@@ -53,8 +53,24 @@ title had been moved away.
 
 A placement also carries `align` (`left` | `center` | `right`) and `anchor`
 (`top` | `middle` | `bottom`), defaulting to `left`/`top`. They reach a component
-as `ctx.text_align()` and `ctx.text_anchor()`, and describe how that component
-sets **its text** inside the rect — not how the rect itself moves.
+as `ctx.text_align()` and `ctx.text_anchor()`, describing how it sets its text inside
+the rect.
+
+**`anchor` also moves what the placement drew.** The rect never moves, but a component
+whose content is shorter than its rect leaves slack, and `compose._settle` translates
+every shape it drew so that extent sits where `anchor` says in the rect — then patches
+the manifest boxes to follow. So a one-line `prose` in a band from 2.1in to 5.7in on a
+7.5in canvas lands at:
+
+| `anchor` | Top of the text | Down the canvas |
+|---|---|---|
+| `top` (default) | 2.10in | 28% |
+| `middle` | 3.77in | 50% |
+| `bottom` | 5.43in | 72% |
+
+A tall band therefore does **not** centre its content by itself: the default is `top`,
+and the content sits at the top of the band however deep the band is. Reach for
+`anchor: middle` rather than narrowing the band to fake it.
 
 A component that sets no text of its own (`chart`, `connector`, `document`, `panel`)
 refuses a non-default value via `_shared.require_default_align()`, and `callouts` refuses

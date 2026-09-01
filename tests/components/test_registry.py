@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import component, get_component, registered_components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import component, get_component, registered_components
 
 
 def test_a_registered_component_is_retrievable():

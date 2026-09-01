@@ -8,10 +8,10 @@ import zipfile
 import pytest
 from lxml import etree
 
-from pptxkit.conform.derive import derive
-from pptxkit.conform.sample import FACE, MARKER, PALETTE, is_sample, write_sample
-from pptxkit.theme.stock import is_stock_accent
-from pptxkit.utils.text import measured
+from deckwright.conform.derive import derive
+from deckwright.conform.sample import FACE, MARKER, PALETTE, is_sample, write_sample
+from deckwright.theme.stock import is_stock_accent
+from deckwright.utils.text import measured
 
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
@@ -48,7 +48,7 @@ def test_the_derived_theme_binds_every_accent_and_a_hued_inverse(sample):
     assert bind["page"] == "lt1" and bind["ink"] == "dk1"
 
 
-def test_the_face_it_teaches_is_one_pptxkit_can_measure(sample):
+def test_the_face_it_teaches_is_one_deckwright_can_measure(sample):
     """`derive` writes the dominant run face into the adopted theme, so an unmeasured face
     reaches every deck and lays it out against the widest-glyph ceiling."""
     assert measured(FACE), f"{FACE} has no advance table"

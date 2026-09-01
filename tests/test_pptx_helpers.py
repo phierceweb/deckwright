@@ -10,15 +10,15 @@ import re
 
 import pytest
 
-from pptxkit.errors import LayoutError
-from pptxkit.motion import (
+from deckwright.errors import LayoutError
+from deckwright.motion import (
     add_chart_build,
     add_click_build,
     add_click_reveals,
     add_click_sequence,
 )
-from pptxkit.utils.deck import delete_slide
-from pptxkit.utils.shapes import bring_to_front
+from deckwright.utils.deck import delete_slide
+from deckwright.utils.shapes import bring_to_front
 
 
 def _blank_slide(prs):

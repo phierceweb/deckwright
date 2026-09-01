@@ -56,17 +56,17 @@ to keep a copy anywhere.
 
 ## The test suite drives what is here
 
-`tests/test_templates.py` builds every capability in `src/pptxkit/conform/exercise.py`
+`tests/test_templates.py` builds every capability in `src/deckwright/conform/exercise.py`
 against each brand template in this directory, then checks bounds, reserved regions,
 contrast, readback and package structure. It is the suite's primary guard.
 
 - **Any diverse set works** — different palettes, fonts, master backgrounds, reserved
   logo regions. Marketplace templates are fine.
 - A file ending `-4-3` is treated as the 4:3 twin of another design and skipped, and a
-  generated `pptxkit sample` is refused by its own `docProps` mark.
+  generated `deckwright sample` is refused by its own `docProps` mark.
 - The guard is exactly as strong as the variety of what is here. **One template is not a
   variance test**, and neither is one template plus its own 4:3 twin.
-- `PPTXKIT_TEMPLATES_MIN=<n>` makes a smaller set a test failure instead of a quiet pass.
+- `DECKWRIGHT_TEMPLATES_MIN=<n>` makes a smaller set a test failure instead of a quiet pass.
   Unset — the normal case — any number is accepted. The release runbook sets it so a tag
   cannot be cut against a thin set.
 

@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-ins
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
+import deckwright.components  # noqa: F401 — registers the built-ins
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
 
 ITEMS = ["Problem", "Evidence", "What shipped"]
 ACTIVE = "Evidence"

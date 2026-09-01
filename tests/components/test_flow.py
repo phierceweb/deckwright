@@ -4,10 +4,10 @@ which step reveals it."""
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
-from pptxkit.theme.model import Rect
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
+from deckwright.theme.model import Rect
 
 EMU = 914400
 

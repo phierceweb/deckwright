@@ -1,6 +1,6 @@
 """The vendored Material Symbols set: how a name reaches it, and what may be in it. Read
 through the loader's bundle API — the set travels as one archive — and measured with
-:mod:`pptxkit.icons.vendor`, so the suite and `pptxkit glyphs sync` agree on what ships."""
+:mod:`deckwright.icons.vendor`, so the suite and `deckwright glyphs sync` agree on what ships."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ import math
 import pytest
 from lxml import etree
 
-from pptxkit.errors import SpecError
-from pptxkit.icons.aliases import ALIASES, OVERRIDES
-from pptxkit.icons.load import BUNDLE, VENDORED, Glyph, _find, available, builtin_bytes, load
-from pptxkit.icons.vendor import NOISE, winding_disagreement
+from deckwright.errors import SpecError
+from deckwright.icons.aliases import ALIASES, OVERRIDES
+from deckwright.icons.load import BUNDLE, VENDORED, Glyph, _find, available, builtin_bytes, load
+from deckwright.icons.vendor import NOISE, winding_disagreement
 
 from tests.conftest import LEGACY_GLYPHS
 
@@ -46,7 +46,7 @@ def test_the_vendored_set_shipped():
 def test_the_bundle_matches_the_manifest_it_ships_with():
     """The manifest is the review surface for a re-vendor, so it has to be the truth
     about the bundle beside it — otherwise `git diff` describes a set nobody has."""
-    from pptxkit.icons import vendor
+    from deckwright.icons import vendor
 
     assert vendor.verify() == []
 
@@ -69,7 +69,7 @@ def test_an_override_replaces_a_glyph_the_set_would_have_supplied(name, target):
 
 def test_a_theme_glyph_outranks_an_override(tmp_path, monkeypatch):
     """A brand replacing `pin.svg` must get its own pin, not the one we prefer."""
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     own = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
         '<path d="M 3 3 H 21 V 21 H 3 Z"/></svg>'
@@ -79,7 +79,7 @@ def test_a_theme_glyph_outranks_an_override(tmp_path, monkeypatch):
 
 
 def test_a_vendored_name_is_found_under_either_spelling():
-    """The set writes `rocket_launch`; pptxkit's own names are hyphenated."""
+    """The set writes `rocket_launch`; deckwright's own names are hyphenated."""
     real = _paths_in(_shipped("rocket_launch"))
     assert load("rocket_launch").subpaths == real
     assert load("rocket-launch").subpaths == real
@@ -123,7 +123,7 @@ def test_a_name_that_is_not_a_slug_is_still_rejected(name):
 def test_a_missing_bundle_says_what_to_run_rather_than_guessing_a_near_miss(monkeypatch):
     """Absent glyphs are an install problem, and 'Did you mean…?' over an empty
     vocabulary would send the reader hunting for a typo they did not make."""
-    from pptxkit.icons import load as load_mod
+    from deckwright.icons import load as load_mod
 
     monkeypatch.setattr(load_mod, "_bundle", lambda: None)
     with pytest.raises(SpecError, match="glyph bundle is missing.*glyphs sync"):
@@ -136,7 +136,7 @@ def test_a_missing_bundle_says_what_to_run_rather_than_guessing_a_near_miss(monk
 def test_the_disagreement_measure_sees_a_hole_that_only_nonzero_would_fill(tmp_path, monkeypatch):
     """Two concentric circles wound the same way: a ring even-odd, a disc nonzero — without
     this the guarantee below could pass by measuring nothing at all."""
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     circles = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d='
         '"M 12 2 A 10 10 0 1 0 12 22 A 10 10 0 1 0 12 2 Z '
@@ -155,9 +155,9 @@ def test_the_disagreement_measure_sees_a_hole_that_only_nonzero_would_fill(tmp_p
 
 
 def test_no_vendored_glyph_needs_nonzero_winding():
-    """pptxkit puts every subpath in one `a:path`, which fills even-odd; Material Symbols
+    """deckwright puts every subpath in one `a:path`, which fills even-odd; Material Symbols
     declare no `fill-rule`, so upstream means nonzero. The two part company on the `*_off`
-    variants, which is what `pptxkit glyphs sync --ref` must keep leaving out."""
+    variants, which is what `deckwright glyphs sync --ref` must keep leaving out."""
     broken = []
     for name in available():
         svg = _shipped(name)

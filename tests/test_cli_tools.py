@@ -14,18 +14,18 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from pptxkit.cli import app
+from deckwright.cli import app
 
 
 @pytest.fixture
 def qa_without_libreoffice(clean_manifest_deck, tmp_path):
     deck, manifest = clean_manifest_deck
-    env = {**os.environ, "COLUMNS": "300", "PPTXKIT_SOFFICE": "/nonexistent/soffice"}
+    env = {**os.environ, "COLUMNS": "300", "DECKWRIGHT_SOFFICE": "/nonexistent/soffice"}
     return subprocess.run(
         [
             sys.executable,
             "-m",
-            "pptxkit.cli",
+            "deckwright.cli",
             "qa",
             str(deck),
             "--manifest",
@@ -55,7 +55,7 @@ def test_qa_names_the_flag_that_runs_without_the_tool(qa_without_libreoffice):
 def test_the_version_flag_prints_the_installed_version():
     result = CliRunner().invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert result.output.startswith("pptxkit ")
+    assert result.output.startswith("deckwright ")
 
 
 def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
@@ -64,7 +64,7 @@ def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
     the caller printed a command that always exited 1."""
     monkeypatch.chdir(tmp_path)
     theme_root = tmp_path / "brand"
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(theme_root))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(theme_root))
 
     result = CliRunner().invoke(app, ["sample"])
 
@@ -76,3 +76,24 @@ def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
     assert hint, result.stdout
     quoted = hint[0].split("conform", 1)[1].split("--adopt")[0].strip()
     assert Path(quoted).resolve().parent == theme_root.resolve()
+
+
+def test_glyphs_find_prints_matching_names():
+    result = CliRunner().invoke(app, ["glyphs", "find", "globe"])
+    assert result.exit_code == 0
+    assert "globe_asia" in result.stdout
+
+
+def test_glyphs_find_exits_nonzero_when_nothing_matches():
+    """A miss is a failed lookup, not an empty success — a script piping this needs
+    the status to say so."""
+    result = CliRunner().invoke(app, ["glyphs", "find", "zzzznotaglyph"])
+    assert result.exit_code == 1
+    assert "no glyph name contains" in result.stdout
+
+
+def test_glyphs_find_caps_its_output_and_says_how_much_it_dropped():
+    result = CliRunner().invoke(app, ["glyphs", "find", "arrow", "--limit", "3"])
+    assert result.exit_code == 0
+    assert len([ln for ln in result.stdout.splitlines() if ln and not ln.startswith("...")]) == 3
+    assert "more — narrow the term" in result.stdout

@@ -1,6 +1,6 @@
 # Imagery — photographs, and the text on them
 
-How `src/pptxkit/imagery/` fits a photograph to a box, measures the pixels a line of
+How `src/deckwright/imagery/` fits a photograph to a box, measures the pixels a line of
 text will sit on, and solves the scrim that makes it legible. This doc covers the
 **engine's internals**: the fit arithmetic, the sampler, the auto-opacity solve, and
 what each of those writes into OOXML.
@@ -30,7 +30,7 @@ happens after the spec is parsed.
 
 ## Why this subsystem exists
 
-Everywhere else in pptxkit a colour pair is known before anything is drawn: the palette
+Everywhere else in deckwright a colour pair is known before anything is drawn: the palette
 contrast-checked `ink` against `page` when the theme loaded, and the manifest records
 both. A slide painted on a photograph has no such pair. What is behind a title in one
 corner is not what is behind a footer in the other, and neither is the theme's paper.
@@ -157,9 +157,9 @@ paint is whatever its designer chose — a stretched photograph on some template
 
 - The template paints a **picture**: it is left alone and sampled instead, so the
   brand's art survives and every line records the pixels it truly sits on. The slide
-  itself is marked as carrying a backdrop, since pptxkit adds no picture shape here and
+  itself is marked as carrying a backdrop, since deckwright adds no picture shape here and
   the render check would otherwise have nothing to see.
-- The template paints a **colour**: pptxkit paints over it unless
+- The template paints a **colour**: deckwright paints over it unless
   `theme/surface.py`'s `inherited_surface()` says that exact colour is already down.
 - The template declares **nothing**: that is still a colour. Every renderer shows
   white there, and it is treated as white.
@@ -191,7 +191,7 @@ compares against WCAG AA.
 
 The second is the slide-level `backdrop` flag, set by `paint_inherited()` when the
 template's own master paints the picture. There is no shape to carry `rendered`
-there — pptxkit placed nothing — so without it every deck built on a picture-painting
+there — deckwright placed nothing — so without it every deck built on a picture-painting
 template would skip the one check that can see what its text really sits on.
 
 The mode, not the mean — glyphs cover a minority of a text box, so averaging drags the
@@ -208,7 +208,7 @@ A **fit** (a third strategy beside `cover`/`contain`):
    an `ImageFit`. Express the crop as source fractions — never resize the source.
 2. Confirm `window_under()` still tells the truth for it. If the fit can leave part of
    the placement without picture, it must return `None` there.
-3. Add an exercise to `src/pptxkit/conform/exercise.py` (see
+3. Add an exercise to `src/deckwright/conform/photos.py` (see
    [`testing.md`](testing.md)) — that is the test.
 
 A **mask**:

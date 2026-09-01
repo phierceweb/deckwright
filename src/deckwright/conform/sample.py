@@ -1,0 +1,147 @@
+"""Generate a brand template deckwright owns outright.
+
+``conform`` needs a real ``.pptx``, and the templates that exercise it properly are
+licensed artwork nobody can ship, so the walkthrough in ``docs/conform.md`` runs
+against this one on a fresh clone.
+
+**It is a pipeline fixture, not brand-variance evidence** — shaped like what the code
+already handles. The file is stamped ``deckwright-sample`` in its ``docProps`` and
+:mod:`tests.test_templates` skips anything carrying that mark, so it cannot quietly
+become the evidence it is not.
+"""
+
+from __future__ import annotations
+
+import zipfile
+from pathlib import Path
+
+from lxml import etree
+from pptx import Presentation
+from pptx.util import Inches, Pt
+
+from pf_core.log import get_logger
+
+from deckwright.utils.xml import fromstring as parse_xml
+
+logger = get_logger(__name__)
+
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_CP = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
+
+MARKER = "deckwright-sample"
+"""Stamped into docProps so the corpus guard can refuse this file mechanically."""
+
+# Deliberately nothing Microsoft ships: `derive()` discards a slot still holding a
+# stock accent, so the shipped scheme would bind no brand colour at all.
+PALETTE = {
+    "dk1": "14181F",
+    "lt1": "FFFFFF",
+    "dk2": "1E3A5F",
+    "lt2": "F2F4F7",
+    "accent1": "2D6BA8",
+    "accent2": "1E8E6A",
+    "accent3": "C25A2B",
+    "accent4": "6B4C9A",
+    "accent5": "B03A5B",
+    "accent6": "5A7A2E",
+    "hlink": "2D6BA8",
+    "folHlink": "6B4C9A",
+}
+
+# On every run, not just the fontScheme: `derive()` reads the runs, and an unmeasured
+# face would reach the adopted theme and wrap against the widest-glyph ceiling.
+FACE = "Helvetica"
+
+_SLIDES = (
+    ("Sample Brand", "A template deckwright generated to onboard against", 40, 18),
+    ("Section", "What a divider looks like in this scheme", 32, 16),
+    ("Content", "Body copy at the size the ramp is measured from", 28, 14),
+)
+
+
+def _theme_part(prs):
+    """The theme XML of the master the deck composes on."""
+    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+
+    master = prs.slide_masters[0]
+    return master.part.part_related_by(RT.THEME)
+
+
+def _restyle(part) -> None:
+    """Put our palette and face into the template's own theme part."""
+    root = parse_xml(part.blob)
+    scheme = root.find(f"{{{_A}}}themeElements/{{{_A}}}clrScheme")
+    for child in scheme:
+        slot = etree.QName(child).localname
+        if slot not in PALETTE:
+            continue
+        for existing in list(child):
+            child.remove(existing)
+        colour = etree.SubElement(child, f"{{{_A}}}srgbClr")
+        colour.set("val", PALETTE[slot])
+    fonts = root.find(f"{{{_A}}}themeElements/{{{_A}}}fontScheme")
+    for kind in ("major", "minor"):
+        latin = fonts.find(f"{{{_A}}}{kind}Font/{{{_A}}}latin")
+        latin.set("typeface", FACE)
+    part._blob = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+
+
+def _add_slides(prs) -> None:
+    """Slides carrying real runs, because that is where the face is counted from."""
+    blank = prs.slide_layouts[6]
+    for title, subtitle, title_pt, body_pt in _SLIDES:
+        slide = prs.slides.add_slide(blank)
+        for text, size, top in ((title, title_pt, 2.4), (subtitle, body_pt, 3.6)):
+            box = slide.shapes.add_textbox(Inches(1.0), Inches(top), Inches(11.3), Inches(1.0))
+            run = box.text_frame.paragraphs[0].add_run()
+            run.text = text
+            run.font.name = FACE
+            run.font.size = Pt(size)
+
+
+def _canonicalize(path: Path) -> None:
+    """Rewrite the saved package with fixed timestamps.
+
+    python-pptx stamps each entry with the local clock, so two saves a second apart
+    are different files. Member order is preserved: readers still expect
+    ``[Content_Types].xml`` where it was put.
+    """
+    with zipfile.ZipFile(path) as original:
+        members = [(info.filename, original.read(info.filename)) for info in original.infolist()]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as rewritten:
+        for name, data in members:
+            info = zipfile.ZipInfo(name, date_time=_ZIP_EPOCH)
+            info.external_attr = 0o644 << 16
+            info.create_system = 3
+            info.compress_type = zipfile.ZIP_DEFLATED
+            rewritten.writestr(info, data)
+
+
+def write_sample(path: str | Path) -> Path:
+    """Write the sample template to ``path`` and return it."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    _restyle(_theme_part(prs))
+    _add_slides(prs)
+    core = prs.core_properties
+    core.title = "deckwright sample template"
+    core.category = MARKER
+    core.comments = "Generated by 'deckwright sample'. A pipeline fixture, not a real brand — see docs/conform.md."
+    prs.save(str(path))
+    _canonicalize(path)
+    logger.info("sample_written", path=str(path), bytes=path.stat().st_size)
+    return path
+
+
+def is_sample(path: str | Path) -> bool:
+    """Whether ``path`` is one of ours, by the mark :func:`write_sample` leaves."""
+    try:
+        with zipfile.ZipFile(path) as package:
+            core = package.read("docProps/core.xml")
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return False
+    found = parse_xml(core).find(f"{{{_CP}}}category")
+    return found is not None and (found.text or "").strip() == MARKER

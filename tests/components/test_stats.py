@@ -1,9 +1,9 @@
 import pytest
 from pptx.util import Inches
 
-import pptxkit.components  # noqa: F401
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
+import deckwright.components  # noqa: F401
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
 
 ITEMS = [
     {"value": "20", "label": "integrations"},
@@ -148,7 +148,7 @@ def test_a_non_numeric_columns_raises_a_layout_error(ctx_factory):
 
 
 def test_stats_is_registered():
-    from pptxkit.layouts.components import registered_components
+    from deckwright.layouts.components import registered_components
 
     assert "stats" in registered_components()
 

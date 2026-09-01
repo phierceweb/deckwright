@@ -1,6 +1,6 @@
 import pytest
 
-from pptxkit.utils.text import closest_match, text_em, wrapped_lines
+from deckwright.utils.text import closest_match, text_em, wrapped_lines
 
 # The band a 13.333x7.5in deck gives a chrome line, and the title rung on it.
 WIDTH_IN = 11.87

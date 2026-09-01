@@ -2,7 +2,7 @@ import dataclasses
 
 import pytest
 
-from pptxkit.layouts.components import BodyResult, as_body_result
+from deckwright.layouts.components import BodyResult, as_body_result
 
 
 def test_a_bare_group_list_normalises():

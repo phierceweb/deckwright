@@ -311,7 +311,7 @@ place:
 
 A chip per palette role, labelled with the role's name and the hex it resolved to. The
 values are read from the live theme at build time, so a slide showing what
-`pptxkit conform` derived from a brand template cannot drift from the theme the deck
+`deckwright conform` derived from a brand template cannot drift from the theme the deck
 was actually built against.
 
 A chip whose colour is close to the slide's own paper — `page`, `surface`, an
@@ -639,8 +639,8 @@ shape.
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `name` | yes | — | Which glyph: a lowercase slug like `chart-bar`. Any Material Symbols name from the shipped set (`rocket_launch`, or the hyphenated `rocket-launch`), or a curated alias (`deploy`, `team`, `growth`). |
-| `size` | no | `1.0` | The glyph's side as a fraction of the placement's short side. |
-| `ink` | no | — | A colour role, painted verbatim. Omit and the mark takes the first brand accent that reads where it lands, falling back to the surface's ink — and, where no colour reads across the box at all, to a plate of the slide's paper behind the glyph (see [icons.md](icons.md#the-colour-a-glyph-is-painted)). |
+| `size` | no | `1.0` | The glyph's side as a fraction of the placement's short side — literally `min(width, height) * size`, so the drawn square is predictable from the rect the placement was given. `1.0` fills the short side; the long side keeps the leftover as margin. |
+| `ink` | no | — | A colour role, painted verbatim. Omit and the mark takes the first brand accent that reads where it lands, falling back to the surface's ink — and, where no colour reads across the box at all, to a plate of the slide's paper behind the glyph (see [icons.md](icons.md#the-colour-a-glyph-is-painted)). That plate is padded around the glyph and clipped to the placement, so it never reaches the placement beside it. |
 
 ```yaml
 place:
@@ -650,15 +650,17 @@ place:
   icon: {name: chart-bar, ink: accent-2}
 ```
 
-The placement is squared off and centred before the glyph is drawn, so an icon in a
-wide slot keeps its proportions rather than stretching.
+The placement is squared off before the glyph is drawn, so an icon in a wide slot
+keeps its proportions rather than stretching. Where that square sits in the rect is the
+placement's `align` and `anchor` — `left`/`top` by default, so add `align: center` to
+centre it.
 
 **Which name to reach for** is [`docs/glyphs.md`](glyphs.md), a shortlist grouped by
 what the slide is about. 4,001 vendored Material Symbols resolve, plus the curated names
 in [`docs/icons.md`](icons.md#the-set-that-ships). Asking for one nobody drew fails the
 build with the closest real names.
 
-**Where the glyphs come from**, in order: `$PPTXKIT_ICON_DIR`, the theme's own
+**Where the glyphs come from**, in order: `$DECKWRIGHT_ICON_DIR`, the theme's own
 `icons:` directory, then the shipped set. A brand overriding `target`
 with its own drawing needs no change to any deck. Each file is an `.svg` with a
 `viewBox` and one or more `<path>` elements — `<circle>`, `<rect>` and strokes are not
@@ -805,8 +807,29 @@ place:
     versus:
       icon: schedule
       left: {value: "2 days", label: the unit stage — it runs in parallel}
-      right: {value: "4 hours", label: collected in person, highlight: true}
+      right: {value: "1 day", label: collected in person, highlight: true}
 ```
+
+**The plates are sized in proportion to their values.** A value the component can read a
+number out of — `11.2%`, `$1,200`, `1.6x` — sizes its plate, so a side 60% larger is 60%
+wider and the shape carries the comparison rather than leaving it to the reader to do the
+arithmetic. [`choosing.md`](choosing.md) has the reason: length is a far stronger encoding
+than a printed number, and two identical plates state that the magnitudes are equal.
+
+**Both sides have to be written in the same unit.** `2 days` against `4 hours` reads 2
+against 4 and would draw the longer span smaller, so a pair whose units differ keeps the
+even split instead. The unit is matched whole, so `1 day` against `4 days` splits evenly
+too — no string rule separates a plural from a different unit, `hrs`/`hr` and `ms`/`m`
+being the same shape, and sizing two units against each other argues the opposite of the
+data. Write both sides in the same unit to get the proportional plates. A magnitude suffix
+counts as part of it: `$1.2M` and `$480K` do not compare, `$1.2M` and `$0.48M` do.
+
+The smaller plate never drops below the width its longest word needs, so a long label
+widens the plate rather than breaking mid-word; a placement too narrow to set both sides
+is refused at build, naming the two widths. Whether the stack then *fits the band* is
+`qa`'s `text-fit` check — give the placement more rows, or shorten the note.
+Values with no number in them — `before` and `after` — keep the even split; there is
+nothing to encode.
 
 Each plate is its own surface, so its type is contrast-checked against the plate's fill
 rather than the slide's. One reveal group per side; the glyph arrives with the first.

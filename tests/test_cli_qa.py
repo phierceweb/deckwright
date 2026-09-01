@@ -3,7 +3,7 @@ from typer.testing import CliRunner
 
 from pf_core.cli import run_cli
 
-from pptxkit.cli import app
+from deckwright.cli import app
 
 runner = CliRunner()
 

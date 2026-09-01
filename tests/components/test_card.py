@@ -5,12 +5,12 @@ import pytest
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.components.card import _ICON_LINES
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.layouts.components import get_component, registered_components
-from pptxkit.theme.model import Rect
-from pptxkit.utils.text import LINE_HEIGHT
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.components.card import _ICON_LINES
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.layouts.components import get_component, registered_components
+from deckwright.theme.model import Rect
+from deckwright.utils.text import LINE_HEIGHT
 
 EMU = 914400
 
@@ -257,8 +257,8 @@ def test_the_card_is_registered():
 
 def test_a_bleeding_placements_shapes_are_recorded_as_bleeding(ctx_factory):
     """The intent has to survive into the manifest, or QA can only see the geometry."""
-    from pptxkit.layouts.compose import _draw
-    from pptxkit.spec.model import Placement
+    from deckwright.layouts.compose import _draw
+    from deckwright.spec.model import Placement
 
     ctx = ctx_factory({"card": {"heading": "H", "body": "B"}})
     _draw(
@@ -278,8 +278,8 @@ def test_a_bleeding_placements_shapes_are_recorded_as_bleeding(ctx_factory):
 
 def test_the_flag_does_not_leak_to_the_next_placement(ctx_factory):
     """Set per placement, so the one after a bleed is not marked as one too."""
-    from pptxkit.layouts.compose import _draw
-    from pptxkit.spec.model import Placement
+    from deckwright.layouts.compose import _draw
+    from deckwright.spec.model import Placement
 
     ctx = ctx_factory({"card": {"heading": "H", "body": "B"}})
     body = {"heading": "H", "body": "B"}
@@ -304,8 +304,8 @@ def test_the_flag_does_not_leak_to_the_next_placement(ctx_factory):
 def test_a_component_that_raises_mid_bleed_does_not_leave_the_flag_set(ctx_factory):
     """The next placement would otherwise inherit an exemption it never asked for —
     which the happy-path test above cannot see, because it clears the flag on entry."""
-    from pptxkit.layouts.compose import _draw
-    from pptxkit.spec.model import Placement
+    from deckwright.layouts.compose import _draw
+    from deckwright.spec.model import Placement
 
     ctx = ctx_factory({"card": {"heading": "H", "body": "B"}})
     tiny = Rect(0.0, 0.0, 0.2, 0.2)
@@ -328,7 +328,7 @@ def test_a_component_that_raises_mid_bleed_does_not_leave_the_flag_set(ctx_facto
 def test_plate_height_insets_by_the_same_curve_the_card_does(ctx_factory):
     """The helper sizes the plate and the component fills it; disagree about how far the
     corner cuts in and the copy runs past the bottom. A stadium is where the two must meet."""
-    from pptxkit.components.card import plate_height
+    from deckwright.components.card import plate_height
 
     ctx = ctx_factory({"card": {"heading": "H", "body": "b"}})
     # 2.5in and 24 words: narrow enough that the arc's 0.24in a side changes the line count.
@@ -342,7 +342,7 @@ def test_plate_height_insets_by_the_same_curve_the_card_does(ctx_factory):
 def test_plate_height_is_unchanged_for_the_radius_every_card_uses(ctx_factory):
     """The second pass must not move the common case: a flow sizes every step through
     this helper, and shifting them all would be a re-flow nobody asked for."""
-    from pptxkit.components.card import _RADIUS_DEFAULT, plate_height
+    from deckwright.components.card import _RADIUS_DEFAULT, plate_height
 
     ctx = ctx_factory({"card": {"heading": "H", "body": "b"}})
     words = " ".join(["word"] * 12)

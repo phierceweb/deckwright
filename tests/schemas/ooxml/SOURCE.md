@@ -1,11 +1,11 @@
 # OOXML schemas — ISO/IEC 29500-4:2016
 
 The PresentationML schema and its transitive imports, used by
-`tests/test_ooxml_schema.py` to validate the raw XML `pptxkit.motion` writes.
+`tests/test_ooxml_schema.py` to validate the raw XML `deckwright.motion` writes.
 
-`pptxkit` authors `<p:timing>` and `<p:transition>` as raw strings, because
+`deckwright` authors `<p:timing>` and `<p:transition>` as raw strings, because
 python-pptx models neither. Nothing else can check that output: LibreOffice
-converts schema-invalid timing to PDF without complaint, and a `pptxkit qa`
+converts schema-invalid timing to PDF without complaint, and a `deckwright qa`
 render sees only the final state of a slide.
 
 Nine files, the closure of `pml.xsd`'s `schemaLocation` imports. They are not

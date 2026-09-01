@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import dataclasses
 
-from pptxkit.imagery.paint import paint_inherited
-from pptxkit.theme.model import Rect
-from pptxkit.theme.surface import Surface
+from deckwright.imagery.paint import paint_inherited
+from deckwright.theme.model import Rect
+from deckwright.theme.surface import Surface
 
 
 def _ctx_on(ctx_factory, theme, tmp_path, surface):

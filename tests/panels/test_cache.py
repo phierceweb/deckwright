@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from pptxkit.errors import RenderError
-from pptxkit.panels import cache
-from pptxkit.panels.cache import cache_key, cached_png
-from pptxkit.panels.model import Panel
+from deckwright.errors import RenderError
+from deckwright.panels import cache
+from deckwright.panels.cache import cache_key, cached_png
+from deckwright.panels.model import Panel
 
 PANEL = Panel(html="<b>hello</b>", width=700)
 
@@ -54,7 +54,7 @@ def test_the_key_is_stable():
 
 
 def test_a_miss_renders_once(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     render, calls = _recorder(tmp_path)
     png = cached_png(PANEL, scale=2, theme_hash="t", render=render)
     assert png.is_file()
@@ -62,7 +62,7 @@ def test_a_miss_renders_once(tmp_path, monkeypatch):
 
 
 def test_a_hit_does_not_render_again(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     render, calls = _recorder(tmp_path)
     cached_png(PANEL, scale=2, theme_hash="t", render=render)
     cached_png(PANEL, scale=2, theme_hash="t", render=render)
@@ -70,7 +70,7 @@ def test_a_hit_does_not_render_again(tmp_path, monkeypatch):
 
 
 def test_a_changed_theme_hash_re_renders(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     render, calls = _recorder(tmp_path)
     cached_png(PANEL, scale=2, theme_hash="one", render=render)
     cached_png(PANEL, scale=2, theme_hash="two", render=render)
@@ -78,14 +78,14 @@ def test_a_changed_theme_hash_re_renders(tmp_path, monkeypatch):
 
 
 def test_the_cache_dir_comes_from_the_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path / "elsewhere"))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "elsewhere"))
     render, _ = _recorder(tmp_path)
     png = cached_png(PANEL, scale=2, theme_hash="t", render=render)
     assert (tmp_path / "elsewhere") in png.parents
 
 
 def test_a_renderer_that_writes_nothing_raises(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
 
     def render(html, path, *, width, scale):
         return str(path)
@@ -98,7 +98,7 @@ def test_a_renderer_that_writes_nothing_raises(tmp_path, monkeypatch):
 
 
 def test_a_crash_after_writing_leaves_nothing_cached_and_a_retry_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     key = cache_key(PANEL.html, width=PANEL.width, scale=2, theme_hash="t")
 
     def crashing_render(html, path, *, width, scale):
@@ -119,7 +119,7 @@ def test_a_crash_after_writing_leaves_nothing_cached_and_a_retry_succeeds(tmp_pa
 
 def test_the_renderer_is_given_a_path_ending_in_png(tmp_path, monkeypatch):
     """A renderer is entitled to infer its output format from the path's extension."""
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     seen_paths = []
 
     def render(html, path, *, width, scale):
@@ -133,7 +133,7 @@ def test_the_renderer_is_given_a_path_ending_in_png(tmp_path, monkeypatch):
 
 
 def test_an_empty_file_raises_render_error_and_caches_nothing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     key = cache_key(PANEL.html, width=PANEL.width, scale=2, theme_hash="t")
 
     def empty_render(html, path, *, width, scale):

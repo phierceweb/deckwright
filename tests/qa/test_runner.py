@@ -4,10 +4,18 @@ import pytest
 
 from tests.conftest import save_blank_deck
 
-from pptxkit.errors import SpecError
-from pptxkit.qa import runner
-from pptxkit.qa.model import Severity
-from pptxkit.qa.runner import run_qa
+from deckwright.compile.scaffold import new_deck
+from deckwright.errors import SpecError
+from deckwright.qa import runner
+from deckwright.qa.model import Severity
+from deckwright.qa.runner import run_qa
+
+
+@pytest.fixture(autouse=True)
+def _unasked_font_scan(monkeypatch):
+    """Pin the scan to "not asked" — otherwise which faces the developer's machine
+    happens to have decides how many findings every render test here sees."""
+    monkeypatch.setattr("deckwright.qa.fonts.installed_families", lambda: None)
 
 
 def _write_manifest(path, theme_path, *, bad_box=False):
@@ -363,3 +371,105 @@ def test_a_relative_theme_path_resolves_against_the_manifest(tmp_path, theme_fil
     manifest = tmp_path / "sub" / "d.manifest.json"
     _write_manifest(manifest, os.path.relpath(theme_file, manifest.parent))
     assert run_qa(deck, manifest=manifest, render=False, outdir=tmp_path).findings == ()
+
+
+def test_a_scaffold_deck_is_reported_as_placeholder_copy(tmp_path):
+    built = new_deck("Scaffold Probe", root=tmp_path / "authoring").built
+    report = run_qa(built.deck, manifest=built.manifest, render=False, outdir=tmp_path)
+    placeholder = [f for f in report.findings if f.check == "placeholder"]
+    assert {(f.slide, f.detail) for f in placeholder} == {
+        (1, "'A KICKER' reads like copy nobody meant to ship"),
+        (1, "'Three lines and a chrome block make a cover' reads like copy nobody meant to ship"),
+        (3, "'Three things are broken' reads like copy nobody meant to ship"),
+        (6, "'questions@example.com' reads like copy nobody meant to ship"),
+    }
+    assert all(f.severity is Severity.WARN for f in placeholder)
+
+
+def test_the_font_check_runs_only_once_something_has_been_rendered(
+    tmp_path, theme_file, monkeypatch
+):
+    """A machine with nothing installed still substituted nothing when nothing rendered."""
+    monkeypatch.setattr("deckwright.qa.fonts.installed_families", lambda: frozenset())
+    deck = save_blank_deck(tmp_path / "d.pptx")
+    manifest = tmp_path / "d.manifest.json"
+    _write_manifest(manifest, theme_file)
+
+    dry = run_qa(deck, manifest=manifest, render=False, outdir=tmp_path)
+    assert [f for f in dry.findings if f.check == "font-substituted"] == []
+
+    monkeypatch.setattr(runner, "render_to_images", lambda deck, out: [out / "s1.png"])
+    monkeypatch.setattr(runner, "extract_pages", lambda pdf, **kw: ["hello"])
+    monkeypatch.setattr(runner, "check_render_contrast", lambda data, images: [])
+    wet = run_qa(deck, manifest=manifest, render=True, outdir=tmp_path)
+    assert [f for f in wet.findings if f.check == "font-substituted"] != []
+
+
+def test_a_recorded_theme_path_that_still_exists_wins(tmp_path):
+    theme = tmp_path / "brand.theme.yaml"
+    theme.write_text("name: brand\n", encoding="utf-8")
+    got = runner._theme_file(None, str(theme), tmp_path / "d.manifest.json", "brand")
+    assert got == theme
+
+
+def test_a_missing_recorded_path_falls_back_to_the_recorded_name(tmp_path):
+    """A deck handed over without its theme file still names the theme, and `base` is
+    inside the package the recipient already has."""
+    got = runner._theme_file(None, "/gone/base.yaml", tmp_path / "d.manifest.json", "base")
+    assert got == "base"
+
+
+def test_without_a_name_a_missing_recorded_path_is_still_reported_as_that_path(tmp_path):
+    got = runner._theme_file(None, "/gone/base.yaml", tmp_path / "d.manifest.json", None)
+    assert str(got) == "/gone/base.yaml"
+
+
+def test_an_explicit_theme_always_wins_over_the_manifest(tmp_path):
+    got = runner._theme_file("/asked/for.yaml", "/gone/base.yaml", tmp_path / "m.json", "base")
+    assert str(got) == "/asked/for.yaml"
+
+
+def test_qa_runs_on_a_deck_handed_over_without_its_theme_file(tmp_path, monkeypatch):
+    """The handover journey docs/qa.md is written for: send the deck and its manifest."""
+    built = new_deck("Handover", root=tmp_path / "authoring").built
+    data = json.loads(built.manifest.read_text(encoding="utf-8"))
+    assert data["theme"] == "base"
+    data["theme_path"] = "/gone/base.yaml"
+    built.manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    report = run_qa(built.deck, manifest=built.manifest, render=False, outdir=tmp_path)
+    assert not [f for f in report.findings if f.severity is Severity.ERROR]
+
+
+def test_a_theme_resolved_by_name_that_hashes_differently_is_reported(tmp_path, monkeypatch):
+    """The name resolves against the reader's own theme dir, so a handed-over deck can
+    pick up a different theme of that name and every finding is measured against it."""
+    away = tmp_path / "away"
+    away.mkdir()
+    (away / "brand.theme.yaml").write_text("name: brand\n", encoding="utf-8")
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(away))
+    built = new_deck("Substituted", root=tmp_path / "authoring", theme="brand").built
+
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "brand.theme.yaml").write_text("name: brand\ntype:\n  min_pt: 3.0\n", encoding="utf-8")
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(other))
+    data = json.loads(built.manifest.read_text(encoding="utf-8"))
+    data["theme_path"] = "/gone/brand.theme.yaml"
+    built.manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    report = run_qa(built.deck, manifest=built.manifest, render=False, outdir=tmp_path)
+    swapped = [f for f in report.findings if f.check == "theme-substituted"]
+    assert len(swapped) == 1
+    assert swapped[0].severity is Severity.WARN
+
+
+def test_the_packaged_theme_resolved_by_name_is_not_reported_as_substituted(tmp_path):
+    """The handover the fallback exists for: same theme, same hash, no noise."""
+    built = new_deck("Quiet Handover", root=tmp_path / "authoring").built
+    data = json.loads(built.manifest.read_text(encoding="utf-8"))
+    data["theme_path"] = "/gone/base.yaml"
+    built.manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    report = run_qa(built.deck, manifest=built.manifest, render=False, outdir=tmp_path)
+    assert [f for f in report.findings if f.check == "theme-substituted"] == []

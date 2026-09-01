@@ -13,9 +13,9 @@ import pathlib
 
 import pytest
 
-from pptxkit.utils import _metrics
-from pptxkit.utils._metrics import ARIAL, CALIBRI, CEILING, advance_em, table_for
-from pptxkit.utils.text import text_em
+from deckwright.utils import _metrics
+from deckwright.utils._metrics import ARIAL, CALIBRI, CEILING, advance_em, table_for
+from deckwright.utils.text import text_em
 
 _LO = pathlib.Path("/Applications/LibreOffice.app/Contents/Resources/fonts/truetype")
 _SYS = pathlib.Path("/System/Library/Fonts/Supplemental")

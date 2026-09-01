@@ -1,11 +1,11 @@
 theme: base
 title: Shape primitives
-out: ../out/shape-primitives/pptxkit Shape Primitives.pptx
+out: ../out/shape-primitives/deckwright Shape Primitives.pptx
 ---
 kicker: SHAPE PRIMITIVES
 title: A disc, a plate, a line and a join
 subtitle: Every size comes from the placement or the type ramp, never an inch
-notes: 'The corpus is built from shapes pptxkit could not draw: 1810 ellipses across
+notes: 'The corpus is built from shapes deckwright could not draw: 1810 ellipses across
 
   eight of eleven templates, 132 rounded-rect cards, 89 lines and connectors. These
   four components are that vocabulary.
@@ -102,7 +102,7 @@ place:
 - at: {cols: right-half, rows: {from: 1, to: 4}}
   card:
     heading: Sized off the placement
-    body: Each disc fills the short side of its own two-column slot.
+    body: Each disc fills the short side of its slot.
 - at: {cols: left-half, rows: {from: 5, to: 9}}
   ellipse: {label: '4', size: 0.9, rung: stat, shadow: true}
   align: center

@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from pptxkit.qa.model import Finding, QaReport, Severity
+from deckwright.qa.model import Finding, QaReport, Severity
 
 
 def _f(slide=1, severity=Severity.ERROR, check="bounds", detail="d"):

@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, Annotation, ChartSpec, Series
-from pptxkit.errors import LayoutError
+from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec, Series
+from deckwright.errors import LayoutError
 
 
 def _body(**over):
@@ -67,12 +67,6 @@ def test_an_unknown_chart_field_is_rejected(ctx_factory):
     ctx = ctx_factory({"title": "T"})
     with pytest.raises(LayoutError, match=r"slide 1 .*'bogus'"):
         ChartSpec.from_body(ctx, _body(bogus=1))
-
-
-def test_a_misspelled_annotate_field_is_not_silently_dropped(ctx_factory):
-    ctx = ctx_factory({"title": "T"})
-    with pytest.raises(LayoutError, match=r"'anotate'"):
-        ChartSpec.from_body(ctx, _body(anotate={"at": 0, "title": "x", "detail": "y"}))
 
 
 # --- No backward compatibility: the old shape must fail naming the new one. ---
@@ -419,31 +413,12 @@ def test_a_new_chart_type_round_trips_via_from_body(ctx_factory, chart_type):
     assert spec.type == chart_type
 
 
-def test_an_annotation_round_trips_its_fields_from_the_at_key(ctx_factory):
+def test_an_annotate_block_is_refused_as_removed(ctx_factory):
+    """It shipped validated-but-undrawn, so a deck may still carry one; the message
+    has to say it is gone rather than read as a typo."""
     ctx = ctx_factory({"title": "T"})
     body = _body(annotate={"at": 1, "title": "+33 pts", "detail": "after rollout"})
-    spec = ChartSpec.from_body(ctx, body)
-    assert spec.annotate == Annotation(index=1, title="+33 pts", detail="after rollout")
-
-
-def test_an_annotation_past_the_last_category_is_rejected(ctx_factory):
-    ctx = ctx_factory({"title": "T"})
-    body = _body(annotate={"at": 5, "title": "x", "detail": "y"})
-    with pytest.raises(LayoutError, match="annotate"):
-        ChartSpec.from_body(ctx, body)
-
-
-def test_an_annotation_missing_a_field_names_it(ctx_factory):
-    ctx = ctx_factory({"title": "T"})
-    body = _body(annotate={"at": 1, "title": "x"})
-    with pytest.raises(LayoutError, match="detail"):
-        ChartSpec.from_body(ctx, body)
-
-
-def test_an_annotation_with_index_instead_of_at_is_rejected_not_dropped(ctx_factory):
-    ctx = ctx_factory({"title": "T"})
-    body = _body(annotate={"index": 1, "title": "x", "detail": "y"})
-    with pytest.raises(LayoutError, match=r"annotate.*'index'"):
+    with pytest.raises(LayoutError, match="'annotate' is gone"):
         ChartSpec.from_body(ctx, body)
 
 
@@ -481,16 +456,6 @@ def test_constructing_an_xy_spec_directly_with_an_out_of_range_highlight_is_reje
             categories=(),
             series=(Series(name="", points=((1.0, 2.0), (3.0, 4.0))),),
             highlight=9,
-        )
-
-
-def test_constructing_a_spec_directly_with_a_plain_dict_annotate_is_rejected():
-    with pytest.raises(LayoutError, match="Annotation"):
-        ChartSpec(
-            type="bar",
-            categories=("Q1", "Q2"),
-            series=(Series(name="A", values=(1.0, 2.0)),),
-            annotate={"index": 0, "title": "x", "detail": "y"},
         )
 
 
@@ -560,3 +525,101 @@ def test_constructing_a_bubble_spec_directly_with_a_non_positive_size_is_rejecte
         ChartSpec(
             type="bubble", categories=(), series=(Series(name="A", points=((1.0, 2.0, 0.0),)),)
         )
+
+
+@pytest.mark.parametrize("bad", [1.5, "two", True, -1, 99])
+def test_a_decimals_that_is_not_a_place_count_is_rejected(ctx_factory, bad):
+    ctx = ctx_factory({"title": "T"})
+    with pytest.raises(LayoutError, match="'decimals'"):
+        ChartSpec.from_body(ctx, _body(decimals=bad))
+
+
+def test_decimals_reaches_the_spec(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    assert ChartSpec.from_body(ctx, _body(decimals=3)).decimals == 3
+
+
+_TWO_SERIES = [
+    {"category": "Q1", "values": {"Ours": 1, "Platform average": 7}},
+    {"category": "Q2", "values": {"Ours": 2, "Platform average": 7}},
+]
+
+
+def test_labels_false_turns_one_series_off_and_leaves_the_others_alone(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    spec = ChartSpec.from_body(ctx, _body(data=_TWO_SERIES, labels={"Platform average": False}))
+    assert [(s.name, s.labels) for s in spec.series] == [
+        ("Ours", True),
+        ("Platform average", False),
+    ]
+
+
+def test_labels_true_is_the_default_written_out(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    spec = ChartSpec.from_body(ctx, _body(data=_TWO_SERIES, labels={"Ours": True}))
+    assert [s.labels for s in spec.series] == [True, True]
+
+
+def test_a_chart_with_no_labels_key_prints_every_series(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    assert [s.labels for s in ChartSpec.from_body(ctx, _body(data=_TWO_SERIES)).series] == [
+        True,
+        True,
+    ]
+
+
+@pytest.mark.parametrize("bad", [False, True, "Ours", ["Ours"], {}])
+def test_a_labels_that_is_not_a_mapping_of_series_names_is_rejected(ctx_factory, bad):
+    """`labels: false` is a different ask; the theme's `label_position` covers it."""
+    ctx = ctx_factory({"title": "T"})
+    with pytest.raises(LayoutError, match="mapping of series name"):
+        ChartSpec.from_body(ctx, _body(data=_TWO_SERIES, labels=bad))
+
+
+def test_labels_naming_a_series_no_row_defines_is_rejected(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    with pytest.raises(LayoutError, match="which no data row defines"):
+        ChartSpec.from_body(ctx, _body(data=_TWO_SERIES, labels={"Platfrom average": False}))
+
+
+def test_a_labels_entry_that_is_not_a_flag_is_rejected(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    with pytest.raises(LayoutError, match="must be true or false"):
+        ChartSpec.from_body(ctx, _body(data=_TWO_SERIES, labels={"Ours": 3}))
+
+
+def test_labels_is_refused_where_the_series_have_no_names(ctx_factory):
+    """`value:` rows and the xy/bubble kinds both fold into one unnamed series, and
+    python-pptx gives an XySeries no `data_labels` to write."""
+    ctx = ctx_factory({"title": "T"})
+    single = _body(data=[{"category": "Q1", "value": 1}], labels={"Anything": False})
+    with pytest.raises(LayoutError, match="series need names"):
+        ChartSpec.from_body(ctx, single)
+    with pytest.raises(LayoutError, match="series need names"):
+        ChartSpec.from_body(ctx, _xy_body(labels={"Anything": False}))
+
+
+def test_a_pie_takes_one_series(ctx_factory):
+    """python-pptx keeps only the first series for a pie, so a second reached a
+    `zip(..., strict=True)` and came out as a bare ValueError traceback."""
+    ctx = ctx_factory({"title": "T"})
+    body = {
+        "kind": "pie",
+        "data": [
+            {"category": "A", "values": {"Ours": 3, "Theirs": 5}},
+            {"category": "B", "values": {"Ours": 4, "Theirs": 2}},
+        ],
+    }
+    with pytest.raises(LayoutError) as e:
+        ChartSpec.from_body(ctx, body)
+    # The slide prefix pins the `from_body` refusal rather than the `__post_init__`
+    # backstop, which cannot name where the deck went wrong.
+    assert str(e.value).startswith("slide 1 (component 'chart'):")
+    assert "takes one series" in str(e.value)
+    assert "'Ours', 'Theirs'" in str(e.value)
+
+
+def test_a_pie_with_one_series_is_accepted(ctx_factory):
+    ctx = ctx_factory({"title": "T"})
+    body = {"kind": "pie", "data": [{"category": "A", "values": {"Ours": 3}}]}
+    assert len(ChartSpec.from_body(ctx, body).series) == 1

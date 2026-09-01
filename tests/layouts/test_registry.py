@@ -3,15 +3,15 @@ import textwrap
 
 import pytest
 
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.theme.defaults import DEFAULT_PALETTE
-from pptxkit.layouts.components import registered_components
-from pptxkit.layouts.registry import SlideCtx, load_extension
-from pptxkit.spec.model import Background, SlideSpec
-from pptxkit.theme.media import resolve_media
-from pptxkit.theme.model import Rect
-from pptxkit.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio
-from pptxkit.utils.shapes import ALIGN, ANCHOR
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.theme.defaults import DEFAULT_PALETTE
+from deckwright.layouts.components import registered_components
+from deckwright.layouts.registry import SlideCtx, load_extension
+from deckwright.spec.model import Background, SlideSpec
+from deckwright.theme.media import resolve_media
+from deckwright.theme.model import Rect
+from deckwright.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio
+from deckwright.utils.shapes import ALIGN, ANCHOR
 
 
 def _ctx(theme, *, spec=None, **over):
@@ -24,7 +24,7 @@ def test_an_extension_module_registers_its_components(tmp_path):
     mod = tmp_path / "custom.py"
     mod.write_text(
         textwrap.dedent("""
-        from pptxkit.layouts.components import component
+        from deckwright.layouts.components import component
 
         @component("t-from-extension")
         def custom(ctx):
@@ -51,7 +51,7 @@ def test_loading_the_same_extension_twice_is_a_no_op(tmp_path):
     mod = tmp_path / "idempotent.py"
     mod.write_text(
         textwrap.dedent("""
-        from pptxkit.layouts.components import component
+        from deckwright.layouts.components import component
 
         @component("t-idempotent")
         def custom(ctx):
@@ -68,7 +68,7 @@ def test_loading_two_different_extensions_both_register(tmp_path):
         mod = tmp_path / f"ext_{name}.py"
         mod.write_text(
             textwrap.dedent(f"""
-            from pptxkit.layouts.components import component
+            from deckwright.layouts.components import component
 
             @component("t-ext-{name}")
             def custom(ctx):
@@ -215,7 +215,7 @@ def test_an_accent_gives_way_to_the_ink_where_it_cannot_be_read(ctx_factory, the
     whether the code is right passes however the selection behaves."""
     import dataclasses
 
-    from pptxkit.theme.palette import build_palette
+    from deckwright.theme.palette import build_palette
 
     # accent-1 is a mid turquoise: 1.9:1 on white, 9.0:1 on near-black.
     palette = build_palette(

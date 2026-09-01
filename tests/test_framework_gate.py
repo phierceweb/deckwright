@@ -54,7 +54,7 @@ def test_the_gate_refuses_each_hand_roll(source, needle, tmp_path):
 def test_the_gate_does_not_fire_on_prose_that_merely_names_a_rule():
     """A doc mentioning ``os.environ`` documents the rule; it does not break it. `config.py`'s own
     docstring says "reads ``os.environ`` at call time", and it must stay green."""
-    assert _run(ROOT / "src/pptxkit/config.py").returncode == 0
+    assert _run(ROOT / "src/deckwright/config.py").returncode == 0
 
 
 def test_the_package_passes_its_own_gate():

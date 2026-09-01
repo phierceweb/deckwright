@@ -7,10 +7,10 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.errors import LayoutError
-from pptxkit.imagery.draw import place_picture
-from pptxkit.imagery.fit import fit_image
-from pptxkit.theme.model import Rect
+from deckwright.errors import LayoutError
+from deckwright.imagery.draw import place_picture
+from deckwright.imagery.fit import fit_image
+from deckwright.theme.model import Rect
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"

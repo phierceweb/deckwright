@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from pptxkit.spec import parse_deck
+from deckwright.spec import parse_deck
 
 EXAMPLES = pathlib.Path(__file__).resolve().parents[2] / "examples"
 DECKS = sorted(EXAMPLES.glob("*.deck.yaml"))
@@ -29,7 +29,7 @@ def treatments(tmp_path, monkeypatch, synthetic_template):
     catches a title drawn *under* its panel. The theme is a stand-in for the brand's own."""
     from pptx import Presentation
 
-    from pptxkit.compile import build_deck
+    from deckwright.compile import build_deck
 
     (tmp_path / "assets").mkdir()
     (tmp_path / "assets" / "t.pptx").write_bytes(synthetic_template.read_bytes())
@@ -37,7 +37,7 @@ def treatments(tmp_path, monkeypatch, synthetic_template):
         "name: base\ntemplate: assets/t.pptx\n"
         "bind: {page: lt1, ink: dk1, inverse: dk1, line: lt2}\n"
     )
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     result = build_deck(TREATMENTS, out=tmp_path / "out.pptx")
     return result, Presentation(str(result.deck))
 

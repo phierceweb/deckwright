@@ -1,4 +1,4 @@
-from pptxkit.theme.model import Rect
+from deckwright.theme.model import Rect
 
 
 def test_rect_exposes_its_edges():

@@ -70,24 +70,24 @@ def test_no_example_hides_a_comma_split_mapping(doc, line, block):
 
 
 def test_the_documented_python_entry_point_works():
-    """README and `pptxkit/__init__.py` both show `import pptxkit; pptxkit.build_deck`, and the
+    """README and `deckwright/__init__.py` both show `import deckwright; deckwright.build_deck`, and the
     package ships `py.typed`, so a caller is invited to import it."""
-    import pptxkit
+    import deckwright
 
-    for name in pptxkit.__all__:
-        assert hasattr(pptxkit, name), f"__all__ promises {name}, which is not there"
-    assert pptxkit.__version__
-    assert callable(pptxkit.build_deck)
+    for name in deckwright.__all__:
+        assert hasattr(deckwright, name), f"__all__ promises {name}, which is not there"
+    assert deckwright.__version__
+    assert callable(deckwright.build_deck)
 
 
 def test_building_from_python_produces_the_same_deck_as_the_cli(tmp_path):
     """The README example, run. A facade that re-exports a function nobody calls
     through it is worth nothing."""
-    import pptxkit
+    import deckwright
 
     spec = tmp_path / "d.deck.yaml"
     spec.write_text("theme: base\nout: D.pptx\n---\ntitle: Hello\n")
-    result = pptxkit.build_deck(spec)
-    assert isinstance(result, pptxkit.BuildResult)
+    result = deckwright.build_deck(spec)
+    assert isinstance(result, deckwright.BuildResult)
     assert result.slides == 1
     assert result.deck.is_file() and result.manifest.is_file()

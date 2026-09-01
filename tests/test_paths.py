@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pptxkit.paths import SCRATCH, in_checkout, render_dir, scratch
+from deckwright.paths import SCRATCH, in_checkout, render_dir, scratch
 
 
 def test_a_decks_renders_go_in_a_directory_named_for_it_beside_the_deck():
@@ -25,7 +25,7 @@ def test_a_strangers_python_project_is_not_our_checkout(tmp_path, monkeypatch):
 
 def test_our_own_source_tree_is_recognised(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "pptxkit"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "deckwright"\n', encoding="utf-8")
     assert in_checkout() is True
 
 

@@ -6,9 +6,9 @@ from __future__ import annotations
 import pytest
 from pptx.oxml.ns import qn
 
-import pptxkit.components  # noqa: F401 — registers the built-ins
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import as_body_result, get_component, registered_components
+import deckwright.components  # noqa: F401 — registers the built-ins
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import as_body_result, get_component, registered_components
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap pptxkit: venv (Python 3.12+), editable install, .env, rule symlinks.
+# Bootstrap deckwright: venv (Python 3.12+), editable install, .env, rule symlinks.
 # Self-contained — works whether pf-core is pip-installed or a sibling checkout.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -61,7 +61,7 @@ fi
 
 # Ensure the structural-gate config exists (stamped by the scaffold; self-heals).
 if [[ ! -f .pf-guards.toml ]]; then
-  printf '[tool.pf_guards]\nroot = "src/pptxkit"\n' > .pf-guards.toml
+  printf '[tool.pf_guards]\nroot = "src/deckwright"\n' > .pf-guards.toml
   ok "created .pf-guards.toml"
 fi
 
@@ -75,18 +75,18 @@ fi
 
 # --- generate ---------------------------------------------------------------
 # The glyph bundle is committed, so this only confirms it arrived intact; it is a
-# hash check over an archive, not a fetch. `pptxkit glyphs sync` rebuilds it.
-if .venv/bin/pptxkit glyphs verify >/dev/null 2>&1; then
+# hash check over an archive, not a fetch. `deckwright glyphs sync` rebuilds it.
+if .venv/bin/deckwright glyphs verify >/dev/null 2>&1; then
   ok "glyph bundle verified"
 else
   info "glyph bundle missing or stale — rebuilding (needs a network)"
-  .venv/bin/pptxkit glyphs sync
+  .venv/bin/deckwright glyphs sync
 fi
 
 # A template to run `conform` against, so onboarding needs no brand file. Never
 # overwritten: you may have put your own there, and doctor reports drift instead.
 if [[ ! -f templates/sample.pptx ]]; then
-  .venv/bin/pptxkit sample >/dev/null
+  .venv/bin/deckwright sample >/dev/null
   ok "templates/sample.pptx written (try: bin/run conform templates/sample.pptx --adopt sample)"
 else
   ok "templates/sample.pptx exists"
@@ -96,19 +96,19 @@ fi
 # One real compile, end to end, into a temp dir: parse -> theme -> layout -> .pptx
 # -> manifest. Needs no external tool, so it is the honest proof setup can give.
 SMOKE="$(mktemp -d)"
-if .venv/bin/pptxkit build examples/smoke.deck.yaml --out "$SMOKE/Smoke.pptx" >/dev/null 2>&1 \
+if .venv/bin/deckwright build examples/smoke.deck.yaml --out "$SMOKE/Smoke.pptx" >/dev/null 2>&1 \
    && [[ -f "$SMOKE/Smoke.pptx" && -f "$SMOKE/Smoke.manifest.json" ]]; then
   ok "end-to-end build (examples/smoke.deck.yaml)"
 else
   echo "FAILED: the smoke deck did not build — run it directly to see why:" >&2
-  echo "  .venv/bin/pptxkit build examples/smoke.deck.yaml --out /tmp/Smoke.pptx" >&2
+  echo "  .venv/bin/deckwright build examples/smoke.deck.yaml --out /tmp/Smoke.pptx" >&2
   rm -rf "$SMOKE"
   exit 1
 fi
 rm -rf "$SMOKE"
 
 echo
-.venv/bin/pptxkit doctor || true
+.venv/bin/deckwright doctor || true
 
 echo
 echo "Setup complete. Try: bin/run demo"

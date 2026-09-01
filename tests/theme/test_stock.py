@@ -1,8 +1,8 @@
 import pytest
 from pptx import Presentation
 
-from pptxkit.theme.clrscheme import parse_color_scheme, read_theme_xml
-from pptxkit.theme.stock import is_stock_accent
+from deckwright.theme.clrscheme import parse_color_scheme, read_theme_xml
+from deckwright.theme.stock import is_stock_accent
 
 SLOTS = ("accent1", "accent2", "accent3", "accent4", "accent5", "accent6")
 

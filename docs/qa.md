@@ -1,6 +1,6 @@
 # QA — automated checks for built decks
 
-The `pptxkit qa` command checks a *built* deck (a `.pptx` plus the build manifest
+The `deckwright qa` command checks a *built* deck (a `.pptx` plus the build manifest
 `bin/run build` writes alongside it) against the automated checks below and writes a
 findings report. This is a distinct layer from the "render and eyeball it" QA
 described in `docs/pptx-deck-building.md` — that loop is a human looking at
@@ -29,7 +29,7 @@ specifically.
 
 ```bash
 bin/run build examples/feature-tour.deck.yaml
-bin/run qa "out/feature-tour/pptxkit Feature Tour v15.pptx"
+bin/run qa "out/feature-tour/deckwright Feature Tour v15.pptx"
 ```
 
 `qa` takes the path to a built `.pptx`. It looks for `<deck>.manifest.json`
@@ -37,7 +37,7 @@ next to it unless `--manifest` names a different file, and reads the theme
 path the manifest itself recorded unless `--theme` overrides it. If the
 manifest is missing, `qa` fails with a message telling you to build the deck
 first — it never guesses or synthesizes one. A deck built by hand outside the
-compiler (no manifest) cannot be QA'd; build it with `pptxkit build` or accept
+compiler (no manifest) cannot be QA'd; build it with `deckwright build` or accept
 that this layer has nothing to check. The package checks are the exception —
 they read the `.pptx` itself, so they stay honest even when the manifest is
 stale from a hand-edit.
@@ -60,10 +60,17 @@ it, and `--no-render` skips both when you only want the fast geometry/contrast p
 | `min-font` | manifest only | A shape's declared font size is below the theme's minimum. |
 | `contrast` | manifest only | A shape's declared foreground/background pair fails WCAG AA (4.5:1 normal text, 3.0:1 at 18pt+). **Severity follows certainty**: a shortfall above 3:1 warns, because the manifest records the pair a component asked for and the real backdrop may be better; below 3:1 nothing behind the text saves it, so it is an error. The build itself never refuses on contrast — it logs `theme_pair_below_aa` and carries on, so a brand's own palette is never unbuildable over a check this layer runs better. |
 | `text-fit` | manifest only | A shape whose own recorded text needs more height than the box it declared — text running past its own frame, which `bounds` structurally cannot see. Each line is measured at its own recorded size. |
-| `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. |
+| `placeholder` | manifest only | Recorded text that reads like copy nobody meant to ship — four phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`, `FIXME`, `[insert`, and a run of three or more `x` in either case. Bare capitalised `TODO` fires unless whitespace and two more capitals follow it — the one exception, and what spares the Spanish *TODO EL MUNDO*; *TODO el mundo* and *TODO, EL MUNDO* are both reported, the second because a comma is not whitespace. `TODO:` fires unconditionally. Lowercase `todo` fires only as `todo:` opening a line, or as `@todo` anywhere. Every recorded row is read — its `lines`, or its `text` where it records none — and so are the slide's speaker notes. `TBD` is deliberately not matched: a deck may legitimately say it. WARN. |
+| `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. A line the whole page does not hold is asked for again inside the shape's own box, because pdftotext merges side-by-side placements row by row and splices one column's line into the other's. |
 | `render-contrast` | **the render's pixels** | Text on a slide showing a picture — one this deck placed, or one the template paints behind every slide — whose *rendered* surroundings fall below WCAG AA. Measured in three horizontal bands per shape, so a gradient scrim is judged where it is weakest. |
+| `font-substituted` | **this machine**, not the deck | A face the theme names is not installed here, so the render is set in something else and every finding drawn from it — `overflow`, `render-contrast` — judged type the deck does not carry. One finding per absent face, on slide `0`. It runs only when `qa` renders, and is silent when fontconfig cannot be asked. WARN. |
 | `chart-negative` | **the .pptx itself** | A bar or column chart carrying a negative value — not a fault in the file, but one the render cannot verify, because LibreOffice plots it as positive. Line and scatter series are unaffected and are not flagged. See [`charts.md`](charts.md#negative-values-and-why-the-render-cannot-check-them). |
+| `chart-datapoints` | **the .pptx itself** | A bar or column chart plotting fewer than four values across all its series — the treatment `choosing.md` says is usually a `stats` row in disguise. The finding quotes that rule. WARN, never an error: the judgement is contextual, and a build that refused it would be wrong more often than the author. Only the six bar and column kinds; a line reads as a direction between ordered points, a pie's slices are the composition itself, and an XY or bubble mark already carries two or three numbers. |
+| `beats` | manifest only | Reports each animated slide's rhythm — how many clicks the build spends and how many shapes each beat reveals — in the vocabulary the author wrote (`animate: together`, `animate: one_at_a_time`, `reveals:`, a chart's own build). INFO, so it never fails a run on its own; it is the only place a deck's reveal order surfaces beside `<deck>.beats.md`. |
+| `beat-size` | manifest only | One beat of a *staged* build revealing more shapes than `DECKWRIGHT_MAX_BEAT_SHAPES` (default 6) — a slide that asked to be revealed a piece at a time and delivers most of it on one click. `animate: together`, a chart build and a `reveals:` trigger are exempt: one click is what they declare. WARN. |
+| `dead-trigger` | **the .pptx itself** | An interactive reveal that cannot do its job: a hidden shape whose every trigger is itself hidden, so nothing can ever be clicked to show it (ERROR), or a target the slide's main build also reveals, so it is already on screen when the trigger is clicked (WARN). The compiler refuses every spec-level case, so this catches a hand-edit or a regression. |
 | `shape-id` | **the .pptx itself** | Two shapes on a slide sharing an id, or an id outside 1..2147483647. |
+| `theme-substituted` | manifest + the resolved theme | The recorded `theme_path` was not there, so the theme was resolved by *name* — and the file that answered hashes differently from the one the deck was built against. Every other finding is measured against that other theme's palette, grid and rungs. Pass `--theme` to name the right one. WARN. |
 | `stale-manifest` | both | The deck's bytes no longer hash to what the manifest recorded — it was edited after the build, so every other finding describes the file that was built rather than the one on disk. WARN. |
 | `shape-name` | **the .pptx itself** | Two shapes on a slide sharing a name. Legal OOXML and invisible in a render, but it costs the deck the mapping back to its spec — see [Shape names](#shape-names). WARN. |
 | `animation-target` | **the .pptx itself** | An animation naming a shape id the slide does not contain. |
@@ -88,7 +95,7 @@ validates the package before it draws anything, and a duplicate shape id, a dang
 relationship or an animation targeting a shape that was never drawn all produce the
 same outcome — a repair prompt, and silently discarded content if you accept it.
 LibreOffice is far more forgiving, so a render that looks perfect proves nothing here.
-Timing is the one tree pptxkit writes as raw XML, which is why its targets are checked
+Timing is the one tree deckwright writes as raw XML, which is why its targets are checked
 against the shapes actually present.
 
 A shape from a placement the author declared `bleed: true` is exempt from `bounds`:
@@ -139,8 +146,8 @@ The manifest opens with what produced it, before the records it describes:
 
 | Key | What it is |
 |---|---|
-| `build_id` | Identity of the build: the spec, the theme and the pptxkit version. The same inputs give the same id. |
-| `pptxkit` | The version that wrote the file, so an old manifest is recognisable as old. |
+| `build_id` | Identity of the build: the spec, the theme and the deckwright version. The same inputs give the same id. |
+| `deckwright` | The version that wrote the file, so an old manifest is recognisable as old. |
 | `spec` | The `.deck.yaml` this deck was compiled from. |
 | `spec_hash` | That file's contents when it was read. |
 | `deck` / `deck_hash` | The `.pptx` written, and its contents. |
@@ -150,13 +157,18 @@ The manifest opens with what produced it, before the records it describes:
 Paths are written **relative to the manifest** wherever the two share a directory
 tree, so a manifest handed over beside its deck carries no absolute home directory,
 and the pair survives being moved. `qa` resolves `theme_path` back against the
-manifest's own location.
+manifest's own location, and falls back to the recorded `theme` *name* when that
+file is not there — which is what lets a deck on `theme: base` be checked by someone
+who has the package but not your directory layout. A name resolves against the
+reader's own theme directory first, so a deck naming a brand can pick up a different
+theme of that name; the recorded `theme_hash` is compared and a mismatch is reported
+as `theme-substituted`.
 
 **The three paths are written relative to the manifest**, so a manifest handed over
 beside its deck carries no build-machine path, and a deck directory survives being
 moved. `qa` resolves `theme_path` against the manifest's own location; an absolute one
 — an older manifest, or a build whose theme shared no ancestor with its output — is
-used as written.
+used as written, and a path that is no longer there falls back to the recorded name.
 
 `deck_hash` is the one that catches a **hand-edited deck**. Every check below describes
 what the build *intended*; open the `.pptx` in PowerPoint, move a box and save, and the
@@ -220,6 +232,12 @@ s7.p4.table.r2c3      a table cell, which is not a shape and so is named only he
 s7.bg#1               the slide's background
 ```
 
+**`#N` counts shapes in the order they were drawn, not the order you would name
+them.** Where no colour reads behind a mark, the compiler paints a plate of the slide's
+paper *first* and the component draws on top — so `#1` is the plate and the component's
+own first shape is `#2`. A geometry finding against `#1` is about the plate, so read it
+against the shape it sits behind rather than against the component you named.
+
 PowerPoint preserves shape names through an edit, so the name is what maps a
 shape in a hand-edited deck back to the spec that made it — and what the
 Selection Pane shows while you are editing.
@@ -247,11 +265,9 @@ no `"bleed": false` — about a third of the keys in a deck's manifest. A reader
 wants one falls back to the default on `ShapeRecord`: `rendered` is `"native"`,
 `bleed` and `backdrop` are `false`, everything else is `null` or empty.
 
-Read a box with `pptxkit.compile.record.box_of(shape)`, which returns
+Read a box with `deckwright.compile.record.box_of(shape)`, which returns
 `(left, top, width, height)` or `None`, and the slide size with `canvas_of(manifest)`.
-A manifest written before boxes were keyed raises a `SpecError` naming the rebuild
-rather than failing obscurely — a bare `dict` survives `tuple()` and `list()` by
-yielding its *key names*, so a silent wrong answer was the alternative.
+A manifest written before boxes were keyed raises a `SpecError` naming the rebuild.
 
 ### Animation steps
 
@@ -273,7 +289,7 @@ manifest was written.
 ### The deck's words
 
 The manifest describes a thousand shapes to say what a few hundred lines of text are —
-by line it is about 3.6% content. `pptxkit build` therefore writes
+by line it is about 3.6% content. `deckwright build` therefore writes
 **`<deck>.content.md`** beside it: the same build rendered for a reader, slide by
 slide, with the chrome as headings, tables as tables, bullets as bullets, and speaker
 notes as quotes. Each block is labelled with the origin that drew it, so a line you
@@ -288,12 +304,20 @@ renderings, so they cannot disagree. Regenerate it; never edit it.
 fallback overflow emits when the manifest's slide count doesn't match the render's
 page count) are `error`, and so is every package check — `shape-id`, `animation-target`,
 `relationship` and `package` — since a file PowerPoint will not open is not a
-matter of degree. `min-font`, `contrast`, `render-contrast` and `canvas-size`
-are `warn`. Findings are data, not exceptions — a deck with findings still
-builds and `qa` still exits 0 unless you pass `--fail-on`:
+matter of degree. `min-font`, `render-contrast`, `placeholder`, `font-substituted` and
+`canvas-size` are `warn`; `contrast` is `warn` above a 3:1 ratio and `error` below it,
+as its row above says. `dead-trigger` is `error` for a reveal that can never fire and
+`warn` for one that reveals what is already on screen.
+
+`beats` is the only `info` finding, and it is emitted for every animated slide rather
+than only when something is wrong — it is a report of the reveal order, not a fault.
+**So `--fail-on info` exits non-zero on any deck that animates.** That is what
+`--fail-on info` asks for; `--fail-on warn` is the threshold that treats findings as
+faults. Findings are data, not exceptions — a
+deck with findings still builds and `qa` still exits 0 unless you pass `--fail-on`:
 
 ```bash
-bin/run qa "out/feature-tour/pptxkit Feature Tour v15.pptx" --fail-on error
+bin/run qa "out/feature-tour/deckwright Feature Tour v15.pptx" --fail-on error
 ```
 
 exits non-zero only if the worst finding meets or exceeds the named severity
@@ -333,11 +357,13 @@ picks up `.env` changes between calls:
 
 | Var | Default | Controls |
 |---|---|---|
-| `PPTXKIT_PDFTOTEXT` | `pdftotext` | The Poppler binary the `overflow` check shells out to. |
-| `PPTXKIT_PDFTOTEXT_TIMEOUT_S` | `60` | Seconds before that call is killed. |
-| `PPTXKIT_SOFFICE` | `soffice` | The LibreOffice binary `qa` uses to render (unless `--no-render`). |
-| `PPTXKIT_PDFTOPPM` | `pdftoppm` | The Poppler binary that rasterizes that render's PDF. |
-| `PPTXKIT_RENDER_DPI` | `110` | Rasterization DPI for that render. |
+| `DECKWRIGHT_PDFTOTEXT` | `pdftotext` | The Poppler binary the `overflow` check shells out to. |
+| `DECKWRIGHT_PDFTOTEXT_TIMEOUT_S` | `60` | Seconds before that call is killed. |
+| `DECKWRIGHT_SOFFICE` | `soffice` | The LibreOffice binary `qa` uses to render (unless `--no-render`). |
+| `DECKWRIGHT_PDFTOPPM` | `pdftoppm` | The Poppler binary that rasterizes that render's PDF. |
+| `DECKWRIGHT_RENDER_DPI` | `110` | Rasterization DPI for that render. |
+| `DECKWRIGHT_FC_LIST` | `fc-list` | The fontconfig binary `font-substituted` asks for the installed families. |
+| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | `20` | Seconds before that call is killed. |
 
 ## What this layer cannot catch
 
@@ -345,6 +371,18 @@ Read this section before trusting a clean `qa` run. A reader who over-trusts
 this layer is worse off than one who knows its edges — treat every check here
 as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
 
+- **Nothing here watches an animation play.** LibreOffice draws a slide's *final* state, so
+  a build mid-reveal is invisible to the render and a transition produces byte-identical
+  images with and without one. `beats`, `beat-size` and `dead-trigger` read the timing
+  *structurally* — how many clicks, how many shapes per beat, whether a trigger can fire.
+  Whether the order teaches the room anything is a judgement, and `<deck>.beats.md` exists
+  so you can read the reveal order in words and make it. Whether five consecutive slides
+  share one rhythm is the run test applied to motion; `treatments.md` carries it as prose,
+  because the tell is a click that stops changing what the room learns.
+- **A trigger that emphasises rather than reveals is not judged.** `dead-trigger` looks for
+  entrance effects. An interactive trigger that animates a shape already on screen is
+  legitimate hand-authored PowerPoint, and this layer cannot tell it from a reveal someone
+  broke.
 - **A shape's declared box is not its rendered text extent.** `bounds` checks
   the box the manifest recorded for a shape — it has no way to know whether
   the text *inside* that box overflows the box's own edges. This is exactly
@@ -369,9 +407,27 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   skipped by `contrast` and `overflow` on purpose — checking it would report
   false losses for text a PDF extractor structurally cannot read. That also
   means those panels get *zero* automated coverage: overflow, illegible type,
-  and low contrast inside a screenshotted card are only caught by eye. This
-  exclusion is by design, not a gap to close — see `docs/panels.md` for the
-  full panel pipeline and the costs of choosing a panel over a native shape.
+  and low contrast inside a screenshotted card are only caught by eye. See
+  `docs/panels.md` for the full panel pipeline and what choosing a panel over a
+  native shape costs.
+- **`placeholder` reads the manifest's words, so a panel hides its copy too.**
+  Scaffold or `TODO` text inside an HTML card or a doc/code panel is a picture by
+  the time the deck is written, and never reaches the manifest as text — the same
+  blind spot `contrast` and `overflow` have there. Nor does the check read intent:
+  it matches literal phrases, so a real sentence that happens to contain one is
+  reported, and copy that is placeholder in every sense but its wording is not.
+- **`placeholder` names four scaffold phrases.**
+  Only copy no ordinary deck would write is on the list: `A KICKER`, `Three lines and
+  a chrome block make a cover`, `Three things are broken` and `questions@example.com`.
+  An unedited scaffold therefore draws four findings, on three of its six slides, and
+  its other seeded lines — *Three moves*, *The first thing*, *What we chose.*,
+  *Adoption climbs every quarter* — pass, as the same words would in a deck someone
+  wrote.
+- **The x-run is matched in either case, and asks nothing about what it stands for.**
+  A masked identifier (*Card ending XXXX 4242*), a Roman numeral (*Section XXX*) and a
+  front-matter page reference all report alongside a real `xxx` placeholder. Three or
+  more `x` standing as a word of their own is the whole test — a run inside a word or
+  between digits (*maxxxx*, *1xxx2*) is not one.
 - **`text-fit` sees only what a component records.** A shape whose paragraphs sit at
   different rungs records a `line_pt` — one size per line — and each is measured at its
   own. A multi-line record *without* those sizes is skipped rather than guessed at,
@@ -381,7 +437,7 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   the sizes too.
 - **Every width this layer measures is only as good as the face's metrics.**
   `text-fit`, and the height arithmetic every component uses to size its own
-  boxes, are computed from per-character advances — and pptxkit ships those for
+  boxes, are computed from per-character advances — and deckwright ships those for
   two families only, Calibri/Carlito and Arial/Helvetica/Liberation. A theme
   naming anything else is laid out against a deliberately loose ceiling, so a
   clean `text-fit` on such a deck means "nothing overflowed the widest estimate
@@ -391,8 +447,17 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   installed** where the deck is opened — the build reserves ceiling width, the
   renderer substitutes something narrower, and a slide that overlaps for your
   audience reports clean for you. See
-  [`theme.md`](theme.md#the-face-and-whether-pptxkit-can-measure-it) for the
+  [`theme.md`](theme.md#the-face-and-whether-deckwright-can-measure-it) for the
   table of measured families and what to do about it.
+- **`font-substituted` needs fontconfig, and answers only for this machine.** It
+  asks `fc-list` which families are installed, and where that binary is absent —
+  macOS does not ship it; `brew install fontconfig` supplies it — the check returns
+  nothing rather than a verdict. A run with no `font-substituted` finding therefore
+  means either every face is installed or nobody looked, and `--no-render` makes it
+  the latter by design. What it does answer for is the box that rendered, which is
+  the one whose pixels `overflow` and `render-contrast` read. The laptop the deck is
+  finally opened on is unobservable from here: a face present on your machine and
+  missing on the presenter's substitutes there, and nothing in this layer sees it.
 - **`min-font` and `contrast` see rows, not lines.** A manifest row can stand
   for a whole multi-paragraph shape under one dominant size and colour, and a
   row that names no size (or no colour pair) is skipped without a finding —
@@ -438,14 +503,13 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   hyphen) or `non- text` (`-layout` keeps it at the row break), and neither
   is loss — but that same leniency means a garbled or reordered rendering of
   the right characters would not be flagged either.
-- **A wrapped line in a multi-column block reports a false `overflow`.** Both
-  extractions read a page row by row, so where two columns sit side by side the
-  neighbouring column's text lands *between* the halves of a line the renderer
-  wrapped: `…the router does` / `• Write-offs stop…` / `not`. The line is never
-  contiguous in either pass, so the search misses it and the check reports text
-  it can plainly see. A two-column `bullets:` whose longest item wraps is the
-  usual way to meet it. The finding is `[error]`, and on this one shape it is
-  worth confirming against the render before believing it.
+- **A line whose own box crop also fails still reports a false `overflow`.** Both
+  whole-page extractions read a page row by row, so where two columns sit side by
+  side the neighbouring column's text lands *between* the halves of a line the
+  renderer wrapped. The check answers that by asking again inside the shape's own
+  box, which resolves the ordinary two-column case — but only when `qa` renders,
+  and a crop that errors is logged and treated as a miss, so the finding comes
+  back. On a single `[error] overflow` it is still worth a look at the render.
 - **None of these checks are a design review.** Visual hierarchy,
   alignment, spacing balance, and "does this look intentional" are out of
   scope entirely — the vision-model design review carried into Plan C2 is
@@ -454,15 +518,19 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
 ## Adding a new check
 
 A manifest-only check is a function `(manifest: dict, theme: Theme) -> list[Finding]`
-in `src/pptxkit/qa/geometry.py`. That `dict` is the serialised form of `ShapeRecord`,
-`PlacementRecord` and `SlideRecord` in `src/pptxkit/compile/record.py` — read those
+in `src/deckwright/qa/geometry.py`. That `dict` is the serialised form of `ShapeRecord`,
+`PlacementRecord` and `SlideRecord` in `src/deckwright/compile/record.py` — read those
 dataclasses for the keys and their units rather than inferring them from a built deck's
 JSON. `manifest.py` only writes them. One that
 needs the render goes in
-`src/pptxkit/qa/textflow.py` (extracted text) or `src/pptxkit/qa/imagery.py`
+`src/deckwright/qa/textflow.py` (extracted text) or `src/deckwright/qa/imagery.py`
 (pixels, taking the rendered images rather than the theme); one that reads the saved
-package goes in `src/pptxkit/qa/package.py`, taking the deck path alone. Wire it into
-`run_qa` (`src/pptxkit/qa/runner.py`) — inside the `if render:` block if it needs one —
+package goes in `src/deckwright/qa/package.py`, taking the deck path alone — unless it asks
+something other than "will PowerPoint open this file": what the chart parts say about the
+charts is `src/deckwright/qa/charts.py`, and what the timing says is
+`src/deckwright/qa/motion.py`, which reads the manifest for the rhythm and the package for a
+reveal that cannot fire. Wire it into
+`run_qa` (`src/deckwright/qa/runner.py`) — inside the `if render:` block if it needs one —
 and give every `Finding` a `severity` that matches the table above: `error` for a
 placement/content defect the audience will notice, `warn` for a quality issue worth a
 human decision. Add its row to "The checks" table and, if it has a blind spot, a

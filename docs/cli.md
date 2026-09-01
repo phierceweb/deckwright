@@ -1,6 +1,6 @@
 # The CLI — every command, and the knobs behind them
 
-Reference for the twelve `pptxkit` commands and the environment variables they read. Run
+Reference for the thirteen `deckwright` commands and the environment variables they read. Run
 them through `bin/run`, which uses the project venv:
 
 ```bash
@@ -28,6 +28,7 @@ reference.
 - [`qa` — check a built deck](#qa--check-a-built-deck)
 - [`diff` — what a hand-edit changed](#diff--what-a-hand-edit-changed)
 - [`inspect` — inventory a deck's shapes](#inspect--inventory-a-decks-shapes)
+- [`extract` — words out of a deck deckwright did not build](#extract--words-out-of-a-deck-deckwright-did-not-build)
 - [`conform` — onboard a brand template](#conform--onboard-a-brand-template)
 - [`shot` — screenshot an HTML file](#shot--screenshot-an-html-file)
 - [`sample` — a template to onboard against](#sample--a-template-to-onboard-against)
@@ -97,16 +98,18 @@ bin/run build deck.deck.yaml
 bin/run build deck.deck.yaml --theme templates/acme.theme.yaml --out out/deck/deck-v3.pptx
 ```
 
-Compiles a `.deck.yaml` against a theme into a `.pptx` and two siblings.
+Compiles a `.deck.yaml` against a theme into a `.pptx` and three siblings.
 `<deck>.manifest.json` records every shape's box, colours and font size — it is what
 `qa` reads, so keep the pair together. `<deck>.content.md` is the same build rendered
 as the deck's **words**: slide by slide, chrome as headings, tables as tables, speaker
-notes as quotes. Read that one; it is derived, so regenerate it rather than edit it.
+notes as quotes. `<deck>.beats.md` is the same build rendered as its **reveal order** —
+what arrives on click one, two, three, and which click fires which trigger. Read those
+two; they are derived, so regenerate them rather than edit them.
 
 | Flag | Effect |
 |---|---|
 | `--theme` / `-t` | Theme file. Default: resolved by the spec's `theme:` name against the theme directory. |
-| `--out` / `-o` | Output path, overriding the spec's own `out:`. |
+| `--out` / `-o` | Output path, overriding the spec's own `out:`. Must be a `.pptx`: a YAML path, and the spec being compiled above all, is refused rather than written over. Rebuilding over an existing deck is fine. |
 | `--keep-layouts` | Keep the template's unused slide layouts and masters, and the media only they reach. Off by default. |
 
 A brand template arrives with every layout its designer drew, and a built deck uses
@@ -134,17 +137,14 @@ motion build.
 | `--out` / `-o` | Where the deck goes. Default `out/demo`. |
 
 **It is generated, not written.** The catalogue is `EXERCISE` in
-`src/pptxkit/conform/exercise.py` — the same slides `conform` drives against real
+`src/deckwright/conform/` — the same slides `conform` drives against real
 brand templates. Nothing here is a second copy: [`testing.md`](testing.md)
 requires every new capability to land in that registry, and `tests/test_templates.py`
-builds all of it against every brand template in `templates/`. So the demo grows
-with the library, and a
-capability cannot go missing from it without the suite going red.
+builds all of it against every brand template in `templates/`. So the demo grows with the
+library, and a capability cannot go missing from it without the suite going red.
 
-That is why it replaced a hand-written deck. A written one pins a theme, a set of
-words and a placement per capability, and goes silently stale the day a component is
-added. This one pins nothing — name a different theme and the same catalogue renders
-through it.
+The deck pins nothing — no theme, no words, no placement per capability. Name a different
+theme and the same catalogue renders through it.
 
 Read the result with the `.content.md` written beside it rather than by opening every
 slide. If a capability fails against a brand theme the build stops at it; reach for
@@ -167,7 +167,7 @@ the render is the ground truth, not the spec.
 | Flag | Effect |
 |---|---|
 | `--outdir` / `-o` | Where images go. Default `<pptx-dir>/render/<deck>`. |
-| `--dpi` | Rasterization DPI. Default 110, or `$PPTXKIT_RENDER_DPI`. |
+| `--dpi` | Rasterization DPI. Default 110, or `$DECKWRIGHT_RENDER_DPI`. |
 | `--contact-sheet` | Also write `contact_sheet.png`, the whole deck as one grid. |
 | `--cols` | Columns in that grid. Default 4. |
 
@@ -253,7 +253,7 @@ Every slide's shapes with ids, names and inch boxes. This is the tool for **surg
 hand-edits to a delivered deck**: it works on any `.pptx`, needs no manifest, and the
 shape ids it prints are what a python-pptx patch script targets.
 
-A deck pptxkit built names each shape for the spec node that drew it — `s1.chrome`,
+A deck deckwright built names each shape for the spec node that drew it — `s1.chrome`,
 `s3.hero.card#1` — so the name says what to edit and where it came from. On a deck
 from anywhere else the names are whatever PowerPoint assigned (`Rectangle 1`).
 Names are the stable handle; ids restart on every slide. See
@@ -265,6 +265,107 @@ after a hand-edit" rule in [`docs/pptx-deck-building.md`](pptx-deck-building.md)
 A file that will not open as a `.pptx` — corrupt, truncated, or another Office app's
 format under a renamed extension — is refused with a message naming the path, not a
 traceback.
+
+## `extract` — words out of a deck deckwright did not build
+
+```bash
+bin/run extract "decks/Board Update.pptx"
+bin/run extract "decks/Board Update.pptx" --as md
+```
+
+```
+90 slide(s) -> decks/Board Update.deck.yaml
+56 shape(s) could not be converted — each is named in Board Update.deck.yaml
+```
+
+Reads every slide's text in reading order and writes it as a draft `.deck.yaml` that
+builds, or as a Markdown transcript. Shapes that overlap vertically are one row and are
+read left to right, so a row of four cards comes back in the order a reader sees it
+rather than in the order of their top edges. This is the way in for a deck that came from
+somewhere else — a client's file, last quarter's version, a deck someone sent you.
+
+| Flag | Effect |
+|---|---|
+| `--out` / `-o` | Where to write. Default: beside the deck, as `<deck>.deck.yaml` or `<deck>.md`. |
+| `--as` | `yaml` for a draft spec, `md` for a transcript. Default `yaml`; any other value is refused. |
+| `--theme` / `-t` | Theme the draft names, and the grid it is drafted against. Default `base`. |
+| `--force` | Overwrite an existing file at that path. Without it, a destination that already exists is refused. |
+
+A draft is written once. The second `extract` of a deck — the client sent a new version,
+the file grew three slides — finds the spec you have been editing at the destination and
+refuses rather than replacing it; `--force` is how you say the edits are expendable. The
+refusal comes before the deck is read, as does an `--as` that is neither `yaml` nor `md`.
+
+Kickers, titles, subtitles, body text, tables and speaker notes convert. A table of a
+single row — a label band, a one-row layout table — comes back as bullets, since it has no
+body rows to put under a header. A slide painted in one of the theme's own pair
+colours comes back with that `background:`. Size, position and every treatment do not
+convert: each slide comes back as chrome plus bullets in the content band. Every shape
+that held something and did not convert — a picture, a chart, a connector, a line,
+SmartArt, an unlabelled band or arrow — is named in a `# not converted:` comment on the
+slide it came from. Repeats collapse into one line, so twenty-nine freeform icons read as
+`# not converted: 29 × freeform`; the count the command prints is one per shape, and so is
+larger than the number of comment lines.
+
+A group is walked rather than named: its children convert as though each sat on the slide,
+ordered among themselves and taking the group's place in the reading order. Eight levels
+of nesting are walked; a group nested deeper than that is named whole in a
+`# not converted:` comment instead.
+
+Three things can put a line in the chrome rather than the bullets, in this order.
+
+- A title, centre-title or subtitle placeholder, whatever the shape is named.
+- A shape named `s<n>.chrome.title`, `s<n>.chrome.kicker` or `s<n>.chrome.subtitle` —
+  the names `build` writes — so a deck deckwright built comes back with the chrome it was
+  authored with. One frame named `s<n>.chrome` carries stacked lines: three are read by
+  position, since that is the order the compiler stacks them in, and two are ambiguous —
+  the larger line is the title and the other is named for the side of it it sits on.
+- Failing both, the slide's first block, when it is a single line, is set larger than
+  every other block on the slide, and runs at least 1.4× the slide's median type size.
+  Anything looser leaves it a bullet.
+
+A background is named only when its colour is one the named theme declares. Drafting a
+deck against a theme other than the one it was built on will not match, and the draft says
+so — `# this slide was painted 12161B; name a background pair` — leaving the choice of
+pair to you.
+
+The bullet marker `build` writes into a `bullets` component is taken off again, so a deck
+can be extracted and rebuilt any number of times without the dot accreting. A leading dot
+in a deck deckwright did not build is left alone; there it is a character the author typed.
+
+A placeholder outranks a shape name, each field is claimed once, and a losing claim keeps
+its place in the reading order as bullets. The size test reads only runs carrying a size
+of their own, so a deck that leaves every size to its layout gets no title from it.
+
+Two things are passed over without a comment, because neither held anything: a layout
+placeholder nobody typed into, and an empty text box. A shape painting the whole canvas in a
+flat colour is passed over too — it is the slide's background, and comes back as one. One thing is named without being
+recovered: the words *inside* a chart or a SmartArt graphic. That shape gets its line; its
+labels do not come back as text.
+
+What builds out of the draft is one rectangle repeated for the length of the file.
+[`docs/treatments.md`](treatments.md) is what fixes that — read it and give each slide
+the shape its content earns before the deck goes anywhere. The draft's header says the
+same thing at the top of the file.
+
+The draft names `--theme` and is drafted against it: a placement's `rows:` spans that
+theme's own grid, so a theme declaring `scale: {rows: 6}` gets six-row spans. Each
+table placement is given the height that table will ask for at build, so its band is
+sized by its contents; every other placement gets a fixed two rows. A name that resolves to no theme
+file and no packaged theme fails here, before anything is written, rather than later at
+`build`.
+
+A slide holding more than the grid can band still yields a spec that builds. Its blocks
+run together into one list, a long list takes a second or third column (`columns:` in the
+draft), and anything still left over is written in as comment lines under `# more than
+one slide holds — these did not fit, and are yours to place:`.
+
+It invents no `sections:` — a `.pptx` cannot say where its sections were, and a guessed
+one would make every slide's `section:` a lie. `out:` defaults to
+`out/<slug>/<title> v1.pptx` — the same slug `new` uses, so one deck name gives one
+output directory whichever command wrote the spec. The draft compiles before it is
+touched; a slide that yielded no words at all becomes a titled placeholder rather than a
+hole.
 
 ## `conform` — onboard a brand template
 
@@ -279,7 +380,7 @@ time, and reports what it carries. Exits non-zero if any exercise failed. Full d
 | Flag | Effect |
 |---|---|
 | `--out` / `-o` | Output root. Default `out/conform/`. |
-| `--adopt` | Keep the derived theme as `templates/<NAME>.theme.yaml`, with a copy of the template in `templates/`. Refuses an existing name. |
+| `--adopt` | Keep the derived theme as `templates/<NAME>.theme.yaml`, beside the template it binds. The template must already be in `templates/` — nothing is copied. Refuses a name already bound to another template that is also there. |
 | `--force` | With `--adopt`, replace an existing theme of that name. |
 
 `out/` is disposable by design, so a theme left there is a theme you will lose. `--adopt`
@@ -300,7 +401,7 @@ building and eyeballing a card's HTML before wiring it into a deck.
 |---|---|
 | `--out` / `-o` | Output `.png`. Default: alongside the `.html`. |
 | `--width` / `-w` | Layout width in CSS px. Default 1000. |
-| `--scale` | Device scale factor. Default 2, or `$PPTXKIT_SHOT_SCALE`. |
+| `--scale` | Device scale factor. Default 2, or `$DECKWRIGHT_SHOT_SCALE`. |
 
 See [`docs/panels.md`](panels.md) for the CSS-variable contract these cards are themed
 through, and the canvas ceiling that clips a too-tall one.
@@ -312,9 +413,9 @@ bin/run sample
 bin/run conform templates/sample.pptx --adopt sample
 ```
 
-Writes a small brand template pptxkit owns outright, so the `conform` walkthrough runs
+Writes a small brand template deckwright owns outright, so the `conform` walkthrough runs
 with nothing to hunt for. It lands in the theme directory — `templates/` unless
-`PPTXKIT_THEME_DIR` says otherwise — because `--adopt` reads a template where it lives
+`DECKWRIGHT_THEME_DIR` says otherwise — because `--adopt` reads a template where it lives
 and refuses one anywhere else. Pass a path to override; if that path is outside the
 theme directory, the printed next step tells you to move it there first.
 
@@ -324,13 +425,13 @@ theme directory, the printed next step tells you to move it there first.
 
 It carries a real colour scheme (six accents, none of them Microsoft's, so a derived
 theme binds all six and a hued `dk2` becomes `inverse`), a font scheme in a face
-pptxkit can measure, and slides whose runs use it — because `conform` takes the face
+deckwright can measure, and slides whose runs use it — because `conform` takes the face
 from a template's own slides, so an unmeasured face here would reach every deck built
 from the adopted theme.
 
 **It is a pipeline fixture, not brand-variance evidence.** It is shaped like what the
 compiler already handles, so a clean `conform` against it proves the pipeline runs —
-never that pptxkit copes with a template nobody designed against. That question is
+never that deckwright copes with a template nobody designed against. That question is
 only answered by real brand templates in `templates/`, and the sample is stamped in
 its `docProps` so [the corpus guard](testing.md) refuses it mechanically rather than
 by convention.
@@ -344,6 +445,7 @@ bin/run doctor
 ```
 PASS   glyphs.bundle     4,001 glyphs @ 50f0603134ce
 PASS   theme.builtin     base resolves (packaged)
+PASS   fonts.base        2 installed: Helvetica, Courier New
 WARN   tools.soffice     not found (soffice) — needed by render, and QA's
                          render-based checks; brew install --cask libreoffice
 SKIP   templates.brands  no brand template — tests/test_templates.py skips, so a green suite is
@@ -352,20 +454,32 @@ SKIP   templates.brands  no brand template — tests/test_templates.py skips, so
 
 Read-only ground truth, in pf-core's `pf-doctor` shape (run that one too — it attests
 the framework install). Reports the version that answered, the glyph bundle against its
-manifest, whether `theme: base` resolves and from where, the sample template, the
-corpus, and each of the four external tools **resolved exactly as the runtime resolves
-them, then checked for existence** — so a `PPTXKIT_SOFFICE` or `PPTXKIT_CHROME` pointing
-somewhere wrong shows up here rather than mid-render.
+manifest, whether `theme: base` resolves, from where, and whether it loads — a theme
+that resolves but will not parse is a `WARN` naming the file and the loader's message —
+whether this machine has the faces `base` sets type in, the sample template, the corpus,
+and each of the five external tools **resolved exactly as the runtime resolves them, then
+checked for existence** — so a `DECKWRIGHT_SOFFICE` or `DECKWRIGHT_CHROME` pointing somewhere
+wrong shows up here rather than mid-render.
 
-**A missing tool is a `WARN`, never a `FAIL`.** LibreOffice, Poppler and Chrome are
-each needed by some commands and irrelevant to others, so absence is a fact about this
-machine; every warning names the command that installs it. Only a broken install —
-a glyph bundle that does not match its manifest — fails, and only that sets a non-zero
-exit.
+The `fonts.base` row is only ever about `base`: a brand theme belongs to a deck, so
+`qa` covers that one. A face the machine lacks is a `WARN` — the render substitutes
+something else, so QA's render-based checks judge type you will not ship. Without
+fontconfig the row is a `SKIP`: the question could not be asked. It is a `SKIP` too when
+`base` itself did not load, since there are then no faces to ask about — the theme row
+carries that failure.
+
+**A missing tool is a `WARN`, never a `FAIL`.** LibreOffice, Poppler, Chrome and
+fontconfig are each needed by some commands and irrelevant to others, so absence is a
+fact about this machine; every warning names the command that installs it. Two things
+`FAIL`, and only a `FAIL` sets a non-zero exit: a glyph bundle that does not match its
+manifest, and a `theme: base` that resolves to a path with no file at it. A `base` that
+resolves to a real file it cannot parse is a `WARN`, so a malformed theme of your own does
+not fail `bin/setup` or CI.
 
 ## `glyphs` — the built-in icon set
 
 ```bash
+bin/run glyphs find globe
 bin/run glyphs verify
 bin/run glyphs sync --ref 50f0603134ce7b70b2d71b686cc13e8b57ccb74c
 ```
@@ -378,15 +492,22 @@ glyph reads faster because there is nothing to decompress.
 
 | Sub-command | Flag | Effect |
 |---|---|---|
+| `find` | | Print every glyph name containing a substring, aliases included, so `icon:` does not need the catalogue. Exits 1 on no match. |
+| `find` | `--limit` | Most names to print, 40 by default; `0` prints all. A capped run says how many it dropped. |
 | `verify` | | Check every glyph in the bundle against its manifest hash. Offline, and what `bin/setup` runs. |
 | `sync` | | Rebuild the bundle from the upstream commit the manifest already pins — repairs a checkout without moving the set. |
 | `sync` | `--ref` | Vendor a **different** upstream commit: fetch, curate, and rewrite both files. |
+
+`find` matches hyphens and underscores alike, and searches the alias tables as well
+as the vendored names — so `glyphs find globe` returns `globe`, the alias, rather
+than only the `language` it resolves to. [`glyphs.md`](glyphs.md) groups the set by
+what a slide is about; `find` is for when you already have the word.
 
 **Updating to newer icons is `sync --ref` and reading a text diff.** The fetch is a
 blobless sparse checkout of just the icon selection (~119MB, ~35s, into a temp
 directory that is deleted straight after), then three rules are applied — the
 `_fill1_24px` suffix comes off the name, a missing `viewBox` is inserted, and any
-drawing that only reads right under nonzero winding is dropped, because pptxkit fills
+drawing that only reads right under nonzero winding is dropped, because deckwright fills
 every glyph even-odd. The command prints what moved:
 
 ```
@@ -399,7 +520,7 @@ Then `git diff` on `glyphs.sum` names every icon that appeared, vanished or was
 redrawn — one line each, so **a re-vendor is reviewed as text, never as a binary**.
 Run `bin/test` after: the suite re-measures the winding property over whatever the
 sync produced, and fails naming any glyph that cannot ship. Provenance and the full
-curation rules are in `src/pptxkit/icons/glyphs/material/SOURCE.md`.
+curation rules are in `src/deckwright/icons/glyphs/material/SOURCE.md`.
 
 ## Environment variables
 
@@ -409,27 +530,30 @@ directory on startup. Defaults live beside the code that reads them, not here.
 
 | Variable | Governs |
 |---|---|
-| `PPTXKIT_THEME_DIR` | Where a spec's `theme:` name is resolved — `<name>.theme.yaml`, beside the `.pptx` it binds to. Relative to the CWD, so set it when running from outside the repo. A name not found there falls back to the packaged built-ins, so `theme: base` resolves anywhere. |
-| `PPTXKIT_CACHE_DIR` | Cache root — rendered panel PNGs and media extracted from templates. |
-| `PPTXKIT_ICON_DIR` | A glyph directory searched *before* the theme's own and the shipped set. |
-| `PPTXKIT_SOFFICE` | The LibreOffice command `render` invokes. |
-| `PPTXKIT_PDFTOPPM` | The Poppler `pdftoppm` command that rasterizes the converted PDF. |
-| `PPTXKIT_RENDER_DPI` | Rasterization DPI for `render`. |
-| `PPTXKIT_CHROME` | The Chrome/Chromium/Edge binary for `shot` and panels. Autodetected when unset. |
-| `PPTXKIT_SHOT_SCALE` | Device scale factor for HTML screenshots. |
-| `PPTXKIT_CHROME_NO_SANDBOX` | Set to `1` to pass `--no-sandbox`. Off by default: a card renders HTML that may not be yours, and the sandbox is the process-level boundary around it — what the HTML itself may do is bounded separately by the content policy in `SECURITY.md`. Needed in containers that deny the unprivileged user namespace Chrome needs; implied when running as root, where the sandbox cannot work at all. A build that dies for want of a sandbox names this variable. |
-| `PPTXKIT_SHOT_TIMEOUT_S` | How long to wait on headless Chrome. |
-| `PPTXKIT_SHOT_CANVAS_H` | Render canvas height in CSS px. A taller card is clipped by the browser; the build detects that and tells you to raise this. |
-| `PPTXKIT_PDFTOTEXT` | The `pdftotext` command QA's text extraction uses. |
-| `PPTXKIT_PDFTOTEXT_TIMEOUT_S` | Timeout for it. |
+| `DECKWRIGHT_THEME_DIR` | Where a spec's `theme:` name is resolved — `<name>.theme.yaml`, beside the `.pptx` it binds to. Relative to the CWD, so set it when running from outside the repo. A name not found there falls back to the packaged built-ins, so `theme: base` resolves anywhere. |
+| `DECKWRIGHT_CACHE_DIR` | Cache root — rendered panel PNGs and media extracted from templates. |
+| `DECKWRIGHT_ICON_DIR` | A glyph directory searched *before* the theme's own and the shipped set. |
+| `DECKWRIGHT_SOFFICE` | The LibreOffice command `render` invokes. |
+| `DECKWRIGHT_PDFTOPPM` | The Poppler `pdftoppm` command that rasterizes the converted PDF. |
+| `DECKWRIGHT_RENDER_DPI` | Rasterization DPI for `render`. |
+| `DECKWRIGHT_CHROME` | The Chrome/Chromium/Edge binary for `shot` and panels. Autodetected when unset. |
+| `DECKWRIGHT_SHOT_SCALE` | Device scale factor for HTML screenshots. |
+| `DECKWRIGHT_CHROME_NO_SANDBOX` | Set to `1` to pass `--no-sandbox`. Off by default: a card renders HTML that may not be yours, and the sandbox is the process-level boundary around it — what the HTML itself may do is bounded separately by the content policy in `SECURITY.md`. Needed in containers that deny the unprivileged user namespace Chrome needs; implied when running as root, where the sandbox cannot work at all. A build that dies for want of a sandbox names this variable. |
+| `DECKWRIGHT_SHOT_TIMEOUT_S` | How long to wait on headless Chrome. |
+| `DECKWRIGHT_SHOT_CANVAS_H` | Render canvas height in CSS px. A taller card is clipped by the browser; the build detects that and tells you to raise this. |
+| `DECKWRIGHT_PDFTOTEXT` | The `pdftotext` command QA's text extraction uses. |
+| `DECKWRIGHT_PDFTOTEXT_TIMEOUT_S` | Timeout for it. |
+| `DECKWRIGHT_MAX_BEAT_SHAPES` | Most shapes one beat of a staged build may reveal before `qa` warns (`beat-size`). Default 6. |
+| `DECKWRIGHT_FC_LIST` | The fontconfig `fc-list` command that answers which faces this machine has — `doctor`'s `fonts` row and QA's `font-substituted` check. Absent, both go silent rather than guess. |
+| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | Timeout for it. |
 
 pf-core supplies the rest — `LOG_LEVEL`, `LOG_FILE` and the API-key vars. See
 `docs/pf-core/config.md` (the symlink `bin/setup` creates).
 
 ## External tools
 
-Four commands shell out. A tool that is not installed fails with a message naming the
-binary it looked for, the command that installs it here, and the `PPTXKIT_*` knob that
+Five commands shell out. A tool that is not installed fails with a message naming the
+binary it looked for, the command that installs it here, and the `DECKWRIGHT_*` knob that
 points at one installed elsewhere:
 
 | Tool | Needed by |
@@ -438,10 +562,14 @@ points at one installed elsewhere:
 | Poppler `pdftoppm` | `render`; QA's render-based checks |
 | Poppler `pdftotext` | QA's overflow check |
 | Chrome / Chromium / Edge | `shot`; **building** any deck that uses a `document` component |
+| fontconfig `fc-list` | `doctor`'s `fonts` row; QA's `font-substituted` check |
 
-`inspect` and `qa --no-render` need none of them. `build` needs only Chrome, and only when
-the spec uses `document:` — the one component rendered through HTML. `panel:` paints a
-native rectangle and needs nothing external, despite the name it shares with
+`fc-list` is the exception to the paragraph above: nothing fails without it, and the
+two checks that ask it go silent instead.
+
+`inspect` and `qa --no-render` need none of them. `build` needs only Chrome, and only
+when the spec uses `document:` — the one component rendered through HTML. `panel:`
+paints a native rectangle and needs nothing external, despite the name it shares with
 [`panels.md`](panels.md).
 
 ## Exit codes and logging
@@ -456,7 +584,7 @@ is on the machine, not in the stack. Debug logging is `-v` / `--verbose` — see
 
 ## Adding a command
 
-1. Add a `@app.command()` function in `src/pptxkit/cli.py`. Keep it thin: parse
+1. Add a `@app.command()` function in `src/deckwright/cli.py`. Keep it thin: parse
    arguments, call **one** service or orchestrator function, print the result. No
    business logic: the command parses arguments and calls one function.
 2. Raise the project's own errors (`SpecError`, `ThemeError`, `LayoutError`) for bad

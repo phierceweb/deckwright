@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.errors import SpecError
-from pptxkit.spec import parse_deck_text
+from deckwright.errors import SpecError
+from deckwright.spec import parse_deck_text
 
 _HEAD = "theme: t\n---\n"
 
@@ -254,7 +254,7 @@ def test_a_box_may_start_off_the_canvas(tmp_path):
 
 def test_a_component_from_the_extends_module_is_accepted(tmp_path):
     (tmp_path / "ext.py").write_text(
-        "from pptxkit.layouts.components import component\n"
+        "from deckwright.layouts.components import component\n"
         "\n"
         "@component('t-ext-component')\n"
         "def _c(ctx):\n"

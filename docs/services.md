@@ -1,6 +1,6 @@
-# Services — where pptxkit leaves its own process
+# Services — where deckwright leaves its own process
 
-`src/pptxkit/services/` holds the four modules that stand between pptxkit and something
+`src/deckwright/services/` holds the four modules that stand between deckwright and something
 it does not implement. Two shell out to a system binary — `render.py` to LibreOffice and
 Poppler, `htmlshot.py` to headless Chrome; `montage.py` is Pillow arithmetic; and
 `htmlcard.py` leaves the process not at all, being a pure string builder over the
@@ -11,7 +11,7 @@ absent, slow, or lying.
 The layers above own the rest. [`panels.md`](panels.md) owns the panel pipeline that sits
 on top of `services/htmlshot.py` — the CSS-variable contract, the cache key, region
 slicing. [`qa.md`](qa.md) owns what a render is then checked *for*. [`cli.md`](cli.md)
-owns the commands, their flags, and every `PPTXKIT_*` default. None of that is repeated
+owns the commands, their flags, and every `DECKWRIGHT_*` default. None of that is repeated
 here.
 
 ---
@@ -54,7 +54,7 @@ The fourth external binary a deck workflow touches, `pdftotext`, is not in this 
 | `shot` | `cli.py` → `render_html_to_png` | a browser |
 | `build` | only when a slide carries `document`: `components/doccard.py` → `panels/place.py` → `render_html_to_png` | a browser, conditionally |
 | `new` | builds the deck it scaffolds, which carries no `document` | nothing |
-| `demo`, `conform` | build every exercise, and `conform/exercise.py` includes a `document` | a browser |
+| `demo`, `conform` | build every exercise, and `conform/layout.py` includes a `document` | a browser |
 | `diff`, `inspect` | read the saved package | nothing |
 
 `document` is the only component that reaches a browser. The `panel` component
@@ -114,8 +114,8 @@ exit inside `RenderError`. Poppler names and zero-pads the pages to the deck's o
 which is the only reason the plain `sorted()` on the way out is page order.
 
 Neither subprocess carries a timeout. A wedged `soffice` blocks the caller for as long as
-it wants — unlike `htmlshot.py` (`PPTXKIT_SHOT_TIMEOUT_S`) and `qa/textflow.py`
-(`PPTXKIT_PDFTOTEXT_TIMEOUT_S`), which both cap their wait.
+it wants — unlike `htmlshot.py` (`DECKWRIGHT_SHOT_TIMEOUT_S`) and `qa/textflow.py`
+(`DECKWRIGHT_PDFTOTEXT_TIMEOUT_S`), which both cap their wait.
 
 ## `htmlshot.py` — headless Chrome
 
@@ -126,11 +126,11 @@ the browser starts, so a failed run cannot leave the previous PNG in place looki
 
 ### Finding a browser
 
-`_resolve_chrome` takes the explicit argument, then `PPTXKIT_CHROME`, then the first
+`_resolve_chrome` takes the explicit argument, then `DECKWRIGHT_CHROME`, then the first
 entry of `_CHROME_CANDIDATES` that exists — bare names through `shutil.which`, macOS
 app-bundle paths through `os.path.exists`. First match wins, so a machine with both gets
 Chrome before Chromium and Chromium before Edge. Nothing found raises
-`RenderError` naming `PPTXKIT_CHROME`, before any work is done.
+`RenderError` naming `DECKWRIGHT_CHROME`, before any work is done.
 
 ### The invocation
 
@@ -167,16 +167,16 @@ that line, with no error. `_check_not_clipped` decides between four outcomes:
 | Evidence | Outcome |
 |---|---|
 | Probe height ≤ canvas | proceeds |
-| Probe height > canvas | `RenderError` naming the height needed and `PPTXKIT_SHOT_CANVAS_H` |
+| Probe height > canvas | `RenderError` naming the height needed and `DECKWRIGHT_SHOT_CANVAS_H` |
 | No probe height, ink on the render's last row and not its first | `RenderError` naming the canvas height |
 | No probe height, any other ink pattern — both edge rows, neither, or the first alone | logs `html_shot_height_unknown`, proceeds |
 
 Only the third row raises: ink on both edge rows is a deliberately full-bleed page, which
-only `pptxkit shot` produces, and everything that is not "bottom inked, top clear" stays on
+only `deckwright shot` produces, and everything that is not "bottom inked, top clear" stays on
 the warn-only path.
 
 The probe is an inline script appended after the document that publishes
-`document.documentElement.scrollHeight` onto `data-pptxkit-doc-h`, read back out of the
+`document.documentElement.scrollHeight` onto `data-deckwright-doc-h`, read back out of the
 dumped DOM with a regex. [`panels.md`](panels.md) owns *why* the pixel fallback exists and
 what defeats the probe; `tests/test_htmlshot.py` covers the decision table with synthetic
 DOMs and images, and `tests/test_htmlshot_browser.py` drives both rejections through a
@@ -241,7 +241,7 @@ definition lists these cards are for.
 
 `contact_sheet(images, out_path, *, cols=4, thumb_width=480, pad=12, bg=…, numbers=True)`
 stitches page images into one grid PNG with Pillow, and is reached only from
-`pptxkit render --contact-sheet`. Nothing in a build calls it.
+`deckwright render --contact-sheet`. Nothing in a build calls it.
 
 Each image is scaled to `thumb_width` keeping aspect; the cell height is the *tallest*
 thumbnail, so a deck of mixed page sizes gets a ragged grid rather than cropped
@@ -260,7 +260,7 @@ the HTML, width, scale and theme hash, so a build that places the same document 
 launches the browser once. [`panels.md`](panels.md) owns the key and its invalidation.
 Two consequences follow from the cache being *there* rather than in the service:
 
-- **`pptxkit shot` bypasses it.** The CLI calls `render_html_to_png` directly, so it
+- **`deckwright shot` bypasses it.** The CLI calls `render_html_to_png` directly, so it
   always launches a browser — which is what makes it usable for iterating on a card's HTML.
 - **`render` and `qa` re-run LibreOffice every time.** `render_to_images` overwrites the
   PDF and the page images in place, so a QA loop costs one full conversion per iteration
@@ -270,20 +270,20 @@ Two consequences follow from the cache being *there* rather than in the service:
 
 | Condition | Raised | The message names |
 |---|---|---|
-| No browser binary found | `RenderError` | `PPTXKIT_CHROME` |
-| `canvas_height` ≤ 0 | `ConfigurationError` | `PPTXKIT_SHOT_CANVAS_H` and the value given |
+| No browser binary found | `RenderError` | `DECKWRIGHT_CHROME` |
+| `canvas_height` ≤ 0 | `ConfigurationError` | `DECKWRIGHT_SHOT_CANVAS_H` and the value given |
 | Browser exits without writing the PNG | `RenderError` | the stderr tail |
-| Browser outlives `PPTXKIT_SHOT_TIMEOUT_S` | `RenderError` | the timeout and the stderr tail |
+| Browser outlives `DECKWRIGHT_SHOT_TIMEOUT_S` | `RenderError` | the timeout and the stderr tail |
 | PNG exists but is empty | `RenderError` | the output path |
-| Document taller than the render canvas | `RenderError` | the height needed and `PPTXKIT_SHOT_CANVAS_H` |
-| Probe swallowed, content on the canvas floor | `RenderError` | `PPTXKIT_SHOT_CANVAS_H` |
+| Document taller than the render canvas | `RenderError` | the height needed and `DECKWRIGHT_SHOT_CANVAS_H` |
+| Probe swallowed, content on the canvas floor | `RenderError` | `DECKWRIGHT_SHOT_CANVAS_H` |
 | `soffice` missing, or exits non-zero | `RenderError` | the `.pptx` and the soffice command |
 | Conversion produced no PDF | `RenderError` | the PDF path expected |
 | `pdftoppm` missing, or exits non-zero | `RenderError` | the PDF and the pdftoppm command |
 | `contact_sheet` with no images | `InvalidInputError` | — |
 | `filetree_card` with an unknown row kind | `KeyError` | — |
 
-`RenderError` is pptxkit's own subclass of `ClientError` (`src/pptxkit/errors.py`), and
+`RenderError` is deckwright's own subclass of `ClientError` (`src/deckwright/errors.py`), and
 raising the base instead throws away the log key that says an external renderer was the
 thing that broke — `bin/check-framework` is what enforces it.
 
@@ -295,15 +295,15 @@ thing that broke — `bin/check-framework` is what enforces it.
    kwarg first, so precedence stays kwarg > env > default
    (a module constant for the default, a wrapper over `pf_core.utils.env.resolve_*`,
    read at call time). Then document the variable in [`cli.md`](cli.md):
-   `tests/test_docs.py` fails on any `PPTXKIT_*` the code reads and that table omits.
+   `tests/test_docs.py` fails on any `DECKWRIGHT_*` the code reads and that table omits.
 3. **Raise `RenderError`**, with the binary name and the input path in `context=`. Catch
    `FileNotFoundError` alongside `CalledProcessError`: a missing tool and a broken one
    want the same message.
 4. **Never `capture_output` a process whose children may outlive it.** Write stdout and
    stderr to files in a temp directory and put a tail of stderr in the error context, as
    `render_html_to_png` does.
-5. **Decide the timeout deliberately.** `PPTXKIT_SHOT_TIMEOUT_S` and
-   `PPTXKIT_PDFTOTEXT_TIMEOUT_S` are the pattern; a tool that can hang and has no cap
+5. **Decide the timeout deliberately.** `DECKWRIGHT_SHOT_TIMEOUT_S` and
+   `DECKWRIGHT_PDFTOTEXT_TIMEOUT_S` are the pattern; a tool that can hang and has no cap
    hangs the whole build.
 6. **Test it against a faked `subprocess.run`, asserting on the argv** —
    `tests/services/test_render_profile.py` is the shape, and it exists because the

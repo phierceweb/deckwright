@@ -8,8 +8,8 @@ from lxml import etree
 from PIL import Image
 from pptx import Presentation
 
-from pptxkit.layouts.resolve import pick_compose_layout
-from pptxkit.theme.surface import inherited_surface
+from deckwright.layouts.resolve import pick_compose_layout
+from deckwright.theme.surface import inherited_surface
 
 _P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"

@@ -4,13 +4,13 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.compile.manifest import ManifestRecorder
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import component
-from pptxkit.layouts.compose import render_slide
-from pptxkit.layouts.place import Reserved
-from pptxkit.layouts.registry import SlideCtx
-from pptxkit.spec.model import Placement, SlideSpec
+from deckwright.compile.manifest import ManifestRecorder
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import component
+from deckwright.layouts.compose import render_slide
+from deckwright.layouts.place import Reserved
+from deckwright.layouts.registry import SlideCtx
+from deckwright.spec.model import Placement, SlideSpec
 
 _SEEN: dict[str, object] = {}
 
@@ -176,7 +176,7 @@ def test_a_box_placement_off_the_canvas_is_still_refused(theme):
 def _short(ctx):
     """Draws one plate a third of its placement tall, at the top — the shape every
     content-sized component makes."""
-    from pptxkit.utils.shapes import rect as fill_rect
+    from deckwright.utils.shapes import rect as fill_rect
 
     r = ctx.body_rect
     shape = fill_rect(ctx.slide, r.left, r.top, r.width, r.height / 3, ctx.color("line"))

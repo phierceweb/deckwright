@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from pptxkit.services import render as render_mod
+from deckwright.services import render as render_mod
 
 PAGES = 2
 
@@ -89,7 +89,7 @@ def test_an_outdir_with_a_bracket_in_its_name_reports_its_pages(captured, tmp_pa
 
 
 def test_the_rasterizer_command_is_configurable(captured, tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_PDFTOPPM", "poppler-pdftoppm")
+    monkeypatch.setenv("DECKWRIGHT_PDFTOPPM", "poppler-pdftoppm")
     _render(tmp_path)
     rasterize = next(c for c in captured if "-jpeg" in c)
     assert rasterize[0] == "poppler-pdftoppm"

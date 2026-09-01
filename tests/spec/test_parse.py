@@ -2,9 +2,9 @@ import textwrap
 
 import pytest
 
-from pptxkit.errors import SpecError
-from pptxkit.spec import parse_deck, parse_deck_text
-from pptxkit.spec.model import Background
+from deckwright.errors import SpecError
+from deckwright.spec import parse_deck, parse_deck_text
+from deckwright.spec.model import Background
 
 MINIMAL = """
     theme: base
@@ -73,8 +73,8 @@ def test_a_background_that_is_neither_a_name_nor_an_image_is_rejected(tmp_path):
 
 
 def test_a_background_naming_an_undeclared_pair_fails_against_the_palette(tmp_path):
-    from pptxkit.errors import ThemeError
-    from pptxkit.theme.defaults import DEFAULT_PALETTE
+    from deckwright.errors import ThemeError
+    from deckwright.theme.defaults import DEFAULT_PALETTE
 
     spec = _parse("theme: t\n---\nbackground: dark\n", tmp_path)
     with pytest.raises(ThemeError, match=r"no colour pair 'dark'; declared pairs:"):
@@ -233,3 +233,37 @@ def test_unknown_deck_config_field_suggests_a_near_miss(tmp_path):
         SpecError, match=r"deck config: unknown field 'tile'; did you mean 'title'\?"
     ):
         _parse("theme: t\ntile: Oops\n---\ntitle: T\n", tmp_path)
+
+
+def test_a_section_that_resumes_after_another_began_is_rejected(tmp_path):
+    """`sections:` is the source of truth for chapter order, and membership was checked
+    while ordering was not — so a reorder that scattered one chapter built clean, and a
+    theme drawing no section rail showed nothing."""
+    text = (
+        "theme: t\nsections: [Alpha, Beta]\n"
+        "---\nsection: Alpha\n---\nsection: Beta\n---\nsection: Alpha\n"
+    )
+    with pytest.raises(SpecError, match=r"slide 3 resumes section 'Alpha', which ended at slide 1"):
+        _parse(text, tmp_path)
+
+
+def test_sections_in_declared_order_are_accepted(tmp_path):
+    text = (
+        "theme: t\nsections: [Alpha, Beta]\n"
+        "---\nsection: Alpha\n---\nsection: Alpha\n---\nsection: Beta\n"
+    )
+    assert [s.section for s in _parse(text, tmp_path).slides] == ["Alpha", "Alpha", "Beta"]
+
+
+def test_an_unsectioned_slide_does_not_break_the_run_around_it(tmp_path):
+    """A divider carries no section of its own and sits in whatever run it falls in."""
+    text = (
+        "theme: t\nsections: [Alpha, Beta]\n"
+        "---\nsection: Alpha\n---\ntitle: Divider\n---\nsection: Alpha\n---\nsection: Beta\n"
+    )
+    assert [s.section for s in _parse(text, tmp_path).slides][-1] == "Beta"
+
+
+def test_a_section_may_be_declared_and_never_used(tmp_path):
+    text = "theme: t\nsections: [Alpha, Beta]\n---\nsection: Alpha\n"
+    assert _parse(text, tmp_path).sections == ("Alpha", "Beta")

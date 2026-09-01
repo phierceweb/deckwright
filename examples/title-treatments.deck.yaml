@@ -1,13 +1,13 @@
 theme: base
 title: Title treatments
-out: ../out/title-treatments/pptxkit Title Treatments.pptx
+out: ../out/title-treatments/deckwright Title Treatments.pptx
 ---
 kicker: FLUSH-LEFT TOP RAIL
 title: The default, unchanged
 subtitle: No chrome block, so every line stacks from the top margin at the content width
 notes: 'The regression reference. 38 of 127 corpus titles use this treatment; it is
 
-  what pptxkit produced for every deck of every theme before this change.
+  what deckwright produced for every deck of every theme before this change.
 
   '
 place:
@@ -44,7 +44,7 @@ place:
     items:
     - {value: '37', label: corpus titles centred on the canvas axis}
     - {value: '12', label: centred inside a column instead}
-    - {value: '0', label: pptxkit could express before this change}
+    - {value: '0', label: deckwright could express before this change}
 ---
 kicker: AN EPIC OF ANCIENT GREECE
 title: Hero cover

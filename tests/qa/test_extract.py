@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.errors import RenderError
-from pptxkit.qa.textflow import extract_pages
+from deckwright.errors import RenderError
+from deckwright.qa.textflow import extract_pages
 
 
 def _fake_pdftotext(tmp_path, stdout: str, *, code: int = 0):
@@ -73,5 +73,5 @@ def test_a_missing_binary_raises_render_error(tmp_path):
 def test_the_binary_comes_from_the_env_when_unset(tmp_path, monkeypatch):
     pdf = tmp_path / "d.pdf"
     pdf.write_bytes(b"%PDF-1.4")
-    monkeypatch.setenv("PPTXKIT_PDFTOTEXT", _fake_pdftotext(tmp_path, "env\f"))
+    monkeypatch.setenv("DECKWRIGHT_PDFTOTEXT", _fake_pdftotext(tmp_path, "env\f"))
     assert extract_pages(pdf) == ["env"]

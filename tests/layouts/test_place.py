@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.layouts.place import (
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.layouts.place import (
     Placed,
     Reserved,
     check_placements,
@@ -9,9 +9,9 @@ from pptxkit.layouts.place import (
     content_rect,
     resolve_at,
 )
-from pptxkit.theme.model import Rect
-from pptxkit.utils.spans import Share
-from pptxkit.theme.scale import Grid, Scale
+from deckwright.theme.model import Rect
+from deckwright.utils.spans import Share
+from deckwright.theme.scale import Grid, Scale
 
 SCALE = Scale(slide_w=13.333, slide_h=7.5)
 GRID = Grid(

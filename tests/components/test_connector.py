@@ -1,10 +1,10 @@
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component, registered_components
-from pptxkit.theme.model import Rect
-from pptxkit.utils.color import AA_LARGE, contrast_ratio
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component, registered_components
+from deckwright.theme.model import Rect
+from deckwright.utils.color import AA_LARGE, contrast_ratio
 
 EMU = 914400
 
@@ -94,7 +94,7 @@ def test_an_elbow_is_one_shape_with_its_bends_written_out(ctx_factory):
 def test_an_elbow_enters_a_rect_square_on(ctx_factory):
     """The last leg must be perpendicular to the attached edge, so the arrowhead
     points into the card rather than alongside it."""
-    from pptxkit.components.connector import _route
+    from deckwright.components.connector import _route
 
     points = _route((4.5, 3.5), (5.7, 5.2), "h", "h")
     # entering a left/right edge: the final segment is horizontal
@@ -111,7 +111,7 @@ def test_another_connector_resolving_mid_build_does_not_move_this_ones_bends(
 ):
     """The axis each end attached on travels back with its point, so a connector
     resolving between this one's attach and its route cannot re-route it."""
-    from pptxkit.components import connector as mod
+    from deckwright.components import connector as mod
 
     body = {"from": "a", "to": "b", "kind": "elbow"}
     solo = _bends(_line(_joined(ctx_factory, body, a=LEFT_BOX, b=STEP_BOX)))

@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme.palette import AUTO_INK, Pair, Palette, build_palette
+from deckwright.errors import ThemeError
+from deckwright.theme.palette import AUTO_INK, Pair, Palette, build_palette
 
 _ROLES = {
     "page": "FFFFFF",
@@ -70,7 +70,7 @@ def test_an_undeclared_pair_is_rejected():
 
 
 def test_a_pair_below_aa_is_built_and_reported(caplog):
-    """Built, not refused: `pptxkit qa` decides this against what was really painted, and
+    """Built, not refused: `deckwright qa` decides this against what was really painted, and
     refusing here as well made a brand's own palette unloadable over a weaker check."""
     with caplog.at_level(logging.WARNING):
         palette = _palette(pairs={"page": Pair("CCCCCC", "FFFFFF")})

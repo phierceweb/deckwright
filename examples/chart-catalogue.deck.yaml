@@ -1,5 +1,5 @@
 theme: base
-title: pptxkit Chart Catalogue
+title: deckwright Chart Catalogue
 sections:
 - Bar & Column
 - Line
@@ -7,11 +7,11 @@ sections:
 - Pie & Doughnut
 - Radar
 - XY & Bubble
-out: ../out/chart-catalogue/pptxkit Chart Catalogue.pptx
+out: ../out/chart-catalogue/deckwright Chart Catalogue.pptx
 ---
 background: inverse
 kicker: JULY 2026
-title: The pptxkit Chart Catalogue
+title: The deckwright Chart Catalogue
 subtitle: Every chart type the native renderer can build, one per slide
 notes: '29 types across 6 families. Each slide names the exact type: field and
 

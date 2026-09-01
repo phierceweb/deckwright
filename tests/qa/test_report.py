@@ -1,7 +1,7 @@
 import json
 
-from pptxkit.qa.model import Finding, QaReport, Severity
-from pptxkit.qa.report import write_json, write_markdown
+from deckwright.qa.model import Finding, QaReport, Severity
+from deckwright.qa.report import write_json, write_markdown
 
 REPORT = QaReport(
     deck="Demo.pptx",

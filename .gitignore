@@ -10,7 +10,7 @@ dist/
 .coverage
 htmlcov/
 .DS_Store
-.pptxkit-cache/
+.deckwright-cache/
 docs/pf-core
 
 # AI / agent workspace

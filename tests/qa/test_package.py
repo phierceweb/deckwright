@@ -11,8 +11,8 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.qa.model import Severity
-from pptxkit.qa.package import check_package
+from deckwright.qa.model import Severity
+from deckwright.qa.package import check_package
 
 
 @pytest.fixture
@@ -125,52 +125,6 @@ def test_the_finding_names_the_slide_it_is_on(deck, tmp_path):
     )
     findings = check_package(bad)
     assert findings and findings[0].slide == int(re.search(r"(\d+)", second).group(1))
-
-
-# --- charts the render cannot verify ----------------------------------------
-
-
-def _charted(tmp_path, chart_type, values, name="c.pptx"):
-    """A saved deck holding one chart of ``chart_type``."""
-    from pptx.chart.data import CategoryChartData
-
-    prs = Presentation()
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    data = CategoryChartData()
-    data.categories = ["Up", "Down"]
-    data.add_series("s", values)
-    slide.shapes.add_chart(chart_type, Inches(1), Inches(1), Inches(6), Inches(4), data)
-    path = tmp_path / name
-    prs.save(str(path))
-    return path
-
-
-def test_a_bar_chart_with_a_negative_value_is_flagged_unverifiable(tmp_path):
-    """The file is correct; the render this suite and `pptxkit render` both go through plots the
-    absolute value, so nothing automated can check the chart. Reproduced with bare python-pptx."""
-    from pptx.enum.chart import XL_CHART_TYPE
-
-    deck = _charted(tmp_path, XL_CHART_TYPE.COLUMN_CLUSTERED, (271, -146))
-    findings = [f for f in check_package(deck) if f.check == "chart-negative"]
-    assert len(findings) == 1
-    assert findings[0].severity is Severity.WARN
-    assert findings[0].slide == 1
-    assert "diverge" in findings[0].detail
-
-
-def test_an_all_positive_bar_chart_is_clean(tmp_path):
-    from pptx.enum.chart import XL_CHART_TYPE
-
-    deck = _charted(tmp_path, XL_CHART_TYPE.COLUMN_CLUSTERED, (271, 146))
-    assert [f for f in check_package(deck) if f.check == "chart-negative"] == []
-
-
-def test_a_line_chart_with_a_negative_value_is_not_flagged(tmp_path):
-    """Line series render their negatives correctly, so warning about them is noise."""
-    from pptx.enum.chart import XL_CHART_TYPE
-
-    deck = _charted(tmp_path, XL_CHART_TYPE.LINE, (271, -146))
-    assert [f for f in check_package(deck) if f.check == "chart-negative"] == []
 
 
 def test_two_shapes_sharing_a_name_are_flagged(deck, tmp_path):

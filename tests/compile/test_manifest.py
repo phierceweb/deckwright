@@ -6,10 +6,10 @@ from pf_core.exceptions import InvalidInputError, PreconditionError
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.compile.record import Box, box_of
-from pptxkit.compile.manifest import ManifestRecorder
-from pptxkit.errors import SpecError
-from pptxkit.theme.model import Rect
+from deckwright.compile.record import Box, box_of
+from deckwright.compile.manifest import ManifestRecorder
+from deckwright.errors import SpecError
+from deckwright.theme.model import Rect
 
 
 @pytest.fixture
@@ -57,9 +57,13 @@ def test_animation_steps_name_the_shapes_they_reveal(slide):
     m.begin_slide(1, background="page")
     m.origin = "s1.p1.callouts"
     first, second = m.record(_box(slide)), m.record(_box(slide))
-    m.record_animation("click_sequence", [[first.shape_id], [second.shape_id]])
+    m.record_animation("click_sequence", [[first.shape_id], [second.shape_id]], clicks=2)
     assert m.to_dict()["slides"][0]["animations"] == [
-        {"kind": "click_sequence", "steps": [["s1.p1.callouts#1"], ["s1.p1.callouts#2"]]}
+        {
+            "kind": "click_sequence",
+            "clicks": 2,
+            "steps": [["s1.p1.callouts#1"], ["s1.p1.callouts#2"]],
+        }
     ]
 
 
@@ -69,7 +73,7 @@ def test_a_reveal_carrying_a_motion_role_is_named_like_any_other(slide):
     m.begin_slide(1, background="page")
     m.origin = "s1.p1.rule"
     rec = m.record(_box(slide))
-    m.record_animation("click_sequence", [[(rec.shape_id, "line")]])
+    m.record_animation("click_sequence", [[(rec.shape_id, "line")]], clicks=1)
     assert m.slides[0].animations[0]["steps"] == [["s1.p1.rule#1"]]
 
 
@@ -77,7 +81,7 @@ def test_a_reveal_target_that_was_never_recorded_keeps_its_id(slide):
     """Better a number that says which shape than a name invented for it."""
     m = ManifestRecorder(deck="d.pptx", theme="t")
     m.begin_slide(1, background="page")
-    m.record_animation("click_sequence", [[99]])
+    m.record_animation("click_sequence", [[99]], clicks=1)
     assert m.slides[0].animations[0]["steps"] == [["shape 99"]]
 
 
@@ -90,7 +94,7 @@ def test_recording_without_beginning_a_slide_is_an_error(slide):
 def test_recording_an_animation_without_beginning_a_slide_is_an_error(slide):
     m = ManifestRecorder(deck="d.pptx", theme="t")
     with pytest.raises(PreconditionError, match="begin_slide"):
-        m.record_animation("click_sequence", [[2, 3]])
+        m.record_animation("click_sequence", [[2, 3]], clicks=1)
 
 
 def test_marking_a_backdrop_without_beginning_a_slide_is_an_error(slide):
@@ -423,7 +427,7 @@ def test_animation_name_map_matches_the_package_name():
     m.record(kicker, part="kicker")
     m.record(title, part="title")
 
-    m.record_animation("appear", [[2], [3]])
+    m.record_animation("appear", [[2], [3]], clicks=2)
     steps = m.to_dict()["slides"][0]["animations"][0]["steps"]
     assert steps == [["s1.chrome.kicker"], ["s1.chrome.title"]], (
         f"animation steps disagree with the package names: {steps}"
@@ -461,3 +465,33 @@ def test_recording_a_placement_before_a_slide_refuses():
     m = ManifestRecorder(deck="d.pptx", theme="t")
     with pytest.raises(PreconditionError):
         m.record_placement("s1.p1.card", "card", Rect(0.0, 0.0, 1.0, 1.0))
+
+
+def test_an_animation_records_the_clicks_it_spends_not_the_beats_it_holds(slide):
+    """`animate: together` fades every group onto one click. Recording the groups as
+    clicks reported eight for one, which is the number issue 12 asked qa to check."""
+    m = ManifestRecorder(deck="d.pptx", theme="t")
+    m.begin_slide(1, background="page")
+    m.origin = "s1.p1.callouts"
+    ids = [m.record(_box(slide)).shape_id for _ in range(4)]
+    m.record_animation("click_build", [ids], clicks=1)
+    entry = m.to_dict()["slides"][0]["animations"][0]
+    assert entry["clicks"] == 1
+    assert len(entry["steps"]) == 1
+    assert len(entry["steps"][0]) == 4
+
+
+def test_an_interactive_reveal_records_no_click_and_names_its_trigger(slide):
+    """A `reveals:` interaction spends no slide advance, so counting its steps as clicks
+    inflates the deck's cost by one per revealed shape."""
+    m = ManifestRecorder(deck="d.pptx", theme="t")
+    m.begin_slide(1, background="page")
+    m.origin = "s1.q.card"
+    trigger = m.record(_box(slide))
+    m.origin = "s1.a.card"
+    target = m.record(_box(slide))
+    m.record_animation("click_reveals", [[target.shape_id]], clicks=0, trigger=trigger.shape_id)
+    entry = m.to_dict()["slides"][0]["animations"][0]
+    assert entry["clicks"] == 0
+    assert entry["trigger"] == "s1.q.card#1"
+    assert entry["steps"] == [["s1.a.card#1"]]

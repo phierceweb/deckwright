@@ -30,7 +30,7 @@ import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src" / "pptxkit"
+SRC = ROOT / "src" / "deckwright"
 
 # Modules pf-core replaces outright. {import: (what to use instead, what it buys)}
 BANNED_IMPORTS = {
@@ -47,7 +47,7 @@ BANNED_IMPORTS = {
 
 # Builtins that must not be raised from library code. {name: (what to raise, why)}
 BANNED_RAISES = {
-    "Exception": ("a class from pptxkit.errors", "an unsearchable log key and no context"),
+    "Exception": ("a class from deckwright.errors", "an unsearchable log key and no context"),
     "RuntimeError": ("pf_core.exceptions.PreconditionError", "'required state not met'"),
     "ValueError": ("pf_core.exceptions.InvalidInputError", "'the caller passed something bad'"),
 }

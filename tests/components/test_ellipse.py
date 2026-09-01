@@ -4,12 +4,12 @@ import pytest
 from pptx.enum.dml import MSO_FILL
 from pptx.enum.text import PP_ALIGN
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.components.ellipse import _INSCRIBED
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.layouts.components import get_component, registered_components
-from pptxkit.theme.model import Rect
-from pptxkit.utils.text import LINE_HEIGHT, wrapped_lines
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.components.ellipse import _INSCRIBED
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.layouts.components import get_component, registered_components
+from deckwright.theme.model import Rect
+from deckwright.utils.text import LINE_HEIGHT, wrapped_lines
 
 EMU = 914400
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme import load_theme
+from deckwright.errors import ThemeError
+from deckwright.theme import load_theme
 
 from tests.theme.test_load import BASE, _write
 

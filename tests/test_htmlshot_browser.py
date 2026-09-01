@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from PIL import Image
 
-from pptxkit.errors import RenderError
-from pptxkit.services.htmlcard import markdown_card
-from pptxkit.services import htmlshot
-from pptxkit.services.htmlshot import _resolve_chrome, render_html_to_png
+from deckwright.errors import RenderError
+from deckwright.services.htmlcard import markdown_card
+from deckwright.services import htmlshot
+from deckwright.services.htmlshot import _resolve_chrome, render_html_to_png
 
 
 def _chrome_or_skip() -> str:
@@ -33,14 +33,14 @@ UNMEASURABLE_CARD = markdown_card(
 
 def test_a_document_taller_than_the_canvas_raises_instead_of_truncating(tmp_path, monkeypatch):
     _chrome_or_skip()
-    monkeypatch.setenv("PPTXKIT_SHOT_CANVAS_H", "200")
+    monkeypatch.setenv("DECKWRIGHT_SHOT_CANVAS_H", "200")
     with pytest.raises(RenderError, match=r"the browser clipped it"):
         render_html_to_png(CARD, tmp_path / "clipped.png", width=600, scale=1)
 
 
 def test_the_same_document_renders_once_the_canvas_is_raised(tmp_path, monkeypatch):
     _chrome_or_skip()
-    monkeypatch.setenv("PPTXKIT_SHOT_CANVAS_H", "2000")
+    monkeypatch.setenv("DECKWRIGHT_SHOT_CANVAS_H", "2000")
     out = render_html_to_png(CARD, tmp_path / "ok.png", width=600, scale=1)
     assert Image.open(out).height < 2000  # cropped to content, not the canvas
 
@@ -48,7 +48,7 @@ def test_the_same_document_renders_once_the_canvas_is_raised(tmp_path, monkeypat
 def test_a_document_that_swallows_the_height_probe_is_caught_by_its_pixels(tmp_path, monkeypatch):
     """With no height to read, a card running off the last row is the only evidence."""
     _chrome_or_skip()
-    monkeypatch.setenv("PPTXKIT_SHOT_CANVAS_H", "400")
+    monkeypatch.setenv("DECKWRIGHT_SHOT_CANVAS_H", "400")
     with pytest.raises(RenderError, match=r"the height probe did not run"):
         render_html_to_png(UNMEASURABLE_CARD, tmp_path / "swallowed.png", width=600, scale=1)
 
@@ -80,6 +80,6 @@ def test_a_file_url_frame_in_someone_elses_markdown_never_reaches_the_render(tmp
 def test_the_height_probe_still_runs_under_the_content_policy(tmp_path, monkeypatch):
     """Allowed by hash; if that breaks, cards clip silently — pin the loud variant."""
     _chrome_or_skip()
-    monkeypatch.setenv("PPTXKIT_SHOT_CANVAS_H", "200")
+    monkeypatch.setenv("DECKWRIGHT_SHOT_CANVAS_H", "200")
     with pytest.raises(RenderError, match=r"content is \d+px tall"):
         render_html_to_png(CARD, tmp_path / "clipped.png", width=600, scale=1)

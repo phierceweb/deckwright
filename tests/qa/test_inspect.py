@@ -2,8 +2,8 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.errors import SpecError
-from pptxkit.qa.inspect import inspect_deck
+from deckwright.errors import SpecError
+from deckwright.qa.inspect import inspect_deck
 
 
 def test_inspect_deck_reports_real_ids_and_inch_boxes(tmp_path):

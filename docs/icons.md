@@ -1,6 +1,6 @@
 # Icons — SVG in, native geometry out
 
-How `src/pptxkit/icons/` finds a glyph by name, converts its SVG paths into DrawingML,
+How `src/deckwright/icons/` finds a glyph by name, converts its SVG paths into DrawingML,
 and paints it a colour that reads where it lands. This doc covers the **subsystem's
 internals**: the search order, what an SVG file must contain, the path conversion, and
 how to add a set.
@@ -56,7 +56,7 @@ resolved to a drawing.
 A preset is exact at any size, carries none of a set's optical styling, and is a real
 shape in PowerPoint rather than a freeform. The cost is that it cannot be restyled by
 dropping in a file — so it is not: **a configured directory is asked first**, and a
-`circle.svg` in `$PPTXKIT_ICON_DIR` or the theme's own directory is used instead.
+`circle.svg` in `$DECKWRIGHT_ICON_DIR` or the theme's own directory is used instead.
 
 `star` and `flag` stay glyphs. Their character is drawn, not geometric; an author
 choosing `star` is choosing a look, not a polygon.
@@ -65,7 +65,7 @@ choosing `star` is choosing a look, not a polygon.
 
 `icons/load.py`'s `roots()` returns where `<name>.svg` is looked for, in order:
 
-1. `$PPTXKIT_ICON_DIR`, if set — read at call time, so it can be changed per run.
+1. `$DECKWRIGHT_ICON_DIR`, if set — read at call time, so it can be changed per run.
 2. The theme's own `icons:` directory, resolved relative to the theme file.
 3. `icons/glyphs/material/glyphs.zip` — the vendored Material Symbols, the only set
    that ships. The first two are directories of files; the shipped set is one archive
@@ -85,7 +85,7 @@ Three more steps then run, in this order:
   which is why it holds four entries and why each was chosen against a render.
 - **The name, then its hyphenated spelling.** The vendored set names its files
   upstream's way, with underscores. `icon: rocket-launch` and `icon: rocket_launch` both
-  reach `material/rocket_launch.svg`, so a deck can stay in pptxkit's own style
+  reach `material/rocket_launch.svg`, so a deck can stay in deckwright's own style
   throughout.
 - **The alias table** (`icons/aliases.py`'s `ALIASES`) — curated names for glyphs the
   set calls something else: `deploy` → `rocket_launch`, `team` → `groups`, `compliance`
@@ -104,7 +104,7 @@ bundle — since a deck reuses the same icon many times.
 
 Two hard requirements, each with an error message that explains itself:
 
-- **A `viewBox` with four values.** pptxkit scales by it; without one the drawing has no
+- **A `viewBox` with four values.** deckwright scales by it; without one the drawing has no
   size to scale from.
 - **At least one `<path>` with a `d`.** `<circle>`, `<rect>`, `<line>` and stroked
   outlines are *not* read — flatten the drawing to filled paths before saving.
@@ -214,6 +214,13 @@ resort a chrome line does: a plate of the slide's own paper painted behind it, t
 accents tried again against that plate, and the slide pair's ink where none clears
 even there.
 
+The plate is padded around the glyph — a fifth of its own height on each edge, so the
+mark has paper to sit on rather than a shape cut to its outline — and then **clipped to
+the placement**. A chrome line's plate is not, because chrome owns the band it sits in;
+a mark's plate would otherwise paint over the placement below it. `qa` cannot see that
+overrun: `placement-fit` exempts every plate, since a plate is by definition a surface
+drawn wider than the thing it backs.
+
 ## The set that ships
 
 One set: **4,001 vendored Material Symbols** (Rounded, filled), Apache 2.0, packed into
@@ -226,8 +233,8 @@ They travel as one archive because 4,001 files cost far more in per-entry overhe
 in content: 716KB in the wheel and 2.9MB installed, against 2.1MB and 16.5MB as loose
 files. The entries are **stored, not deflated** — both places the bundle lives, git and
 the wheel, compress it themselves, and a pre-compressed archive defeats both while
-making every glyph read slower. `pptxkit glyphs sync` builds it and
-`pptxkit glyphs verify` checks it against the manifest; see
+making every glyph read slower. `deckwright glyphs sync` builds it and
+`deckwright glyphs verify` checks it against the manifest; see
 [`docs/cli.md`](cli.md#glyphs--the-built-in-icon-set).
 
 One style throughout is the point of a single set. A hand-drawn glyph beside a Material
@@ -277,7 +284,7 @@ exist:
 To count the set, or search it, without opening this file:
 
 ```bash
-bin/py -c "from pptxkit.icons.load import available; print(len(available()))"
+bin/py -c "from deckwright.icons.load import available; print(len(available()))"
 ```
 
 An icon nobody drew fails the build with a message naming the closest real glyphs, so a
@@ -294,7 +301,7 @@ It now outranks everything, including the overrides.
 there is lost the next time it is re-vendored. A name the set genuinely has no drawing
 for is a name to leave failing, since the error at least says so.
 
-**A whole set:** point `$PPTXKIT_ICON_DIR` at the directory to try it without touching a
+**A whole set:** point `$DECKWRIGHT_ICON_DIR` at the directory to try it without touching a
 theme; make it permanent by adding `icons:` to the theme file.
 
 In all three cases, verify the result — a glyph that fails to parse fails the build with

@@ -1,8 +1,8 @@
 # Conform — onboarding a brand template
 
-How `pptxkit conform` reads a brand `.pptx`, writes a theme for it, and drives every
+How `deckwright conform` reads a brand `.pptx`, writes a theme for it, and drives every
 capability through it to report what that template can and cannot carry. This is the
-path for **getting a new template into pptxkit**, and the answer to "will my deck build
+path for **getting a new template into deckwright**, and the answer to "will my deck build
 against this?".
 
 Distinguish it from two neighbours: [`docs/theme.md`](theme.md) describes the design
@@ -39,14 +39,14 @@ Three things, in order:
 Step 2 is the point. Unit tests on the library's own arithmetic cannot answer whether a
 *particular* template is usable; only building against it can.
 
-The exercises are also the library's **capability catalogue**, and `pptxkit demo` builds
+The exercises are also the library's **capability catalogue**, and `deckwright demo` builds
 the same set against a theme named rather than derived — see
 [`docs/cli.md`](cli.md#demo--every-capability-in-one-deck). One registry, two readers:
 add a capability there and it is both conformed and demonstrated.
 
 ## Try it without a brand template
 
-`bin/setup` writes a small template pptxkit owns, so the whole flow runs on a fresh
+`bin/setup` writes a small template deckwright owns, so the whole flow runs on a fresh
 clone with nothing to hunt for:
 
 ```bash
@@ -55,7 +55,7 @@ bin/run conform templates/sample.pptx --adopt sample
 
 That is a real derivation — six accents bound off its colour scheme, a hued `inverse`,
 a face read from its slides — and every capability builds against it. What it is *not*
-is evidence that pptxkit copes with an unfamiliar template: it is shaped like what the
+is evidence that deckwright copes with an unfamiliar template: it is shaped like what the
 compiler already handles. Only real brand templates answer that, which is why the
 generated one is stamped and [the corpus guard](testing.md) refuses it. See
 [`sample`](cli.md#sample--a-template-to-onboard-against).
@@ -136,7 +136,7 @@ brand.pptx
   · ignored 3 unedited stock accent(s): accent4, accent5, accent6
   ok    cover
   FAIL  panel: <the error, first line, truncated>
-  <passed>/90 exercises
+  <passed>/98 exercises
 ```
 
 The `·` notes are what a reader of the derived theme needs to know about this template —
@@ -185,15 +185,18 @@ for the theme, the one artefact of onboarding worth keeping.
 bin/run conform templates/brand.pptx --adopt brand
 ```
 
-After a run that built something, that writes `templates/<name>.theme.yaml` and copies the
-template to `templates/`, so the theme's relative `template:` resolves from
-where it now lives. A deck then names it as `theme: brand`.
+After a run that built something, that writes `templates/<name>.theme.yaml` beside the
+template it binds, so the theme's relative `template:` resolves from where both of them
+live. A deck then names it as `theme: brand`.
+
+**A template is adopted where it lives.** Nothing is copied, so there is only ever one
+copy of the binary; a `.pptx` somewhere else is refused, naming the `mv` that fixes it.
 
 **A sidecar theme beside the binary is installed instead of the derivation.** When
 `--adopt brand` finds `brand.theme.yaml` next to the `.pptx`, the exercises run against
-the sidecar — what gets validated is what gets installed — and it is installed verbatim,
-re-pointed at the template's new location. This is how a tuned theme survives leaving
-the repo: keep it beside the binary, and re-onboarding costs one command. The report
+the sidecar — what gets validated is what gets installed — and it is installed verbatim.
+This is how a tuned theme survives leaving the repo: keep it beside the binary, and
+re-onboarding costs one command. The report
 carries `· theme from sidecar …` so a derived run and a re-onboard are never confused.
 
 **Adoption does not make the derivation authoritative.** It changes *which file you
@@ -207,8 +210,8 @@ than the whole run:
 
 | Refusal | Why |
 |---|---|
-| `theme 'brand' already exists` | The existing file may be hand-edited, and nothing would recover it. Adopt under another name, or pass `--force`. |
-| `a different template is already installed at …` | Two brands can both ship a `Brand.pptx`. Overwriting the installed copy would silently change what every theme already bound to it builds. Rename the `.pptx`, or pass `--force`. |
+| `theme 'brand' already exists … and binds …` | That name is live on another template that is also here, and repointing it hijacks the theme; the existing file may be hand-edited, and nothing would recover it. Adopt under another name, or pass `--force`. |
+| `a template is adopted where it lives` | The theme binds its template by a bare filename resolved beside it, so the `.pptx` has to be in the theme directory already. The message names the `mv`. |
 | `--adopt takes a bare theme name` | The name becomes a filename and a deck's `theme:` line. Letters, digits, `-` and `_`. |
 | `template not found` | Named before anything is written. |
 
@@ -226,7 +229,7 @@ the template at all, so there is nothing worth installing under a project name. 
 report says so and names the derived file to read:
 
 ```
-  0/90 exercises
+  0/98 exercises
   not adopted: no exercise built, so the derived theme does not describe brand.pptx —
   read out/conform/brand/brand.theme.yaml and fix its bind: before adopting
 ```
@@ -237,7 +240,7 @@ The interesting part of `conform/derive.py` is what it refuses to trust:
 
 | Source | Treatment |
 |---|---|
-| The `fontScheme` | **Ignored.** Across the eleven-template corpus it was honoured by no run at all — one template declares Calibri while every slide in it is Aptos. The face is counted from the runs on the template's own slides, weighted by how much text is set in it. |
+| The `fontScheme` | **Not read as a declaration.** Across the eleven-template corpus it was honoured by no run at all — one template declares Calibri while every slide in it is Aptos. The face is counted from the runs on the template's own slides, weighted by how much text is set in it. The scheme is consulted for one thing: a run whose typeface reads `+mj-lt` or `+mn-lt` (or the `-ea`/`-cs` script variants) is not set in a face at all — that is OOXML's *reference* to the theme's major or minor font, and it is resolved through the master's own `fontScheme` before it counts. A reference no scheme can resolve is skipped rather than counted, since the built-in default is at least a real typeface. |
 | `lt1`/`dk1` by position | **Ignored.** `page` and `ink` bind to the lightest and darkest slots by measured luminance. Three corpus templates carry a mid-grey in `dk1` and their real dark in `dk2`. |
 | Unedited accent slots | **Dropped.** An accent still holding Microsoft's shipped value says nothing about the brand, so it is not bound and the report says how many were skipped. |
 | The master's own paint | **Outranks the scheme.** What a slide will really show is the master's paint, so when it differs meaningfully from the page slot, every surface role is re-derived against it — a `clrScheme` has no slot for "secondary text on this template's photograph". |
@@ -252,9 +255,10 @@ the title beside it.
 
 ## The exercises
 
-`src/pptxkit/conform/exercise.py` holds one slide per capability, written the way a real
-deck would use it, and ordered by how often that shape appears across the sample corpus —
-so a template that fails early fails on something that matters.
+`src/deckwright/conform` holds one slide per capability, written the way a real deck would
+use it, and ordered by how often that shape appears across the sample corpus — so a
+template that fails early fails on something that matters. `exercise.py` assembles the
+families in that order; each family is its own module beside it.
 
 Every exercise is plain content with no brand words in it. The point is what the
 *template* can carry, not what any particular deck says.
@@ -294,16 +298,32 @@ the fix. Common shapes:
   naming the path. Nothing can be built from it.
 
 Re-run against an edited theme by building the exercises through the normal `build`
-command, or call `pptxkit.conform.run.conform()` with an `exercises=` subset to iterate on
+command, or call `deckwright.conform.run.conform()` with an `exercises=` subset to iterate on
 one slide.
 
 ## Adding an exercise
 
-1. Add an entry to `EXERCISE` in `src/pptxkit/conform/exercise.py` — or to one of the
-   family modules it composes in: `charts.py`, `motion.py`, `photos.py`, `tables.py`,
-   `marks.py` (icons, and every component carrying one) and `figures.py` (`diverge`,
-   `fanout`, `versus`, `nav`). Key it by a short slug that will appear in the report,
-   and position it by how common the shape is, not by when you added it.
+1. Add an entry to the family module that owns the shape. `exercise.py` holds no
+   exercises of its own — it calls each family in deck order and `EXERCISE` is what
+   they assemble to:
+
+   | Module | Family |
+   |---|---|
+   | `titles.py` | covers, headings, and where a title sits |
+   | `text.py` | bullets, columns, cards, stat tiles |
+   | `charts.py` | the chart catalogue, plus the four a template meets first |
+   | `diagrams.py` | badges, connectors, flows, rules, rendered panels |
+   | `blocks.py` | swatch wall, grid, set prose, code listing |
+   | `motion.py` | entrances, and the builds that spend a click |
+   | `layout.py` | a row split into shares, and a placed document |
+   | `tables.py` | every shape a table takes |
+   | `marks.py` | icons, and every component carrying one |
+   | `figures.py` | `diverge`, `fanout`, `versus`, `nav` |
+   | `photos.py` | imagery, fit and crop |
+
+   Key it by a short slug that will appear in the report, and position it within its
+   family by how common the shape is, not by when you added it. A new family is a new
+   module plus one line in `exercise.py`, which is where deck order is decided.
 2. Write it as a real deck would — no brand words, no template-specific assumptions. Name
    run-time assets with the `{photo}` / `{portrait}` / `{notes}` placeholders.
 3. Run `bin/run conform` against at least one real template and confirm it passes, then

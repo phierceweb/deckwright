@@ -7,20 +7,20 @@ import subprocess
 
 import pytest
 
-from pptxkit.errors import MissingToolError, RenderError
-from pptxkit.services import render
+from deckwright.errors import MissingToolError, RenderError
+from deckwright.services import render
 
 
 def test_a_missing_soffice_names_the_install_and_the_knob_that_overrides_it(
     tmp_path, monkeypatch, synthetic_template
 ):
     monkeypatch.setattr(render.platform, "system", lambda: "Linux")
-    monkeypatch.setenv("PPTXKIT_SOFFICE", "/nonexistent/soffice")
+    monkeypatch.setenv("DECKWRIGHT_SOFFICE", "/nonexistent/soffice")
     with pytest.raises(MissingToolError) as exc:
         render.render_to_images(synthetic_template, tmp_path / "out")
     message = str(exc.value)
     assert "/nonexistent/soffice" in message
-    assert "PPTXKIT_SOFFICE" in message
+    assert "DECKWRIGHT_SOFFICE" in message
     assert "sudo apt-get install libreoffice-impress" in message
 
 

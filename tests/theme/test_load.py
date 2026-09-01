@@ -1,9 +1,14 @@
+import logging
+import pathlib
+import re
 import textwrap
 
 import pytest
+from pptx import Presentation
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme import load_theme
+from deckwright.errors import ThemeError
+from deckwright.theme import DEFAULT_PALETTE, load_theme
 
 
 def _write(tmp_path, template, body: str):
@@ -295,6 +300,17 @@ def test_a_ramp_rung_renders_in_the_face_it_asks_for(tmp_path, synthetic_templat
     assert theme.font_for(theme.style("kicker")) == "Courier New"  # a literal typeface
 
 
+def test_a_rung_asking_for_mono_gets_the_themes_mono_face(tmp_path):
+    """`face: mono` is the only way a rung reaches `type: mono` without repeating the
+    string, which then drifts from it with nothing catching the drift."""
+    path = tmp_path / "t.yaml"
+    path.write_text(
+        'name: t\ntype:\n  mono: "IBM Plex Mono"\n  ramp:\n    stat: {pt: 34, face: mono}\n'
+    )
+    theme = load_theme(path)
+    assert theme.style("stat").face == "IBM Plex Mono"
+
+
 def test_the_faces_fall_back_to_the_template_when_undeclared(tmp_path, synthetic_template):
     """major is the display face, minor the body face — both Calibri in stock Office."""
     theme = load_theme(_write(tmp_path, synthetic_template, BASE))
@@ -340,11 +356,29 @@ def test_a_declared_rung_overrides_only_itself(tmp_path):
     assert "title" in theme.ramp  # the rest of the ramp survives
 
 
-def test_binding_without_a_template_is_rejected(tmp_path):
+def test_a_literal_colour_binds_without_any_template(tmp_path):
+    """An author with a story and no brand file still gets their own palette."""
+    path = tmp_path / "bare.yaml"
+    path.write_text("name: bare\nbind:\n  page: '10212A'\n  accent-1: E4572E\n")
+    palette = load_theme(path).palette
+    assert palette.role("page") == "10212A"
+    assert palette.role("accent-1") == "E4572E"
+
+
+def test_binding_a_slot_name_without_a_template_is_rejected(tmp_path):
+    """A slot name needs a clrScheme to resolve against; a literal does not."""
     path = tmp_path / "bare.yaml"
     path.write_text("name: bare\nbind:\n  accent-1: accent1\n")
-    with pytest.raises(ThemeError, match="declares 'bind:' but no 'template:'"):
+    with pytest.raises(ThemeError, match="reads as a template slot name"):
         load_theme(path)
+
+
+def test_a_templateless_theme_that_binds_nothing_keeps_every_default(tmp_path):
+    """The bind path replaced a straight DEFAULT_PALETTE assignment — it must be a
+    no-op when the theme declares no colours."""
+    path = tmp_path / "bare.yaml"
+    path.write_text("name: bare\n")
+    assert load_theme(path).palette == DEFAULT_PALETTE
 
 
 def test_marks_without_a_template_are_rejected(tmp_path):
@@ -448,27 +482,27 @@ def test_an_explicit_bold_false_still_wins(tmp_path):
 
 
 def test_a_bare_theme_name_loads_the_packaged_builtin(tmp_path, monkeypatch):
-    """`pptxkit.load_theme("base")` is the advertised way in; a path was the only one."""
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path / "no-such-dir"))
+    """`deckwright.load_theme("base")` is the advertised way in; a path was the only one."""
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path / "no-such-dir"))
     assert load_theme("base").name == "base"
 
 
 def test_a_bare_name_prefers_the_theme_directory_over_the_packaged_builtin(tmp_path, monkeypatch):
     (tmp_path / "base.theme.yaml").write_text("name: local-override\n")
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     assert load_theme("base").name == "local-override"
 
 
 def test_an_unknown_name_names_the_directory_it_searched_and_the_remedy(tmp_path, monkeypatch):
     """'theme file not found: acme' named no directory, no env var and no way out."""
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     with pytest.raises(ThemeError) as excinfo:
         load_theme("acme")
     message = str(excinfo.value)
     assert "unknown theme 'acme'" in message
     assert str(tmp_path) in message
-    assert "PPTXKIT_THEME_DIR" in message
-    assert "pptxkit conform <brand>.pptx --adopt acme" in message
+    assert "DECKWRIGHT_THEME_DIR" in message
+    assert "deckwright conform <brand>.pptx --adopt acme" in message
     assert "packaged: base" in message
 
 
@@ -479,3 +513,194 @@ def test_a_path_shaped_reference_is_reported_as_a_path_not_an_unknown_name(tmp_p
     message = str(excinfo.value)
     assert "theme file not found" in message
     assert "unknown theme" not in message
+
+
+# --- a fontScheme reference left in a theme file -----------------------------
+
+PITCHDECK = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "templates"
+    / "free pitch deck template powerpoint.pptx"
+)
+
+REF = """
+    name: brand
+    template: assets/t.pptx
+    bind:
+      page: lt1
+      ink: dk1
+    type:
+      {key}: {value}
+"""
+
+
+def _brand_theme(tmp_path, key: str, value: str):
+    """A theme on the corpus template, whose fontScheme names Montserrat-Bold major and
+    Open Sans minor. Stock Office sets both to Calibri, so on a synthetic template a
+    per-key fallback is invisible."""
+    if not PITCHDECK.is_file():
+        pytest.skip(f"{PITCHDECK.name} not present — templates/ is gitignored")
+    return _write(tmp_path, PITCHDECK, REF.format(key=key, value=value))
+
+
+def _events(caplog) -> list[dict]:
+    return [r.msg for r in caplog.records if isinstance(r.msg, dict)]
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [("face", "Open Sans"), ("heading_face", "Montserrat-Bold"), ("mono", "Courier New")],
+)
+def test_a_fontscheme_reference_in_a_face_falls_back_to_a_real_one(tmp_path, caplog, key, expected):
+    """`+mj-lt` is OOXML's reference to a template's major latin font, not a typeface.
+    Kept, it is measured against nothing and rendered as whatever the reader falls back
+    to; dropped, the key takes the face it would have had with no `type:` entry at all."""
+    with caplog.at_level(logging.WARNING):
+        theme = load_theme(_brand_theme(tmp_path, key, "+mj-lt"))
+
+    assert getattr(theme, key) == expected
+
+
+def test_the_reference_warning_names_the_theme_the_key_the_token_and_the_remedy(tmp_path, caplog):
+    """Nothing else tells a reader that a theme on disk carries one, or that the fix is
+    an adoption rather than an edit."""
+    with caplog.at_level(logging.WARNING):
+        load_theme(_brand_theme(tmp_path, "face", "+mn-cs"))
+
+    warned = [e for e in _events(caplog) if e["event"] == "theme_face_scheme_reference"]
+    assert len(warned) == 1
+    assert warned[0]["theme"] == "brand"
+    assert warned[0]["key"] == "type.face"
+    assert warned[0]["token"] == "+mn-cs"
+    assert "--adopt brand" in warned[0]["fix"]
+
+
+def test_an_uninstalled_face_is_not_reported_as_a_fontscheme_reference(tmp_path, caplog):
+    """The two warnings take different fixes — re-adopt the template, against name a
+    measured face or accept the slack — so a real face must never raise the first."""
+    with caplog.at_level(logging.WARNING):
+        load_theme(_brand_theme(tmp_path, "face", "Brandish Grotesk"))
+
+    events = {e["event"] for e in _events(caplog)}
+    assert "theme_face_unmeasured" in events
+    assert "theme_face_scheme_reference" not in events
+
+
+def test_a_scheme_reference_is_recognised_whatever_its_case(tmp_path, caplog, synthetic_template):
+    """A theme file is hand-edited, so the token arrives in whatever case was typed. Match
+    it case-sensitively and `+MJ-LT` sails through as a typeface named "+MJ-LT"."""
+    body = BASE.replace("      min_pt: 10.5", '      face: "+MJ-LT"\n      min_pt: 10.5')
+    with caplog.at_level(logging.WARNING):
+        theme = load_theme(_write(tmp_path, synthetic_template, body))
+
+    assert theme.face == "Calibri"
+    warned = [e for e in _events(caplog) if e["event"] == "theme_face_scheme_reference"]
+    assert [w["token"] for w in warned] == ["+MJ-LT"]
+
+
+def test_a_rung_face_matching_an_alias_only_in_case_stays_literal_and_warns(tmp_path, caplog):
+    """`face: Mono` is a typeface named "Mono", which no machine has; nothing else says so
+    until qa renders and fontconfig answers."""
+    path = tmp_path / "t.yaml"
+    path.write_text(
+        'name: t\ntype:\n  mono: "IBM Plex Mono"\n  ramp:\n    stat: {pt: 34, face: Mono}\n'
+    )
+    with caplog.at_level(logging.WARNING):
+        theme = load_theme(path)
+
+    assert theme.style("stat").face == "Mono"
+    warned = [e for e in _events(caplog) if e["event"] == "theme_ramp_face_alias_case"]
+    assert [(w["rung"], w["face"]) for w in warned] == [("stat", "Mono")]
+
+
+# --- a template whose fontScheme names no latin face --------------------------
+
+
+def _blank_major_face(pptx: pathlib.Path) -> None:
+    """Rewrite the template so its fontScheme's major latin entry names no face — a real
+    template shape, and one `conform` derives from without complaint."""
+    prs = Presentation(str(pptx))
+    part = prs.slide_masters[0].part.part_related_by(RT.THEME)
+    xml, n = re.subn(
+        r'(<a:majorFont>\s*<a:latin typeface=")[^"]*(")', r"\1\2", part.blob.decode("utf8")
+    )
+    assert n == 1
+    part._blob = xml.encode("utf8")
+    prs.save(str(pptx))
+
+
+def test_a_template_with_no_major_latin_face_loads_with_the_builtin_faces(
+    tmp_path, caplog, synthetic_template
+):
+    """`conform` skips such a scheme and writes the face it counted off the slides, so
+    the theme it adopts must load past the same scheme; a theme naming no face gets the
+    design system's, and the warning says which scheme entry was unusable."""
+    path = _write(tmp_path, synthetic_template, BASE)
+    _blank_major_face(tmp_path / "assets" / "t.pptx")
+
+    with caplog.at_level(logging.WARNING):
+        theme = load_theme(path)
+
+    assert (theme.face, theme.heading_face) == ("Helvetica", "Helvetica")
+    warned = [e for e in _events(caplog) if e["event"] == "theme_font_scheme_unusable"]
+    assert len(warned) == 1
+    assert warned[0]["theme"] == "testtheme"
+    assert "no major latin typeface" in warned[0]["reason"]
+
+
+# --- numbers that cast but cannot be weighed ----------------------------------
+
+_TOO_BIG = "1" + "0" * 320  # an integer past the range of the float `isfinite` weighs
+
+
+@pytest.mark.parametrize(
+    ("block", "names"),
+    [
+        pytest.param(f"scale: {{rows: {_TOO_BIG}}}", "rows is a whole number", id="rows"),
+        pytest.param(f"scale: {{columns: {_TOO_BIG}}}", "columns is a whole number", id="columns"),
+        pytest.param(f"motion: {{beat_ms: {_TOO_BIG}}}", "beat_ms is a whole number", id="beat"),
+        pytest.param(
+            f"motion: {{stagger_ms: {_TOO_BIG}}}", "stagger_ms is a whole number", id="stagger"
+        ),
+    ],
+)
+def test_an_integer_too_large_to_weigh_is_refused_by_name(tmp_path, block, names):
+    """These reach the finite check as ints past a float's range — `int()` takes an integer
+    of any size, where a float that large fails the cast. Weigh one outside `number`'s try
+    and the loader raises a bare OverflowError instead of naming the key."""
+    path = tmp_path / "t.yaml"
+    path.write_text(f"name: t\n{block}\n", encoding="utf-8")
+
+    with pytest.raises(ThemeError, match=names):
+        load_theme(path)
+
+
+@pytest.mark.parametrize(
+    "block,message",
+    [
+        ("scale:\n  gutterr: 2%\n", "'scale': unknown key 'gutterr'"),
+        ("scale:\n  margin:\n    topp: 5%\n", "'scale.margin': unknown key 'topp'"),
+        ("type:\n  wibble: 42\n", "'type': unknown key 'wibble'"),
+    ],
+)
+def test_a_typo_in_a_nested_theme_block_is_refused(tmp_path, block, message):
+    """The value was dropped and the default stood, so the theme read as if honoured."""
+    path = tmp_path / "probe.theme.yaml"
+    path.write_text(f"name: probe\n{block}", encoding="utf-8")
+    with pytest.raises(ThemeError) as e:
+        load_theme(path)
+    assert message in str(e.value)
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        "scale:\n  margin: {top: 5%}\n  columns: 12\n  gutter: 1.5%\n  body_top: 22%\n",
+        "type:\n  face: Helvetica\n  ramp:\n    body: {pt: 14}\n",
+    ],
+)
+def test_every_key_a_nested_block_really_reads_is_accepted(tmp_path, block):
+    """The guard on the guard: a check that refuses real keys is worse than none."""
+    path = tmp_path / "probe.theme.yaml"
+    path.write_text(f"name: probe\n{block}", encoding="utf-8")
+    assert load_theme(path).name == "probe"

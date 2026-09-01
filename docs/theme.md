@@ -1,9 +1,9 @@
 # The built-in design system
 
-`pptxkit` owns a complete design system that renders correctly against a **blank
+`deckwright` owns a complete design system that renders correctly against a **blank
 presentation**. A template is an explicit override surface, never the source of the
 theme — nothing is inferred at build time. Everything below lives in
-`src/pptxkit/theme/defaults.py` and is reachable as `from pptxkit.theme import ...`.
+`src/deckwright/theme/defaults.py` and is reachable as `from deckwright.theme import ...`.
 
 To write a deck spec, read [`docs/authoring.md`](authoring.md); this doc is the
 reference for what a spec gets *for free* when it names no template.
@@ -16,7 +16,7 @@ reference for what a spec gets *for free* when it names no template.
 - [What a theme file may contain](#what-a-theme-file-may-contain)
 - [Colour: roles and pairs](#colour-roles-and-pairs)
 - [Type: points at a reference height](#type-points-at-a-reference-height)
-- [The face, and whether pptxkit can measure it](#the-face-and-whether-pptxkit-can-measure-it)
+- [The face, and whether deckwright can measure it](#the-face-and-whether-deckwright-can-measure-it)
 - [Geometry: fractions, not inches](#geometry-fractions-not-inches)
 - [Chrome: the theme's title treatment](#chrome-the-themes-title-treatment)
 - [Icons: the brand's own, or ours](#icons-the-brands-own-or-ours)
@@ -26,7 +26,7 @@ reference for what a spec gets *for free* when it names no template.
 ## No template at all
 
 ```python
-from pptxkit.theme import load_theme
+from deckwright.theme import load_theme
 
 theme = load_theme()                                   # 13.333 x 7.5in
 theme = load_theme(slide_w=26.666, slide_h=15.0)       # same system, twice the canvas
@@ -55,10 +55,10 @@ a theme is not a place where a typo is silently ignored. Everything is optional 
 | Key | What it does |
 |---|---|
 | `name` | How a deck's `theme:` refers to it. |
-| `template` | The brand `.pptx` this theme specializes into, relative to the theme file. Without one the built-in system stands alone, and `bind:`/`marks:` are then refused as having nothing to bind onto. |
+| `template` | The brand `.pptx` this theme specializes into, relative to the theme file. Without one the built-in system stands alone: `bind:` then resolves literal colours only, and `marks:` is refused as having nowhere to look. |
 | `compose_layout` | Names the layout generated slides compose on, for a template whose ambiguity ranking cannot resolve. The escape hatch, never a requirement — the ranking itself lives in `layouts/resolve.py`. |
 | `drop_template_slides` | Delete the template's own slides after loading it. Almost always `true` for a brand template, whose slides are examples rather than content. |
-| `bind` | Maps semantic roles onto the template's `clrScheme` slots, or onto literal `RRGGBB` values. |
+| `bind` | Maps semantic roles onto the template's `clrScheme` slots, or onto literal `RRGGBB` values. Literals need no template. |
 | `scale` | Margins, `columns`, `rows` and gutter. `rows` is the divisor a placement's `rows:` indexes — 12 by default, and stated here so an author can read the number they are indexing. |
 | `type` | `face`, `heading_face`, `mono`, `reference_height`, `min_pt`, `line_weight_pt`, and per-rung `ramp` overrides written in `pt`. |
 | `chart` | The chart renderer's aesthetic knobs — gap width, gradients, shadows, markers, gridlines, label position. See [`charts.md`](charts.md). |
@@ -90,7 +90,7 @@ declared with, so a component never invents a combination nobody vetted. Every p
 measured against WCAG AA (4.5:1) when the `Palette` is constructed, and a shortfall is
 logged as `theme_pair_below_aa` — **it does not refuse the theme.** A real brand file
 whose own accent cannot carry AA text would otherwise be unusable, and the decision
-belongs where it can be made properly: [`pptxkit qa`](qa.md) judges contrast against
+belongs where it can be made properly: [`deckwright qa`](qa.md) judges contrast against
 what was really painted, including the photograph a pair of nominal colours cannot see.
 
 | Pair | fg on bg | Ratio |
@@ -145,7 +145,7 @@ cycle whatever that leaves, which is four roles on a template that binds none.
 
 The consequence worth knowing is that a chart's `highlight:` is `accent-2`. Derive a
 theme from a template that yields only `accent-1` and the highlighted point is painted
-`0F6E63` — pptxkit's own colour, sitting in a chart otherwise drawn in the brand's.
+`0F6E63` — deckwright's own colour, sitting in a chart otherwise drawn in the brand's.
 Bind every accent you want a chart to cycle, or read the highlight as a system colour.
 
 ### What the template already paints
@@ -156,11 +156,38 @@ one of the sixteen sample templates declares a background on its master, and two
 them paint a photograph. A palette bound only to scheme slots describes a page that
 is not on the slide.
 
+**Literals need no template.** A theme naming no `template:` is a colour palette of
+its own — the fastest way to a deck that is not in deckwright's navy:
+
+```yaml
+name: tidewater
+bind:
+  page: '10212A'
+  ink: F2F5F7
+  muted: A8B2BD
+  accent-1: E4572E
+  accent-2: '17BEBB'
+```
+
+Note `muted` moved with `page`. The defaults are tuned for a light page, so inverting
+one without the other leaves `page-muted` below AA — which the load logs as
+`theme_pair_below_aa` rather than refusing, since `qa` judges what was really painted.
+
+A slot name in that theme is refused, since there is no `clrScheme` to name a slot in.
+An accent bound to a *slot* still holding Microsoft's shipped value is ignored — that
+slot says the brand set no accent there — but a literal is what you typed and is kept
+whatever it equals.
+
+Every role you leave out keeps its system default, so a palette can be two lines. A
+`type: {face: …}` beside it sets the faces — but name one this machine has not got and
+`qa` reports `font-substituted` and declines to judge the render, because what it
+measured is not what your audience will see.
+
 `inherited_surface` resolves what the composed layout will really show — a `bgPr`'s
 own fill, or a `bgRef` indexed into the theme's `bgFillStyleLst` with its colour
 standing in for `phClr` — and the result reaches the deck as `Theme.surface`:
 
-| The template paints | pptxkit does |
+| The template paints | deckwright does |
 |---|---|
 | a picture | leaves it, and samples its pixels behind every line |
 | a colour the palette calls `page` | nothing; the promise is already kept |
@@ -183,7 +210,7 @@ author asked for by name never moves — it raises instead.
 
 ## Type: points at a reference height
 
-**A theme writes point sizes.** `body: {pt: 14}` is 14pt on a canvas
+**A theme writes point sizes.** `body: {pt: 16}` is 16pt on a canvas
 `type.reference_height` inches tall — 7.5in unless the theme says otherwise, which is
 the 16:9 slide almost every deck is.
 
@@ -191,7 +218,7 @@ the 16:9 slide almost every deck is.
 type:
   reference_height: 7.5
   ramp:
-    body:  {pt: 14}
+    body:  {pt: 16}
     title: {pt: 34}
 ```
 
@@ -200,17 +227,20 @@ by `reference_height`. Height is the right normalizer — a 4:3 10x7.5in deck an
 13.33x7.5in deck are viewed at the same physical size and take the same type size,
 which a width-based rule gets wrong by 33%. So the ramp still scales with the canvas;
 only what an author writes changed, because "14pt body" is the thing they mean and
-`1.8667` is not.
+`2.1333` is not.
 
 `min_pt` and `line_weight_pt` are read the same way.
 
 `DEFAULT_RAMP` is modular — `2.13 * 1.25 ** step` — so the whole ramp moves with one
-number. `TypeStyle.rung` holds the rung; `TypeStyle.size` returns resolved points.
+number. `caption` takes a half step: a `kicker` is bold and set in caps, and a caption — the
+rung a chart's axis, a code listing, a stat's label and a citation are set at — is neither,
+so one size for both left the caption the smaller of the two to read.
+`TypeStyle.rung` holds the rung; `TypeStyle.size` returns resolved points.
 
 | Rung | Value | at 7.5in | at 15in |
 |---|---|---|---|
 | `kicker` | 1.704 | 12.8pt | 25.6pt |
-| `caption` | 1.704 | 12.8pt | 25.6pt |
+| `caption` | 1.9051 | 14.3pt | 28.6pt |
 | `body` | 2.13 | 16.0pt | 31.9pt |
 | `lead` | 2.6625 | 20.0pt | 39.9pt |
 | `subtitle` | 2.6625 | 20.0pt | 39.9pt |
@@ -226,6 +256,23 @@ These ten names are the complete vocabulary; a spec may not name a rung outside 
 inherits both for its rung — `title: {pt: 34}` resizes the title without un-bolding
 it — and states `bold:` or `face:` to override. The minimum readable size is
 `MIN_RUNG_DEFAULT = 1.40` — 10.5pt at 7.5in — and `Theme.min_pt` holds it resolved.
+
+A rung's `face:` names one of the theme's own faces by role — `face: body`, `face: heading`,
+`face: mono` — or a literal typeface. The three aliases are the whole vocabulary; a value
+matching one only in case (`face: Mono`) is a literal, and warns as
+`theme_ramp_face_alias_case` because no machine has a typeface by that name.
+
+A figure-heavy deck can give `stat` — and `caption`, for axis-style labels — the mono face.
+Numerals then align in a column and read as measurements rather than display type. This is a
+suggestion, not a rule: it suits decks whose slides carry figures, and reads as an affectation
+on decks that do not.
+
+```yaml
+type:
+  mono: IBM Plex Mono
+  ramp:
+    stat: {pt: 34, face: mono}
+```
 
 The built-in faces are body `Helvetica`, headings `Helvetica`, monospace `Courier New`.
 A theme's own `type: face` / `heading_face` / `mono` overrides them; failing that, a
@@ -243,25 +290,25 @@ saying so.
 
 ## Where the built-in theme lives
 
-`base.yaml` ships **inside the package**, at `src/pptxkit/theme/builtin/base.yaml`,
+`base.yaml` ships **inside the package**, at `src/deckwright/theme/builtin/base.yaml`,
 and nowhere else. A checkout has no copy of it in `templates/`.
 
 A `theme:` name resolves against the theme directory first (`templates`, or
-`PPTXKIT_THEME_DIR`) and falls back to the packaged built-ins — which is why
+`DECKWRIGHT_THEME_DIR`) and falls back to the packaged built-ins — which is why
 `theme: base` works from an installed wheel with no checkout anywhere near it. A file
 of the same name in the theme directory always wins, so a brand theme can be called
 `base` if you insist.
 
 **Do not edit it to make a brand theme.** You would be editing the file that ships in
 the wheel, and the next install replaces it. Derive one instead:
-`pptxkit conform templates/<brand>.pptx --adopt <name>`, which writes
+`deckwright conform templates/<brand>.pptx --adopt <name>`, which writes
 `templates/<name>.theme.yaml` — gitignored, because it carries a client's palette.
 
-## The face, and whether pptxkit can measure it
+## The face, and whether deckwright can measure it
 
 Every wrap decision in a build — how deep a callout row is, whether a table row needs a
 second line, whether a title costs the body some height — is computed from the face's own
-per-character advances. pptxkit ships those advances for two families:
+per-character advances. deckwright ships those advances for two families:
 
 | Family | Covers |
 |---|---|
@@ -281,7 +328,34 @@ warning  theme_face_unmeasured  theme=brand role=heading_face face='Aptos Displa
 regular's, so the ceiling is the honest answer rather than a table that would under-size
 every line.
 
-### Why this matters more than it looks
+### `theme_face_unmeasured` and `font-substituted`
+
+One is about the width tables deckwright ships, the other about the fonts the machine has.
+They take different fixes.
+
+| | `theme_face_unmeasured` | `font-substituted` |
+|---|---|---|
+| Where it shows | a build warning, from the theme loader | a `deckwright qa` finding, severity WARN |
+| What is wrong | deckwright ships no advance table for the face | the face is not installed on the machine that rendered |
+| What it costs | wrap estimates fall back to the loose `CEILING` width | the render, and every finding drawn from it, shows a typeface the deck does not carry |
+| What fixes it | name a measured face, or accept the slack | install the face here, or read `overflow` and `render-contrast` as approximate |
+
+A face can hit either, both, or neither. The build warning covers `face` and
+`heading_face`; the QA check covers every face the theme names, `mono` and any per-rung
+`face` included. `font-substituted` says nothing when fontconfig cannot be asked — no
+`fc-list` on the machine is an absent answer, not a clean one.
+
+### A face that is not a face
+
+OOXML lets a run name `+mj-lt` or `+mn-lt` instead of a typeface — a reference meaning
+*whatever the template's font scheme calls major latin*. `deckwright conform` resolves those
+against the template's own scheme before deriving a face. A theme adopted before it did
+carries the reference itself, which no renderer resolves, so the deck sets its type in a
+string and every machine substitutes. `load_theme` warns as `theme_face_scheme_reference`,
+names the key and the token, and falls back to the template's scheme entry; re-adopt the
+template to settle it.
+
+### The three machines a face has to survive
 
 The face named in a theme is a *request*. Whether it renders is a property of the machine
 opening the file, and there are three machines in play: the one that measured the layout,
@@ -339,7 +413,7 @@ non-geometric values, and neither has a size.
 ## Icons: the brand's own, or ours
 
 `icons:` names a directory of `.svg` glyphs beside the theme file. It is searched
-before the set that ships with pptxkit, so a brand that has drawn its own `target`
+before the set that ships with deckwright, so a brand that has drawn its own `target`
 gets it everywhere without a single deck changing.
 
 ```yaml
@@ -361,7 +435,7 @@ corner and expect the title beside it, so all three fields commonly take the sam
 column range; they stack down the page rather than piling at the top margin. Lines
 sharing a measure share one frame, which is what lets a title that wraps wider than
 estimated push its subtitle down instead of drawing through it — so a field given
-its own columns starts a new frame. `pptxkit conform` writes this block when the
+its own columns starts a new frame. `deckwright conform` writes this block when the
 template's background leaves a wide enough clear run to aim at.
 
 ## Motion
@@ -455,7 +529,7 @@ say about it. Naming a *different* transition would be naming a look, which is w
 this block exists to hold.
 
 `speed` is `slow`, `med` or `fast`. There is no duration knob — the base schema has
-no `dur` attribute, and the sub-second form needs a 2010-namespace extension pptxkit
+no `dur` attribute, and the sub-second form needs a 2010-namespace extension deckwright
 does not write.
 
 Twenty-one effects, and **each takes its own direction vocabulary** — a shared
@@ -477,7 +551,7 @@ that first uses it.
 > in the schema, not in good taste.
 
 > Nothing in a static render shows a transition — `bin/run render` produces identical
-> images with and without one, and `pptxkit qa` reads the manifest, which a transition
+> images with and without one, and `deckwright qa` reads the manifest, which a transition
 > does not touch. Only presentation mode shows it.
 
 > A still render cannot show a stagger — LibreOffice draws the final state of every

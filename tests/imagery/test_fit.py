@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from pptxkit.errors import LayoutError
-from pptxkit.imagery.fit import fit_image, parse_aspect, square
-from pptxkit.theme.model import Rect
+from deckwright.errors import LayoutError
+from deckwright.imagery.fit import fit_image, parse_aspect, square
+from deckwright.theme.model import Rect
 
 
 def test_an_aspect_written_with_a_colon_is_width_over_height():

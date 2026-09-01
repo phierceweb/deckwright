@@ -8,7 +8,7 @@ permissions:
 # both the browser-backed tests and the `document:` exercise start a real browser.
 # The HTML rendered here is this repo's own; see SECURITY.md.
 env:
-  PPTXKIT_CHROME_NO_SANDBOX: "1"
+  DECKWRIGHT_CHROME_NO_SANDBOX: "1"
 
 jobs:
   structure:
@@ -47,15 +47,15 @@ jobs:
         run: python -m pytest -q -rs
       # The glyph bundle is committed; this is the same hash check bin/setup runs.
       - name: glyph bundle
-        run: python -m pptxkit.cli glyphs verify
+        run: python -m deckwright.cli glyphs verify
       - name: end-to-end build (no external tools needed)
         run: |
-          python -m pptxkit.cli build examples/smoke.deck.yaml \
+          python -m deckwright.cli build examples/smoke.deck.yaml \
             --out "$RUNNER_TEMP/smoke/Smoke.pptx"
           test -f "$RUNNER_TEMP/smoke/Smoke.pptx"
           test -f "$RUNNER_TEMP/smoke/Smoke.manifest.json"
       - name: doctor
-        run: python -m pptxkit.cli doctor
+        run: python -m deckwright.cli doctor
 
   # The only job that builds the real 89-exercise catalogue. Everything above runs
   # without LibreOffice, Poppler or a browser — which is why nothing above proves the
@@ -81,21 +81,21 @@ jobs:
             echo "::error::no Chromium-family browser on the runner — the 'document' \
           exercise needs one; install it here or drop that exercise"; exit 1; }
       - name: build every capability
-        run: python -m pptxkit.cli demo --theme base --out out/demo
+        run: python -m deckwright.cli demo --theme base --out out/demo
       - name: render + contact sheet
-        run: python -m pptxkit.cli render "out/demo/base capabilities.pptx" --contact-sheet --cols 8
+        run: python -m deckwright.cli render "out/demo/base capabilities.pptx" --contact-sheet --cols 8
       # `error` rather than `warn`: the runner substitutes its own faces for the
       # theme's (Liberation Sans for Helvetica), so wrap-sensitive findings can differ
       # from a developer's machine. Tighten once that has been watched for a while.
       - name: qa
-        run: python -m pptxkit.cli qa "out/demo/base capabilities.pptx" --fail-on error
+        run: python -m deckwright.cli qa "out/demo/base capabilities.pptx" --fail-on error
       # An owned template, so the whole conform path runs here without licensed
       # artwork. It is a pipeline smoke test, not brand-variance evidence — that is
       # tests/test_templates.py, which cannot run in CI.
       - name: conform against the generated sample
         run: |
-          python -m pptxkit.cli sample "$RUNNER_TEMP/sample.pptx"
-          python -m pptxkit.cli conform "$RUNNER_TEMP/sample.pptx" --out "$RUNNER_TEMP/conform"
+          python -m deckwright.cli sample "$RUNNER_TEMP/sample.pptx"
+          python -m deckwright.cli conform "$RUNNER_TEMP/sample.pptx" --out "$RUNNER_TEMP/conform"
       - name: qa summary
         if: always()
         run: cat "out/demo/render/base capabilities/qa.md" >> "$GITHUB_STEP_SUMMARY"

@@ -1,18 +1,19 @@
 import dataclasses
+import re
 
 from lxml import etree
 
 import pytest
-from pptx.enum.chart import XL_DATA_LABEL_POSITION, XL_MARKER_STYLE
+from pptx.enum.chart import XL_DATA_LABEL_POSITION, XL_LEGEND_POSITION, XL_MARKER_STYLE
 from pptx.enum.dml import MSO_FILL
 from pptx.oxml.ns import qn
 from pptx.util import Pt
 
-from pptxkit.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec, Series
-from pptxkit.charts.native import add_native_chart
-from pptxkit.errors import ThemeError
-from pptxkit.theme.chartstyle import ChartStyle
-from pptxkit.theme.palette import build_palette
+from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec, Series
+from deckwright.charts.native import add_native_chart
+from deckwright.errors import ThemeError
+from deckwright.theme.chartstyle import ChartStyle
+from deckwright.theme.palette import build_palette
 
 # A non-default style exercising every knob this task wires up, so a chart
 # built from it differs from today's flat look in every dimension at once.
@@ -159,8 +160,8 @@ def test_the_values_outrank_the_axis_scale_that_frames_them(ctx_factory, chart_s
 
 def test_every_spec_type_is_renderable_natively():
     """Catches a type added to ChartSpec and never wired into native.py's mapping."""
-    from pptxkit.charts.model import _TYPES
-    from pptxkit.charts.native import _CHART_TYPES
+    from deckwright.charts.model import _TYPES
+    from deckwright.charts.native import _CHART_TYPES
 
     assert set(_TYPES) <= set(_CHART_TYPES)
 
@@ -362,9 +363,9 @@ def test_shadow_effect_lst_carries_the_themes_blur_dist_dir_alpha(ctx_factory, t
     assert alpha.get("val") == str(round(STYLED.shadow_alpha * 100000))
 
 
-def test_percent_unit_sets_the_data_labels_number_format(ctx_factory, theme, spec_annotated):
+def test_percent_unit_sets_the_data_labels_number_format(ctx_factory, theme, spec_highlighted_pct):
     ctx = _plain_ctx(ctx_factory, theme)
-    chart = add_native_chart(ctx, spec_annotated, ctx.body_rect).chart
+    chart = add_native_chart(ctx, spec_highlighted_pct, ctx.body_rect).chart
     assert chart.plots[0].data_labels.number_format == '0"%"'
 
 
@@ -520,7 +521,7 @@ def test_an_area_chart_builds_and_does_not_touch_gap_width(ctx_factory, theme):
 def test_non_bar_column_chart_types_are_excluded_from_gap_width_types():
     """Assigning gap_width to AreaPlot/LinePlot/DoughnutPlot/RadarPlot/PiePlot is a silent
     no-op in python-pptx, so the frozenset itself is the enforced contract."""
-    from pptxkit.charts.native import _GAP_WIDTH_CHART_TYPES
+    from deckwright.charts.native import _GAP_WIDTH_CHART_TYPES
 
     assert (
         not {
@@ -666,7 +667,7 @@ _BUBBLE_TYPES = ("bubble", "bubble-3d")
 @pytest.mark.parametrize("chart_type", _BUBBLE_TYPES)
 def test_bubble_types_get_the_themes_data_labels(ctx_factory, chart_type):
     """Bubble's CT_BubbleChart does define dLbls, so it must keep labels. Asserted on the
-    styling pptxkit writes — ``has_data_labels`` is already True on a fresh bubble plot."""
+    styling deckwright writes — ``has_data_labels`` is already True on a fresh bubble plot."""
     ctx = ctx_factory({"title": "T"})
     spec = ChartSpec(
         type=chart_type,
@@ -853,7 +854,7 @@ def test_radar_markers_gets_themed_too(ctx_factory, theme):
 def test_marker_chart_types_never_include_a_type_without_the_marker_mixin():
     """BarSeries/AreaSeries/PieSeries/BubbleSeries expose no usable ``.marker``; the
     frozenset is the only thing between a wrong entry and a schema-mismatched write."""
-    from pptxkit.charts.native import _MARKER_CHART_TYPES
+    from deckwright.charts.native import _MARKER_CHART_TYPES
 
     assert (
         not {
@@ -878,7 +879,7 @@ def test_marker_chart_types_never_include_a_type_without_the_marker_mixin():
 
 
 def test_marker_chart_types_excludes_the_no_marker_variants():
-    from pptxkit.charts.native import _MARKER_CHART_TYPES
+    from deckwright.charts.native import _MARKER_CHART_TYPES
 
     assert (
         not {
@@ -1109,3 +1110,305 @@ def test_a_currency_unit_prefixes_the_data_labels(ctx_factory, theme):
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
     assert chart.plots[0].data_labels.number_format == '"$"0'
+
+
+def test_a_decimal_series_keeps_its_places_in_the_data_labels(ctx_factory, theme):
+    """The bug this fixes: 11.2 and 9.6 both printed as whole numbers, and a refund
+    rate of 5.1 against 4.8 collapsed into two identical labels."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("W1", "W2", "W3", "W4"),
+        series=(Series(name="Refunds", values=(11.2, 9.6, 5.1, 4.8), unit="%"),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.number_format == '0.0"%"'
+
+
+def test_whole_numbers_get_no_decimal_point(ctx_factory, theme):
+    """ "General" is python-pptx's untouched state: inference found nothing to write.
+    A spurious place would make this "0.0"."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("Atlas", "Beacon"),
+        series=(Series(name="Tickets", values=(6140.0, 6930.0)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.number_format == "General"
+
+
+def test_decimals_overrides_what_the_data_would_infer(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("W1", "W2"),
+        series=(Series(name="Refunds", values=(11.25, 9.6), unit="%"),),
+        decimals=1,
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.number_format == '0.0"%"'
+
+
+def test_decimals_zero_forces_whole_numbers_back(ctx_factory, theme):
+    """The escape hatch for a noisy series: the author asked for no places at all."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("W1", "W2"),
+        series=(Series(name="Refunds", values=(11.2, 9.6), unit="%"),),
+        decimals=0,
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.number_format == '0"%"'
+
+
+def test_a_series_that_asked_for_no_labels_writes_its_own_show_val_off(ctx_factory):
+    """Plot-level data labels are all-or-nothing; only the series' own `c:dLbls` dissents."""
+    ctx = ctx_factory({"title": "T"})
+    spec = ChartSpec(
+        type="line-markers",
+        categories=("W1", "W2", "W3"),
+        series=(
+            Series(name="Ours", values=(11.2, 9.6, 5.1), unit="%"),
+            Series(name="Platform average", values=(7.0, 7.0, 7.0), unit="%", labels=False),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].has_data_labels is True
+    assert chart.series[0]._element.find(qn("c:dLbls")) is None
+    reference = chart.series[1]._element.find(qn("c:dLbls"))
+    assert reference is not None
+    assert reference.find(qn("c:showVal")).get("val") == "0"
+
+
+def test_a_unit_reaches_the_value_axis_as_well_as_the_labels(ctx_factory, theme):
+    """The axis read 0-12 while every label on the line read 11.2% — the scale and the
+    values it framed disagreed about what the numbers were."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="line",
+        categories=("Jan", "Feb", "Mar", "Apr"),
+        series=(Series(name="Refunds", values=(11.2, 9.6, 5.1, 4.8), unit="%"),),
+    )
+    ticks = add_native_chart(ctx, spec, ctx.body_rect).chart.value_axis.tick_labels
+    assert ticks.number_format == '0.0"%"'
+    assert ticks.number_format_is_linked is False
+
+
+def test_a_currency_unit_prefixes_the_value_axis_too(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("Q1", "Q2"),
+        series=(Series(name="Budget", values=(900.0, 1200.0), unit="$"),),
+    )
+    ticks = add_native_chart(ctx, spec, ctx.body_rect).chart.value_axis.tick_labels
+    assert ticks.number_format == '"$"0'
+
+
+def test_a_chart_with_no_unit_leaves_its_value_axis_automatic(ctx_factory, theme):
+    """The ticks are the renderer's to choose; only the unit is something it cannot know.
+    Pinning a format here would print 12.0 for a tick of 12."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("Q1", "Q2"),
+        series=(Series(name="Tickets", values=(11.2, 9.6)),),
+    )
+    axis = add_native_chart(ctx, spec, ctx.body_rect).chart.value_axis
+    # Paired with something `_style_axes` writes unconditionally, so the absence
+    # assertion cannot stay green on a function that returned early.
+    assert axis.has_minor_gridlines is False
+    assert axis.tick_labels.number_format == "General"
+
+
+def test_a_hundred_percent_type_keeps_its_percent_axis_over_a_redundant_unit(ctx_factory, theme):
+    """`0%` is the share the renderer computed. A decimal in the data is what makes the
+    unit branch produce a code at all, so that is what a wrong branch order would use."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column-stacked-100",
+        categories=("A", "B"),
+        series=(
+            Series(name="S", values=(60.5, 39.5), unit="%"),
+            Series(name="T", values=(39.5, 60.5), unit="%"),
+        ),
+    )
+    ticks = add_native_chart(ctx, spec, ctx.body_rect).chart.value_axis.tick_labels
+    assert ticks.number_format == "0%"
+
+
+def _plot_box(chart):
+    layout = chart._chartSpace.find(qn("c:chart")).find(qn("c:plotArea")).find(qn("c:layout"))
+    manual = layout.find(qn("c:manualLayout"))
+    return float(manual.find(qn("c:x")).get("val")), float(manual.find(qn("c:w")).get("val"))
+
+
+def test_a_bar_chart_with_a_legend_leaves_the_legend_a_column(ctx_factory, theme):
+    """The plot ran to 98% of the frame whatever the legend needed, so the legend was
+    drawn over the bars and its longest name clipped."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="bar-stacked-100",
+        categories=("Enterprise", "Small business"),
+        series=(
+            Series(name="Resolved within one business day", values=(62.0, 81.0)),
+            Series(name="Escalated to engineering", values=(38.0, 19.0)),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    x, w = _plot_box(chart)
+    assert 1.0 - (x + w) > 0.15  # a real column, not the bare 2% frame margin
+    assert chart.legend.include_in_layout is False
+
+
+def test_a_single_series_bar_chart_still_uses_the_full_width(ctx_factory, theme):
+    """No legend, so nothing to reserve — the plot keeps everything but the margin."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="bar",
+        categories=("Enterprise", "Small business"),
+        series=(Series(name="Resolved", values=(62.0, 81.0)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    x, w = _plot_box(chart)
+    assert 1.0 - (x + w) == pytest.approx(0.02)
+
+
+def test_a_long_category_and_a_long_series_name_still_leave_the_bars_room(ctx_factory, theme):
+    """Both columns come out of one budget, so neither can squeeze the plot away."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="bar-stacked-100",
+        categories=("An extremely long category label that runs on and on",),
+        series=(
+            Series(name="A series name that is also absurdly long indeed", values=(62.0,)),
+            Series(name="Another very long series name for good measure", values=(38.0,)),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    _, w = _plot_box(chart)
+    assert w >= 0.45
+
+
+def test_a_stacked_100_chart_keeps_its_decimal_places(ctx_factory, theme):
+    """The axis shows the computed share; each label still prints its own series value.
+    Excluding these kinds from inference reproduced the exact collapse — 11.2 and 88.8
+    labelled 11 and 89."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="bar-stacked-100",
+        categories=("A", "B"),
+        series=(
+            Series(name="Resolved", values=(11.2, 9.6)),
+            Series(name="Escalated", values=(88.8, 90.4)),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.number_format == "0.0"
+
+
+def test_a_non_bar_legend_goes_under_the_plot(ctx_factory, theme):
+    """Only the bar family reserves a side column for it; everywhere else a mid-right
+    legend takes a quarter of the width and crowds the plot."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="column",
+        categories=("Atlas", "Beacon"),
+        series=(
+            Series(name="Direct signups", values=(6140.0, 6930.0)),
+            Series(name="Partner referrals", values=(3070.0, 2410.0)),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.legend.position == XL_LEGEND_POSITION.BOTTOM
+
+
+def test_a_bar_legend_keeps_its_own_column(ctx_factory, theme):
+    """Its plot area is pinned by hand, so a bottom legend would waste the column the
+    manual layout already measured."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="bar",
+        categories=("Atlas", "Beacon"),
+        series=(Series(name="One", values=(1.0, 2.0)), Series(name="Two", values=(3.0, 4.0))),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.legend.position != XL_LEGEND_POSITION.BOTTOM
+
+
+@pytest.mark.parametrize(
+    "chart_type,expected",
+    [
+        # `inEnd` is a position only the bar family and a pie offer.
+        ("column", "inEnd"),
+        ("bar", "inEnd"),
+        ("pie", "inEnd"),
+        # These groups offer none; a `c:dLblPos` in one is what asks to repair the file.
+        ("doughnut", None),
+        ("area", None),
+        ("radar", None),
+        ("radar-filled", None),
+        ("radar-markers", None),
+        # A line has its own position and keeps it rather than taking an illegal one.
+        ("line-markers", "t"),
+    ],
+)
+def test_a_theme_position_is_written_only_where_the_chart_group_offers_it(
+    ctx_factory, theme, chart_type, expected
+):
+    """`label_position: inside_end` is authorable on any theme, and it was written into
+    every kind — including the groups PowerPoint offers no position for at all."""
+    styled = dataclasses.replace(
+        theme, chart=ChartStyle(thousands_sep=False, label_position="inside_end")
+    )
+    ctx = ctx_factory({"title": "T"}, theme_override=styled)
+    spec = ChartSpec(
+        type=chart_type,
+        categories=("W1", "W2", "W3"),
+        series=(Series(name="Ours", values=(11.2, 9.6, 5.1)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    xml = etree.tostring(chart._chartSpace, encoding="unicode")
+    found = re.findall(r'<c:dLblPos val="(\w+)"', xml)
+    assert found == ([expected] if expected else [])
+
+
+@pytest.mark.parametrize("chart_type", ("radar", "radar-filled", "radar-markers"))
+def test_a_radar_series_carries_no_smooth(ctx_factory, theme, chart_type):
+    """python-pptx writes `c:smooth` for every connected kind, but `CT_RadarSer` has no
+    such child and a radar part carrying it does not validate."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type=chart_type,
+        categories=("W1", "W2", "W3"),
+        series=(Series(name="Ours", values=(11.2, 9.6, 5.1)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert "smooth" not in etree.tostring(chart._chartSpace, encoding="unicode")
+
+
+def test_a_line_series_keeps_its_smooth(ctx_factory, theme):
+    """The strip is scoped to radar: a line chart's own `c:smooth` is legal and load-bearing."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="line-markers",
+        categories=("W1", "W2"),
+        series=(Series(name="Ours", values=(1.0, 2.0)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert "smooth" in etree.tostring(chart._chartSpace, encoding="unicode")
+
+
+def test_a_line_chart_sets_its_labels_above_the_marker(ctx_factory, theme):
+    """`outside_end` has no meaning on a line: it lands the label on the point it names,
+    which is how 11.2%, 5.1% and 4.8% all ended up drawn through the line."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = ChartSpec(
+        type="line-markers",
+        categories=("W1", "W2"),
+        series=(Series(name="Ours", values=(11.2, 9.6), unit="%"),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.position == XL_DATA_LABEL_POSITION.ABOVE

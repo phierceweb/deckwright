@@ -1,6 +1,6 @@
-# Building PowerPoint decks with pptxkit
+# Building PowerPoint decks with deckwright
 
-pptxkit assembles decks programmatically with **python-pptx** and renders/QAs them
+deckwright assembles decks programmatically with **python-pptx** and renders/QAs them
 headlessly. This is the general, tool-level guide — the workflow and the
 library gotchas that hold for *any* deck.
 
@@ -22,18 +22,18 @@ library gotchas that hold for *any* deck.
 
 | Concern | Module / tool |
 |---|---|
-| Authoring shapes and text | `pptx` (python-pptx) + `pptxkit.utils.shapes` / `pptxkit.utils.deck` |
-| Animation and slide transitions | `pptxkit.motion` — see [Animations](#animations--inject-ptiming-verify-in-powerpoint) |
-| Doc / code "cards" (rendered snippets) | `pptxkit.services.htmlcard` + `pptxkit.services.htmlshot` (headless Chrome) |
-| Slide rasterization + overview | `pptxkit.services.render` (LibreOffice → PDF → images) + `pptxkit.services.montage` (contact sheet) |
+| Authoring shapes and text | `pptx` (python-pptx) + `deckwright.utils.shapes` / `deckwright.utils.deck` |
+| Animation and slide transitions | `deckwright.motion` — see [Animations](#animations--inject-ptiming-verify-in-powerpoint) |
+| Doc / code "cards" (rendered snippets) | `deckwright.services.htmlcard` + `deckwright.services.htmlshot` (headless Chrome) |
+| Slide rasterization + overview | `deckwright.services.render` (LibreOffice → PDF → images) + `deckwright.services.montage` (contact sheet) |
 
 External binaries and their env knobs (see `.env.example`):
 
-- **LibreOffice** (`soffice`) — `PPTXKIT_SOFFICE`; DPI via `PPTXKIT_RENDER_DPI` (default 110).
-- **Poppler** (`pdftoppm`, `$PPTXKIT_PDFTOPPM`) — the PDF → per-slide image step.
-- **A Chromium-family browser** — `PPTXKIT_CHROME` (autodetected if unset); `PPTXKIT_SHOT_SCALE`
-  (default 2), `PPTXKIT_SHOT_CANVAS_H` (default 4000 — a card taller than this is clipped by the
-  browser and the render is rejected), `PPTXKIT_SHOT_TIMEOUT_S` (default 60).
+- **LibreOffice** (`soffice`) — `DECKWRIGHT_SOFFICE`; DPI via `DECKWRIGHT_RENDER_DPI` (default 110).
+- **Poppler** (`pdftoppm`, `$DECKWRIGHT_PDFTOPPM`) — the PDF → per-slide image step.
+- **A Chromium-family browser** — `DECKWRIGHT_CHROME` (autodetected if unset); `DECKWRIGHT_SHOT_SCALE`
+  (default 2), `DECKWRIGHT_SHOT_CANVAS_H` (default 4000 — a card taller than this is clipped by the
+  browser and the render is rejected), `DECKWRIGHT_SHOT_TIMEOUT_S` (default 60).
 
 ## The build → render → QA loop
 
@@ -44,7 +44,7 @@ capability in one deck, generated from the exercise registry against any theme, 
 1. `bin/run build <spec>.deck.yaml` compiles a spec into a `.pptx` and its
    manifest — the normal path, documented in [`docs/authoring.md`](authoring.md).
    A hand-written `build_deck.py` assembling the deck with python-pptx + the
-   pptxkit helpers is the older one, and still what a deck the spec cannot
+   deckwright helpers is the older one, and still what a deck the spec cannot
    express falls back to.
 2. `bin/run render <deck>.pptx --contact-sheet` rasterizes every slide to
    `render/<deck>/slide-NN.jpg` and writes `render/<deck>/contact_sheet.png`.
@@ -56,7 +56,7 @@ capability in one deck, generated from the exercise registry against any theme, 
 > appears visible. It cannot show reveal / interactive / hidden states — those are
 > only verifiable in real PowerPoint (see Animations).
 
-For a deck built by `pptxkit build` (i.e. one with a manifest), `bin/run qa <deck>.pptx`
+For a deck built by `deckwright build` (i.e. one with a manifest), `bin/run qa <deck>.pptx`
 runs automated bounds/reserved/min-font/contrast/overflow checks on top of the eyeball
 pass above. See [`docs/qa.md`](qa.md) for what it catches and — the more important
 half — what it structurally cannot.
@@ -66,25 +66,25 @@ half — what it structurally cannot.
 - **Edit existing title runs with `run.text = ...`**, never `text_frame.text = ...`
   (the latter collapses all formatting into one unstyled run).
 - **Kill the theme drop shadow** on every autoshape: `shape.shadow.inherit = False`
-  (pptxkit's `solid()` does this for you).
+  (deckwright's `solid()` does this for you).
 - **Colors:** `RGBColor.from_string("27B94C")` — no leading `#`, no 8-digit alpha;
   either corrupts the file.
 - **Autoshape text anchors MIDDLE** in render — set
   `text_frame.vertical_anchor = MSO_ANCHOR.TOP` and zero the margins for top-left text.
-- **Delete a slide with `pptxkit.utils.deck.delete_slide(prs, i)`** — it drops the
+- **Delete a slide with `deckwright.utils.deck.delete_slide(prs, i)`** — it drops the
   relationship *and* the `sldId`. Removing only the `sldId` leaves an orphan part →
   "Duplicate name" zip warning and a corrupt file.
-- Reusable primitives in `pptxkit.utils.shapes`: `solid`, `para`, `textbox`, `rrect`,
+- Reusable primitives in `deckwright.utils.shapes`: `solid`, `para`, `textbox`, `rrect`,
   `rect`, `notes`, `bring_to_front` (z-order — python-pptx has no z-order API).
 
 ## Body components — composing a slide
 
-A slide has no layout. `pptxkit.layouts.compose.render_slide` paints the
+A slide has no layout. `deckwright.layouts.compose.render_slide` paints the
 backdrop, places the chrome (`kicker`/`title`/`subtitle`), walks the spec's
 placements calling one **component** for each, then writes the chrome over the
 top — so a title told to sit on a painted panel lands above it. Components live in
-`pptxkit.layouts.components` (the registry) with implementations in
-`pptxkit.components.*`; register one with `@component("name")`. For the spec
+`deckwright.layouts.components` (the registry) with implementations in
+`deckwright.components.*`; register one with `@component("name")`. For the spec
 side of this — every component's fields and a worked example each — see
 [`docs/authoring.md`](authoring.md).
 
@@ -118,14 +118,14 @@ a bare group list from a component that skips `height`):
   can bound the body against `ctx.body_rect.height` instead of taking the
   component's word for it. `None` if the component doesn't report it.
 
-Worked example: `src/pptxkit/components/callouts.py` computes a capped
+Worked example: `src/deckwright/components/callouts.py` computes a capped
 `row_h` for its own overflow guard, then reuses that same value for
 `height=len(items) * row_h` — reuse the guard's value, don't recompute it, or
 the guard and the reported height can drift apart.
 
 ## Animations — inject `<p:timing>`, verify in PowerPoint
 
-python-pptx cannot author animations; you append raw `<p:timing>` OOXML. `pptxkit.motion`
+python-pptx cannot author animations; you append raw `<p:timing>` OOXML. `deckwright.motion`
 is one module per concern — `builds` (shape reveals), `chartbuild` (a chart's own build),
 `interactive` (click-to-reveal), `transition` (how the show arrives at a slide) — over a
 shared `_tree` that owns the timing skeleton and the one-timing-per-slide rule. The public
@@ -143,7 +143,7 @@ helpers are re-exported from the package:
   `<a:bldChart>` instead of the `<p:bldP>` visibility toggle the builds above
   use — a chart is a `graphicFrame`, not a shape whose visibility can flip.
   Wired from the spec via `animate: by_category`/`by_series` on a chart slide
-  (`pptxkit.components.chart`); see [`charts.md`](charts.md).
+  (`deckwright.components.chart`); see [`charts.md`](charts.md).
 - `add_transition(slide, kind, direction=, speed=)` — a different element entirely
   (`<p:transition>`, no timing tree). Wired from the theme's `motion.transition`; a slide
   opts out with `transition: none`. See [`theme.md`](theme.md#the-decks-transition).
@@ -201,18 +201,18 @@ When *every* animated shape on a slide is text-free the build list is omitted en
 
 Show what a real doc or snippet *looks like* as a slide image instead of retyping it:
 
-- `pptxkit.services.htmlcard.markdown_card(md, filename=...)` wraps markdown in a macOS-style
+- `deckwright.services.htmlcard.markdown_card(md, filename=...)` wraps markdown in a macOS-style
   window card; `window_card(body_html, filename=..., extra_css=...)` is the generic
   frame for bespoke HTML.
 - `filetree_card(folder, rows, filename=..., count=, more=)` renders a file-explorer tree —
   each row is `(label, kind, level)` with `kind` in `file` / `folder` / `hi` (highlighted) —
   the "where this file lives" graphic (docs / rules / skills slides). Scale up with `extra_css`.
-- `pptxkit.services.htmlshot.render_html_to_png(html, out)` screenshots the card via headless
+- `deckwright.services.htmlshot.render_html_to_png(html, out)` screenshots the card via headless
   Chrome, autocropped to content. `card_to_slide(slide, html, left=, top=, height=)`
   renders **and** places it in one call, returning the picture (use its `.shape_id`
   for animations or `.width.inches` to anchor a callout at its edge).
 - Match the card's `max_width` to the render `width` so the shot is tight.
-- The `document` body component (`pptxkit.components.doccard`) wires this into a
+- The `document` body component (`deckwright.components.doccard`) wires this into a
   slide: `document: {source: <path>}` renders a markdown file into a
   window card via `panel_css(theme)` + `place_panel` and places it as a picture
   (`filename`, `max_width`, `side: left|right|full` are optional). `source` is
@@ -227,7 +227,7 @@ repo ends up with 378MB nobody dares delete.
 | Directory | Holds | Committed |
 |---|---|---|
 | `authoring/` | **Decks you are writing**, and whatever they read. Your content, not the library's. | no |
-| `examples/` | **pptxkit's own demonstration specs** — the feature tour, the chart catalogue, the table and shape tours. They exist to exercise the library, so they are part of it. | yes |
+| `examples/` | **deckwright's own demonstration specs** — the feature tour, the chart catalogue, the table and shape tours. They exist to exercise the library, so they are part of it. | yes |
 | `templates/` | **Brand `.pptx` files and the themes derived from them**, side by side. A theme is not deck-specific, so it never lives beside one deck's source. | `README.md` only |
 | `out/` | **Everything a command writes** — builds, manifests, renders, PDFs, `qa.md`, `conform/` output. | no |
 
@@ -245,13 +245,14 @@ beside the `.pptx` they were given, into `render/<deck>/`, so two decks sharing 
 directory keep their slides apart — but they do interleave two decks' output in one
 place, which is the thing a deck directory exists to keep separate.
 
-**Inside one deck's directory, three things and no more:**
+**Inside one deck's directory, four things and no more:**
 
 ```
 out/smoke/
   Smoke.pptx                 the deck
   Smoke.manifest.json        what `qa` reads; it pairs with the deck by name
   Smoke.content.md           the same build as words, for a human to read
+  Smoke.beats.md             the same build as its reveal order, click by click
   render/Smoke/              slide-NNN.jpg, the PDF, qa.md, qa.json, contact sheets
   .build/                    generated inputs and intermediates — hidden on purpose
 ```
@@ -311,6 +312,6 @@ is the check that still applies — see [`qa.md`](qa.md#provenance).
 If you later need to *regenerate* instead of hand-edit, copy the spec snapshot the build
 left in `out/<deck>/.build/<name>.deck.yaml` as
 the template. The skeleton is small: `Presentation(template)` → one `add_slide(BLANK)` per
-slide → place shapes/cards with the `pptxkit` helpers → `prs.save(OUT)`. Per-slide card
+slide → place shapes/cards with the `deckwright` helpers → `prs.save(OUT)`. Per-slide card
 sources (`_render_*.py` + the `.md` / `.html` snippets) render to `assets/` and are embedded
 at build time.

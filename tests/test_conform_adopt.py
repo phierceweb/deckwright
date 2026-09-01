@@ -4,15 +4,22 @@ binds to, where a file may be somebody's hand-edited theme and nothing would rec
 
 from __future__ import annotations
 
+import pathlib
+import re
+
 import pytest
 import yaml
 from pptx import Presentation
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+from pptx.util import Inches, Pt
 from typer.testing import CliRunner
 
-from pptxkit.cli import app
-from pptxkit.compile.build import build_deck
-from pptxkit.conform import conform, install, plan
-from pptxkit.errors import ThemeError
+from deckwright.cli import app
+from deckwright.compile.build import build_deck
+from deckwright.conform import conform, install, plan
+from deckwright.conform.derive import derive
+from deckwright.errors import ThemeError
+from deckwright.theme import load_theme
 
 runner = CliRunner()
 
@@ -44,7 +51,7 @@ def themes(tmp_path, monkeypatch):
     same env var — point both at a scratch directory."""
     root = tmp_path / "themes"
     root.mkdir()
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(root))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(root))
     return root
 
 
@@ -216,7 +223,7 @@ def test_a_template_that_will_not_open_names_itself(themes, template, tmp_path):
 def test_the_cli_passes_adopt_and_force_through(themes, template, tmp_path, monkeypatch):
     """The flags are the whole feature. One exercise stands in for the registry the real
     command runs — this is about the two flags, not the corpus."""
-    monkeypatch.setattr("pptxkit.conform.run.EXERCISE", {"fine": FINE})
+    monkeypatch.setattr("deckwright.conform.run.EXERCISE", {"fine": FINE})
     other = _template(themes / "Other.pptx", slides=3)
     (themes / "brand.theme.yaml").write_text(
         yaml.safe_dump({"name": "brand", "template": other.name})
@@ -267,10 +274,18 @@ def test_a_sidecar_theme_beside_the_template_is_installed_instead_of_the_derivat
 
 
 def test_without_a_sidecar_the_derivation_is_what_installs(themes, template, tmp_path):
-    """The sidecar is an override, not a requirement — a first meeting still derives."""
-    conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="fresh")
+    """The sidecar is an override, not a requirement — a first meeting still derives.
+
+    This template derives no `type:` block, so an assertion reading `type.face` holds
+    whatever `install` wrote, however little. Assert what `derive` produced.
+    """
+    result = conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="fresh")
+
     installed = yaml.safe_load((themes / "fresh.theme.yaml").read_text())
-    assert installed.get("type", {}).get("face") != "Georgia"
+    assert installed["name"] == "fresh"
+    assert installed["template"] == template.name
+    assert installed["bind"], installed  # what `derive` read off the template's own scheme
+    assert not any("sidecar" in n for n in result.notes), result.notes
 
 
 def test_adoption_writes_the_theme_and_nothing_else(themes, template, tmp_path):
@@ -292,10 +307,7 @@ def test_no_module_copies_a_template(themes, template, tmp_path):
     `out/` is regenerated per run and may hold whatever it likes; nothing that outlives
     a run may copy a brand binary.
     """
-    import pathlib
-    import re
-
-    src = pathlib.Path(__file__).resolve().parents[1] / "src/pptxkit"
+    src = pathlib.Path(__file__).resolve().parents[1] / "src/deckwright"
     offenders = [
         f"{path.relative_to(src)}:{i}"
         for path in src.rglob("*.py")
@@ -305,3 +317,115 @@ def test_no_module_copies_a_template(themes, template, tmp_path):
     assert offenders == [], (
         "a template is adopted where it lives and is never copied: " + ", ".join(offenders)
     )
+
+
+_FONT_SCHEME = (
+    '<a:fontScheme name="t">'
+    '<a:majorFont><a:latin typeface="{major}"/><a:ea typeface="{ea}"/><a:cs typeface=""/>'
+    "</a:majorFont>"
+    '<a:minorFont><a:latin typeface="{minor}"/><a:ea typeface="{ea}"/><a:cs typeface=""/>'
+    "</a:minorFont>"
+    "</a:fontScheme>"
+)
+
+
+def _referencing_template(path, runs, *, major="Georgia", minor="Verdana", ea="", scheme=True):
+    """A template whose slide text names OOXML font *references* rather than faces.
+
+    Stock Office sets major and minor to the same face, so the theme part is rewritten:
+    without that, mapping ``+mn-lt`` onto the major font is invisible.
+    """
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    para = slide.shapes.add_textbox(
+        Inches(1), Inches(1), Inches(5), Inches(2)
+    ).text_frame.paragraphs[0]
+    for text, face in runs:
+        run = para.add_run()
+        run.text = text
+        run.font.name = face
+        run.font.size = Pt(24)
+    part = prs.slide_masters[0].part.part_related_by(RT.THEME)
+    part._blob = re.sub(
+        r"<a:fontScheme.*?</a:fontScheme>",
+        _FONT_SCHEME.format(major=major, minor=minor, ea=ea) if scheme else "",
+        part.blob.decode("utf8"),
+        flags=re.S,
+    ).encode("utf8")
+    prs.save(str(path))
+    return path
+
+
+def _derived_face(template):
+    return (derive(template).get("type") or {}).get("face")
+
+
+@pytest.mark.parametrize("token", ["+mj-lt", "+MJ-LT"])
+def test_a_major_font_reference_is_resolved_to_the_face_it_names(tmp_path, token):
+    """`+mj-lt` is not a typeface, it is "the theme's major latin font". python-pptx
+    hands the attribute back verbatim, so counting it writes a string no renderer resolves.
+    The upper-case spelling is the same reference: matched case-sensitively it is counted
+    as a face named "+MJ-LT"."""
+    template = _referencing_template(tmp_path / "Ref.pptx", [("x" * 40, token)])
+
+    assert _derived_face(template) == "Georgia"
+
+
+def test_a_template_with_no_major_latin_face_adopts_a_theme_that_loads(themes, tmp_path):
+    """Derivation reads the face off the slides and shrugs at a fontScheme with an empty
+    major entry — so the theme it adopts must open against that same scheme, with the
+    face it wrote winning."""
+    template = _referencing_template(themes / "Brand.pptx", [("x" * 40, "Courier New")], major="")
+
+    result = conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert result.adopted == themes / "brand.theme.yaml"
+    assert load_theme("brand").face == "Courier New"
+
+
+def test_a_minor_font_reference_resolves_to_the_minor_face(tmp_path):
+    """The two references name different entries of the same scheme. Point `+mn-lt` at
+    the major font and this reads Georgia."""
+    template = _referencing_template(tmp_path / "Ref.pptx", [("x" * 40, "+mn-lt")])
+
+    assert _derived_face(template) == "Verdana"
+
+
+def test_an_unresolvable_reference_is_skipped_rather_than_counted(tmp_path):
+    """No fontScheme to resolve against: the reference is dropped and the runs set in a
+    real face carry the vote. Counting it instead would beat Courier New 40 characters to 10."""
+    template = _referencing_template(
+        tmp_path / "Ref.pptx",
+        [("x" * 40, "+mj-lt"), ("y" * 10, "Courier New")],
+        scheme=False,
+    )
+
+    assert _derived_face(template) == "Courier New"
+
+
+@pytest.mark.parametrize("token", ["+mj-ea", "+mj-cs", "+mn-ea", "+mn-cs"])
+def test_a_script_reference_is_skipped_rather_than_read_as_the_latin_face(tmp_path, token):
+    """`+mj-ea` names the fontScheme's own `<a:ea>` element and `+mj-cs` its `<a:cs>`,
+    neither of which is the latin face. Answering one with the latin face sets CJK or
+    complex-script text in a face that cannot carry it."""
+    template = _referencing_template(
+        tmp_path / "Ref.pptx",
+        [("x" * 40, token), ("y" * 10, "Courier New")],
+        ea="Yu Gothic",
+    )
+
+    assert _derived_face(template) == "Courier New"
+
+
+def test_the_pitchdeck_template_derives_a_real_face():
+    """The corpus template that exhibited this: 201 characters of `+mj-lt` against 8 of
+    Open Sans, so the reference won the count and `+mj-lt` was written into the theme."""
+    template = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "templates"
+        / "free pitch deck template powerpoint.pptx"
+    )
+    if not template.is_file():
+        pytest.skip(f"{template.name} not present — templates/ is gitignored")
+
+    assert _derived_face(template) == "Montserrat-Bold"

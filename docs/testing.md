@@ -6,7 +6,7 @@ fail at all.
 
 This is about the **library's own test suite**. For checks that run against a *built
 deck* — bounds, safe zones, min font size, contrast, render overflow — see
-[`qa.md`](qa.md). `pptxkit qa` is a product feature; this doc is about `bin/test`.
+[`qa.md`](qa.md). `deckwright qa` is a product feature; this doc is about `bin/test`.
 
 ---
 
@@ -43,9 +43,9 @@ names the mutation that defeats the test it argues against.
 ## The template test is the primary guard
 
 `tests/test_templates.py` builds every capability in
-`src/pptxkit/conform/exercise.py` against **every brand template in `templates/`** — the
+`src/deckwright/conform/` against **every brand template in `templates/`** — the
 same directory decks resolve `theme:` from, with `-4-3` twins skipped and a generated
-`pptxkit sample` refused by its own `docProps` mark. It then asserts on the resulting
+`deckwright sample` refused by its own `docProps` mark. It then asserts on the resulting
 deck and its manifest: every exercise builds, the deck reads back, the package holds no
 duplicate shape id or broken relationship, no ink is unreadable on what was really
 painted behind it, nothing lands outside the slide or intrudes on a reserved region, and
@@ -56,7 +56,7 @@ it did not choose?* Each run re-derives the theme by measurement, so what it exe
 genuine brand variance rather than a fixture shaped to pass.
 
 **The guard is worth exactly the variety of `templates/`.** Read that off the directory;
-`pptxkit doctor` reports it. One template is not a variance test, and neither is one
+`deckwright doctor` reports it. One template is not a variance test, and neither is one
 template plus its 4:3 twin. `templates/` is gitignored, so the module skips where it is
 empty and **a green suite on a machine with no brand template proves almost nothing**.
 
@@ -210,11 +210,11 @@ run elsewhere, but nothing elsewhere asserts on the *values*.
 
 ## Raw OOXML has its own gate
 
-`src/pptxkit/motion/` writes `<p:timing>` and `<p:transition>` as raw strings, because
+`src/deckwright/motion/` writes `<p:timing>` and `<p:transition>` as raw strings, because
 python-pptx models neither. **No other layer in this project can check that output.**
 
 - LibreOffice converts schema-invalid timing to PDF without complaint.
-- `pptxkit qa` renders the final state of a slide, which a build mid-reveal and a
+- `deckwright qa` renders the final state of a slide, which a build mid-reveal and a
   transition are both invisible to.
 - A `filter` string is `xsd:string`, so a typo validates and silently does nothing.
 
@@ -232,7 +232,7 @@ without a repair prompt. See [`motion.md`](motion.md#verification).
 ## Adding a capability
 
 A new component, chart kind, layout, or slide-level feature gets an entry in
-`src/pptxkit/conform/exercise.py`. That is the test.
+the family module in `src/deckwright/conform/` that owns the shape. That is the test.
 
 1. Add a key to `EXERCISE` — a plain-content slide dict written the way a real deck would
    use the feature. No brand words: the point is what the *template* can carry.

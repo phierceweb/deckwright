@@ -2,8 +2,8 @@ import dataclasses
 
 import pytest
 
-from pptxkit.errors import LayoutError
-from pptxkit.panels.model import Panel, Region
+from deckwright.errors import LayoutError
+from deckwright.panels.model import Panel, Region
 
 
 def test_regions_are_named():

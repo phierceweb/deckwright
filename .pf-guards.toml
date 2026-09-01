@@ -2,4 +2,4 @@
 # (bin/lint, pre-commit, CI); flat library limits for a src layout.
 # See docs/pf-core/guards.md.
 [tool.pf_guards]
-root = "src/pptxkit"
+root = "src/deckwright"

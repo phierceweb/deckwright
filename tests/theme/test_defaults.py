@@ -3,9 +3,9 @@ import zipfile
 
 import pytest
 
-from pptxkit.layouts.resolve import pick_compose_layout
-from pptxkit.theme import load_theme
-from pptxkit.theme.defaults import (
+from deckwright.layouts.resolve import pick_compose_layout
+from deckwright.theme import load_theme
+from deckwright.theme.defaults import (
     DEFAULT_ACCENTS,
     DEFAULT_PAIRS,
     DEFAULT_PALETTE,
@@ -15,8 +15,8 @@ from pptxkit.theme.defaults import (
     default_ramp,
     default_theme,
 )
-from pptxkit.theme.palette import AUTO_INK
-from pptxkit.theme.scale import Scale
+from deckwright.theme.palette import AUTO_INK
+from deckwright.theme.scale import Scale
 
 _EMU_PER_INCH = 914400
 
@@ -86,6 +86,13 @@ def test_the_ramp_defines_a_rung_for_every_name_the_spec_may_use():
 def test_body_type_is_sixteen_points_on_a_seven_and_a_half_inch_canvas():
     ramp = default_ramp(Scale(slide_w=13.333, slide_h=7.5))
     assert ramp["body"].size == pytest.approx(16.0, abs=0.1)
+
+
+def test_a_caption_is_set_larger_than_a_kicker():
+    """A kicker is bold and set in caps; a caption is neither, so one shared step left the
+    caption the smaller of the two to read."""
+    ramp = default_ramp(Scale(slide_w=13.333, slide_h=7.5))
+    assert ramp["caption"].size > ramp["kicker"].size
 
 
 def test_doubling_the_canvas_height_doubles_every_rung():
@@ -188,8 +195,8 @@ def test_type_scales_with_the_canvas_height_when_the_theme_is_loaded():
 
 
 def test_the_defaults_are_reachable_from_the_theme_package():
-    from pptxkit.theme import DEFAULT_ROLES as Exported
-    from pptxkit.theme import default_theme as exported_theme
+    from deckwright.theme import DEFAULT_ROLES as Exported
+    from deckwright.theme import default_theme as exported_theme
 
     assert set(Exported) == set(DEFAULT_PALETTE.roles)
     assert exported_theme().name == "default"

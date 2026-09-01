@@ -2,7 +2,7 @@
 
 Two ways to add one. **A deck-local component** goes in a Python module the deck names
 with `extends:`, and is right when the shape only makes sense for that deck.
-**A built-in** lives in `src/pptxkit/components/`, and is right when the shape recurs.
+**A built-in** lives in `src/deckwright/components/`, and is right when the shape recurs.
 The component API is identical; only the registration and the checklist differ.
 
 The API surface itself is [`docs/authoring.md`](authoring.md#adding-a-component-the-spec-cannot-express).
@@ -103,14 +103,15 @@ built-in has a checklist, and three of its steps are enforced by nothing.
 
 ### Code
 
-1. **`src/pptxkit/components/<name>.py`** — the module. It needs a double-quoted
+1. **`src/deckwright/components/<name>.py`** — the module. It needs a double-quoted
    `@component("<name>")`, a module-level `_FIELDS` tuple written as one parenthesised
    line of double-quoted names, and the literal call `known_fields(ctx, _FIELDS)`. Those
    three shapes are grepped for, not parsed, so a clever rewrite of any of them fails the
    gates. Item mappings take `known_item_fields`.
-2. **`src/pptxkit/components/__init__.py`** — add it to the import list. There is no
+2. **`src/deckwright/components/__init__.py`** — add it to the import list. There is no
    autoloader; without this the module never registers and the component does not exist.
-3. **`src/pptxkit/conform/exercise.py`** — add an exercise. Per
+3. **`src/deckwright/conform/`** — add an exercise to the family module that owns the
+   shape. Per
    [`testing.md`](testing.md) **that is the test** for the layout
    arithmetic: it runs against every real brand template. A unit test re-checking the
    same maths is explicitly not wanted.
@@ -144,5 +145,5 @@ Then the ungated ones, which nothing will catch:
 | `tests/test_docs.py` | A field in `_FIELDS` that no doc names, a documented field the code does not read, and a component missing from either registry listing quoted in `docs/errors.md`. |
 | `tests/components/test_unknown_fields.py` | A component that declares `_FIELDS` or `_ITEM_FIELDS` and never enforces it — declaring the tuple for the docs gate's benefit and skipping the check is how the last five got there. |
 | `bin/check-layers` | A component importing from `cli`, `conform`, `compile` or `qa`. |
-| `bin/check-framework` | `logging`, `os.environ`, a bare `ValueError`, `print()`, a hand-rolled atomic write. Raise `LayoutError` from `pptxkit.errors`. |
+| `bin/check-framework` | `logging`, `os.environ`, a bare `ValueError`, `print()`, a hand-rolled atomic write. Raise `LayoutError` from `deckwright.errors`. |
 | `python -m pf_core.guards` | The file over its size budget. |

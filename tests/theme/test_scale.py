@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme import Grid, Scale, blocks, load_theme
-from pptxkit.theme.defaults import DEFAULT_RAMP, default_grid
+from deckwright.errors import ThemeError
+from deckwright.theme import Grid, Scale, blocks, load_theme
+from deckwright.theme.defaults import DEFAULT_RAMP, default_grid
 
-import pptxkit.theme as _theme_pkg
+import deckwright.theme as _theme_pkg
 
 _SHIPPED = Path(_theme_pkg.__file__).parent / "builtin" / "base.yaml"
 
@@ -70,6 +70,13 @@ def _shipped_grid_kwargs() -> dict:
 
 
 SHIPPED = _shipped_grid_kwargs()
+
+
+def test_the_shipped_theme_sets_its_caption_larger_than_its_kicker():
+    """base.yaml states its own ramp, so DEFAULT_RAMP's step never reaches it — the rung
+    has to be raised in both places or no deck on `base` moves."""
+    ramp = _shipped_yaml()["type"]["ramp"]
+    assert ramp["caption"]["pt"] > ramp["kicker"]["pt"]
 
 
 def test_the_shipped_fractions_still_land_on_their_inch_geometry():
@@ -201,7 +208,7 @@ def test_the_default_rungs_still_land_on_their_point_sizes():
     assert sizes == pytest.approx(
         {
             "body": 15.975,
-            "caption": 12.78,
+            "caption": 14.2882,
             "head": 24.9608,
             "title": 31.2015,
             "kicker": 12.78,

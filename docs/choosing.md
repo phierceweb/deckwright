@@ -30,7 +30,7 @@ this doc is the reference for deciding what a slide should show.
 - [Distribution](#distribution)
 - [Profile across dimensions](#profile-across-dimensions)
 - [The traps](#the-traps)
-- [What pptxkit cannot draw](#what-pptxkit-cannot-draw)
+- [What deckwright cannot draw](#what-deckwright-cannot-draw)
 - [When a new chart kind lands](#when-a-new-chart-kind-lands)
 - [Sources](#sources)
 
@@ -103,6 +103,8 @@ is not:
 
 A chart with fewer than four datapoints is almost always one of these three in disguise.
 
+**Read your title aloud before you draw it.** If the sentence already contains every number the chart would show, the chart is decoration. `qa` reports this as `chart-datapoints`, quoting the line above — a warning, because the judgement is yours.
+
 ## When a table beats a chart
 
 Knaflic's framing is the useful one: a graph talks to the visual system, which is fast; a
@@ -134,6 +136,14 @@ trying to encode the fourth dimension as colour or size loses the reader.
 it.** Otherwise pull the one row that matters into a `stats` tile or a `column` chart and
 send the table to an appendix slide.
 
+**A total row is a conclusion, not a heading.** When you are walking the room through the
+table, consider giving the total its own beat: they read the split, then the sum arrives. Put
+the body rows in one placement and the summary row in a second `table` beneath it — the same
+`widths:` and `align:`, one row, `emphasis: true` on each cell — and let `animate: one_at_a_time`
+hold it back. That trades the double-weight rule a `total:` draws above itself for the beat.
+This is editorial guidance, not a finding: a table that will be read rather than presented
+wants everything at once.
+
 ## Comparison and ranking
 
 **Default to `column`.** Every column stands on the same baseline, so the reader is
@@ -143,11 +153,11 @@ comparing positions along a common scale — the most accurate judgement availab
 main reason and a decisive one: a horizontal bar gives its label a full line of width,
 where a column has only its own width and the renderer must rotate or shrink the text.
 "Enterprise self-serve migration" under a column is unreadable at any type size; beside a
-bar it is fine. pptxkit also reserves the label column explicitly in the file for the bar
+bar it is fine. deckwright also reserves the label column explicitly in the file for the bar
 family, so long labels do not run off the slide in Keynote.
 
 **Sort the rows** unless the categories have a natural order (quarters, sizes, ages). A
-ranking that is not sorted is a ranking the reader has to do themselves. pptxkit draws
+ranking that is not sorted is a ranking the reader has to do themselves. deckwright draws
 rows in the order you write them, so sorting is your job in the `data:` list.
 
 **Two to four series: `column` with a legend**, which appears automatically past one
@@ -227,7 +237,7 @@ the work. Split the chart, or plot the two lines the claim needs and put the res
 table.
 
 **You cannot highlight a point on a line, area, radar or scatter chart.** A point on those
-is a stroke or a band with no fill of its own, so pptxkit refuses `highlight:` outright
+is a stroke or a band with no fill of its own, so deckwright refuses `highlight:` outright
 with a `LayoutError` naming the kinds that can. To draw attention on a line chart, use the
 slide title, `animate: by_series`, or pin the axis with `y_min`.
 
@@ -273,7 +283,7 @@ the audience does not need an axis or editable data.
 
 ## Distribution
 
-**pptxkit has no histogram and no box plot.** A `column` chart with bins as categories is
+**deckwright has no histogram and no box plot.** A `column` chart with bins as categories is
 the closest thing, and it is genuinely readable, but the bars will carry the theme's gap
 between them: `gap_width` is a theme knob (`theme.chart.gap_width`), not a spec field, so
 you cannot close it for one slide. The bars will not touch the way a histogram's do.
@@ -312,11 +322,11 @@ per-category build would emit a click per category with nothing moving.
 | `highlight:` on a line/area/radar/scatter chart | Refused with a `LayoutError` — those points have no fill | Use the title, `animate:`, or switch to `bubble` |
 | A table nobody will read aloud | The audience reads instead of listening | Pull the one row into `stats`; table to an appendix |
 
-**pptxkit cannot build a second y-axis at all**, so that row is a trap you cannot fall
+**deckwright cannot build a second y-axis at all**, so that row is a trap you cannot fall
 into here — but it is also why "just put it on a secondary axis" is never an available
 fix. Two chart placements on the grid is the answer.
 
-## What pptxkit cannot draw
+## What deckwright cannot draw
 
 **First, two the literature recommends that you *can* build today** — both are often the
 better answer than the chart people reach for first, and neither is obvious from the list
@@ -332,7 +342,7 @@ of kinds:
 so the invisible-spacer-series trick that builds a waterfall or a Gantt in Excel has
 nothing to set:
 
-| Treatment | Nearest thing pptxkit builds |
+| Treatment | Nearest thing deckwright builds |
 |---|---|
 | Waterfall | `column` with signed values; put the running total in the title |
 | Histogram (bars touching) | `column` with bins as categories, carrying the theme's gap |
@@ -351,7 +361,7 @@ Adding it *here* is a separate step and is not optional:
    data shape. A kind nobody can map to a sentence will not get chosen.
 2. Name what it replaces. A new kind that is the better answer for a case already in this
    doc must change that case's recommendation, or the doc now gives two answers.
-3. If it fixes something in [What pptxkit cannot draw](#what-pptxkit-cannot-draw), delete
+3. If it fixes something in [What deckwright cannot draw](#what-deckwright-cannot-draw), delete
    that row.
 
 ## Sources
@@ -372,7 +382,7 @@ accurate as pies.
 [FT Visual Vocabulary](https://github.com/Financial-Times/chart-doctor/blob/main/visual-vocabulary/Visual-vocabulary-en.pdf)
 — nine families (deviation, correlation, ranking, distribution, change over time,
 magnitude, part-to-whole, spatial, flow); this doc's sections follow it, minus spatial and
-flow, which pptxkit cannot draw. Its bar caption is the source for the long-labels rule.
+flow, which deckwright cannot draw. Its bar caption is the source for the long-labels rule.
 [Abela's Chart Chooser](https://extremepresentation.com/wp-content/uploads/chart-chooser-2020.pdf)
 (2020) — the comparison / relationship / distribution / composition tree, and the
 static-vs-over-time split this doc borrows for part-to-whole.

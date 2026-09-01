@@ -7,8 +7,8 @@ import os
 import pytest
 from PIL import Image
 
-from pptxkit.errors import RenderError
-from pptxkit.services.htmlshot import (
+from deckwright.errors import RenderError
+from deckwright.services.htmlshot import (
     CSP_META,
     _HEIGHT_PROBE,
     _NO_SANDBOX_ENV_VAR,
@@ -23,7 +23,7 @@ from pptxkit.services.htmlshot import (
 
 
 def _dom(height: int) -> str:
-    return f'<!DOCTYPE html><html data-pptxkit-doc-h="{height}"><body></body></html>'
+    return f'<!DOCTYPE html><html data-deckwright-doc-h="{height}"><body></body></html>'
 
 
 def _shot(path, *, top: bool = False, bottom: bool = False):
@@ -95,7 +95,7 @@ def test_content_taller_than_the_canvas_is_rejected(tmp_path):
 
 
 def test_the_rejection_names_the_canvas_env_knob(tmp_path):
-    with pytest.raises(RenderError, match=r"PPTXKIT_SHOT_CANVAS_H to at least 6743"):
+    with pytest.raises(RenderError, match=r"DECKWRIGHT_SHOT_CANVAS_H to at least 6743"):
         _check_not_clipped(_dom(6743), canvas_height=4000, out_path=tmp_path / "o.png")
 
 
@@ -106,14 +106,14 @@ def test_an_unreadable_probe_does_not_reject(tmp_path):
 
 def test_an_unreadable_probe_over_a_render_that_reaches_the_canvas_floor_is_rejected(tmp_path):
     """A card floats on white, so ink on the last row is the canvas cutting it off."""
-    with pytest.raises(RenderError, match="PPTXKIT_SHOT_CANVAS_H"):
+    with pytest.raises(RenderError, match="DECKWRIGHT_SHOT_CANVAS_H"):
         _check_not_clipped(
             "<html></html>", canvas_height=400, out_path=_shot(tmp_path / "o.png", bottom=True)
         )
 
 
 def test_a_full_bleed_page_with_no_measurement_is_still_let_through(tmp_path):
-    """Ink on both edges is what ``pptxkit shot`` renders on purpose."""
+    """Ink on both edges is what ``deckwright shot`` renders on purpose."""
     _check_not_clipped(
         "<html></html>",
         canvas_height=400,
@@ -122,7 +122,7 @@ def test_a_full_bleed_page_with_no_measurement_is_still_let_through(tmp_path):
 
 
 def test_the_probe_publishes_the_scroll_height_under_the_expected_attribute():
-    assert "data-pptxkit-doc-h" in _HEIGHT_PROBE
+    assert "data-deckwright-doc-h" in _HEIGHT_PROBE
     assert "scrollHeight" in _HEIGHT_PROBE
 
 

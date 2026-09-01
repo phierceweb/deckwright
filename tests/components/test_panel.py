@@ -1,10 +1,10 @@
 import pytest
 from pptx.enum.dml import MSO_FILL
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.layouts.components import get_component
-from pptxkit.utils.color import contrast_ratio
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.layouts.components import get_component
+from deckwright.utils.color import contrast_ratio
 
 
 def _panel(ctx):
@@ -71,6 +71,6 @@ def test_align_is_refused_because_the_block_sets_no_text(ctx_factory):
 
 
 def test_the_block_is_registered():
-    from pptxkit.layouts.components import registered_components
+    from deckwright.layouts.components import registered_components
 
     assert "panel" in registered_components()

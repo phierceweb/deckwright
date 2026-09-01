@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Enforce import-layering direction for pptxkit (a src/ library).
+"""Enforce import-layering direction for deckwright (a src/ library).
 
 pf-core's structural gate checks layering only for app/<layer>/ trees, so it is
 a no-op on src/ libraries (pf-core included). This is the equivalent gate for
-pptxkit: a module may import its own layer or below, never upward.
+deckwright: a module may import its own layer or below, never upward.
 
     cli                                          L6  (entry point)
     conform                                      L5  (drives the compiler)
     compile, qa                                  L4  (build a deck / judge one)
     charts, components, icons, imagery,          L3  (the render core)
       layouts, panels, spec, theme
-    motion, services, utils                      L2  (leaves with no pptxkit deps
+    motion, services, utils                      L2  (leaves with no deckwright deps
                                                       beyond errors)
     config, errors, paths, pkg root              L1  (no imports at all)
 
@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src" / "pptxkit"
+SRC = ROOT / "src" / "deckwright"
 RANK = {
     "cli": 6,
     # Attestation reads across the whole stack — glyphs, themes, the sample, the
@@ -50,14 +50,14 @@ RANK = {
 
 # The package facade re-exports from every tier below it, so it sits above all of
 # them — including `cli`. Ranking it here also makes the converse an error: nothing
-# inside the package may `import pptxkit` and reach back through its own front door.
+# inside the package may `import deckwright` and reach back through its own front door.
 FACADE = 7
 
 
 def rank(module: str) -> int | None:
-    """Layer rank of a pptxkit module path; None for anything external or unranked."""
+    """Layer rank of a deckwright module path; None for anything external or unranked."""
     parts = module.split(".")
-    if not parts or parts[0] != "pptxkit":
+    if not parts or parts[0] != "deckwright":
         return None
     return RANK.get(parts[1]) if len(parts) > 1 else FACADE
 
@@ -72,7 +72,7 @@ def unranked() -> list[str]:
 def main() -> int:
     bad: list[str] = []
     for path in sorted(SRC.rglob("*.py")):
-        mod = ".".join(["pptxkit", *path.relative_to(SRC).with_suffix("").parts]).removesuffix(".__init__")
+        mod = ".".join(["deckwright", *path.relative_to(SRC).with_suffix("").parts]).removesuffix(".__init__")
         own = rank(mod)
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):

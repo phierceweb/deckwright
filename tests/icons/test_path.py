@@ -7,8 +7,8 @@ import math
 
 import pytest
 
-from pptxkit.errors import SpecError
-from pptxkit.icons.path import UNITS, parse, to_drawingml
+from deckwright.errors import SpecError
+from deckwright.icons.path import UNITS, parse, to_drawingml
 
 SQUARE = (0.0, 0.0, 100.0, 100.0)
 

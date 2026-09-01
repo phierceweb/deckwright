@@ -7,9 +7,9 @@ import textwrap
 
 import pytest
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme import load_theme
-from pptxkit.theme.chartstyle import ChartStyle
+from deckwright.errors import ThemeError
+from deckwright.theme import load_theme
+from deckwright.theme.chartstyle import ChartStyle
 
 # Literal on purpose: `ChartStyle()` here would agree with any edit to the dataclass,
 # which is the one thing this file exists to catch.

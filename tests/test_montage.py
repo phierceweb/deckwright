@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 from pf_core.exceptions import InvalidInputError
-from pptxkit.services.montage import contact_sheet
+from deckwright.services.montage import contact_sheet
 
 
 def _write_img(path, color, size=(160, 90)):

@@ -1,5 +1,5 @@
-from pptxkit.qa.geometry import check_contrast, check_type_sizes
-from pptxkit.qa.model import Severity
+from deckwright.qa.geometry import check_contrast, check_type_sizes
+from deckwright.qa.model import Severity
 from tests.qa.test_geometry_bounds import _manifest, _shape, _theme
 
 

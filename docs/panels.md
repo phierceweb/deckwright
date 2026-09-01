@@ -27,28 +27,28 @@ specifically.
 
 ## What a panel is, and when to use one
 
-`pptxkit.panels.model.Panel` is HTML plus a target width in CSS pixels.
-`pptxkit.panels.place.place_panel(ctx, panel, left=, top=, width=|height=,
+`deckwright.panels.model.Panel` is HTML plus a target width in CSS pixels.
+`deckwright.panels.place.place_panel(ctx, panel, left=, top=, width=|height=,
 render=)` renders it once, then adds it to the slide as a picture, scaled to
 fit the given inches while preserving aspect ratio.
 
 Use a panel when the content is a document, a code listing, or a file tree —
 something that is easier to show *as itself* than to re-typeset as bullet
 text, and where the audience benefits from seeing the real artifact rather
-than a paraphrase. `document` (`pptxkit.components.doccard`) is the current
+than a paraphrase. `document` (`deckwright.components.doccard`) is the current
 example: it reads a real markdown file and renders it into a macOS-style
-window card via `pptxkit.services.htmlcard.markdown_card`.
+window card via `deckwright.services.htmlcard.markdown_card`.
 
 Do not reach for a panel when a native component already says what you need —
 see [The costs](#the-costs) for why.
 
 ## The theme-as-CSS-variables contract
 
-`pptxkit.panels.css.panel_css(theme)` emits a `:root` block declaring the
+`deckwright.panels.css.panel_css(theme)` emits a `:root` block declaring the
 theme's resolved colours (`--c-<role>`), type sizes (`--t-<role>`), and faces
 (`--font`, `--font-mono`). Pass it as `content_css` (or append it to your own
 CSS) so the browser-rendered half of the slide draws from the same theme as
-the python-pptx half. `pptxkit.services.htmlcard`'s own rules consume these
+the python-pptx half. `deckwright.services.htmlcard`'s own rules consume these
 with hardcoded fallbacks (`var(--c-bg, #ffffff)`), so a card rendered without
 a theme still looks reasonable. This is a real, verified contract — set a
 theme's `bg` role to a colour and the panel's background changes to match.
@@ -64,10 +64,10 @@ sans-serif;`), and the face is quoted so a multi-word name still tokenises.
 
 ## The cache and its key
 
-`pptxkit.panels.cache.cached_png(panel, scale=, theme_hash=, render=)` keys on
+`deckwright.panels.cache.cached_png(panel, scale=, theme_hash=, render=)` keys on
 `sha256(html, width, scale, theme_hash)`, truncated to 20 hex chars, under a
-`panels/` subdirectory of `PPTXKIT_CACHE_DIR` — which defaults to
-`.pptxkit-cache`, so `.pptxkit-cache/panels`, and the subdirectory is appended
+`panels/` subdirectory of `DECKWRIGHT_CACHE_DIR` — which defaults to
+`.deckwright-cache`, so `.deckwright-cache/panels`, and the subdirectory is appended
 to whatever the var is set to. A hit skips the Chrome invocation entirely and
 logs `panel_cache_hit`; a miss renders to a temp file and `os.replace`s it into
 place, so a killed process or a concurrent build never observes a torn PNG.
@@ -77,7 +77,7 @@ stale PNG shows would otherwise silently drift from the theme.
 
 ## The render canvas ceiling
 
-Chrome screenshots a window of a fixed size — `PPTXKIT_SHOT_CANVAS_H` CSS px
+Chrome screenshots a window of a fixed size — `DECKWRIGHT_SHOT_CANVAS_H` CSS px
 tall, 4000 by default — and content below that line is simply not in the
 image. Nothing downstream can see the loss: the picture is recorded
 `rendered: "image"`, so `qa`'s overflow check skips it by design, and a
@@ -88,7 +88,7 @@ too-tall-for-the-body-rect guard does not fire either.
 script that publishes `document.documentElement.scrollHeight` onto an
 attribute, asks the same Chrome run for `--dump-dom`, and raises `RenderError`
 naming the required height and the canvas limit if the document was taller.
-Raise `PPTXKIT_SHOT_CANVAS_H` (or shorten the source) to clear it.
+Raise `DECKWRIGHT_SHOT_CANVAS_H` (or shorten the source) to clear it.
 
 The measurement is the browser's own, not a guess about the image — but it
 depends on the injected script actually running, and the page decides that.
@@ -97,7 +97,7 @@ swallows the rest of the parse takes the probe with it: a raw `<plaintext>`,
 `<textarea>` or `<xmp>`, or an unterminated `<script>`, turns everything that
 follows into text. A `document:` source is a real markdown file someone else
 wrote, so this is not an edge case reserved for arbitrary HTML fed to
-`pptxkit shot` — one stray tag reaches it. A CSP blocking inline scripts, or
+`deckwright shot` — one stray tag reaches it. A CSP blocking inline scripts, or
 a browser ignoring `--dump-dom`, defeats it the same way.
 
 The pixels are the fallback, and they are read rather than shrugged at. A card
@@ -106,7 +106,7 @@ means the canvas cut the content off, and that raises `RenderError` naming the
 canvas height — the same fix as the measured case. Ink on *both* rows is the one
 case that still only warns (`html_shot_height_unknown`) and renders unchecked: a
 page bleeding to both edges is a deliberate full-bleed design, which only
-`pptxkit shot` produces, and no pixel test can tell it from a clip.
+`deckwright shot` produces, and no pixel test can tell it from a clip.
 
 ## Region slicing
 
@@ -125,7 +125,7 @@ panel — they are not edge cases, they are what a panel *is*:
 - **Unselectable.** A panel is one image; nothing inside it can be
   copy-pasted as text.
 - **Unsearchable.** PowerPoint's own text search finds nothing inside it.
-- **Invisible to the overflow check.** `pptxkit qa`'s `overflow` check reads
+- **Invisible to the overflow check.** `deckwright qa`'s `overflow` check reads
   `pdftotext` output; a panel's text was never text to the PDF extractor, so
   a line that got cut off inside the picture produces no finding. `bounds`
   and `reserved` still check the *picture's own box* against the slide edge
@@ -156,9 +156,9 @@ rather than advice in this doc.
 
 ## The markdown raw-HTML sharp edge
 
-`pptxkit.services.htmlcard.markdown_card` calls `markdown.markdown()`, which
+`deckwright.services.htmlcard.markdown_card` calls `markdown.markdown()`, which
 passes raw HTML straight through by design — this is standard markdown
-behaviour, and pptxkit does not suppress it, because doing so would also
+behaviour, and deckwright does not suppress it, because doing so would also
 break HTML someone embedded in the document on purpose. The hazard: a
 document containing `a<b` or `List<Item>` is not safely inert. `<b` opens a
 real `<b>` tag, and everything until markdown finds a matching `</b>` (which
@@ -180,13 +180,13 @@ a fallback, not the rule. When neither place holds the file the error names both
 
 ## Adding a new panel-backed component
 
-1. Build the HTML — reuse `pptxkit.services.htmlcard` helpers
+1. Build the HTML — reuse `deckwright.services.htmlcard` helpers
    (`window_card`, `markdown_card`, `filetree_card`) or hand-author your own.
 2. Wrap it in a `Panel(html=..., width=<css px>)`, adding `regions=(...)` only
    if parts of it need to animate independently.
 3. Call `place_panel(ctx, panel, left=, top=, width=|height=, max_height=,
    render=_render)` where `_render` wraps
-   `pptxkit.services.htmlshot.render_html_to_png`. Route through a thin
+   `deckwright.services.htmlshot.render_html_to_png`. Route through a thin
    module-level `_render` function (as `doccard.py` does) so tests can
    monkeypatch it without shelling out to Chrome.
 4. Return a `BodyResult` with `height=picture.height / 914400` so the caller

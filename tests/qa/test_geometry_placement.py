@@ -5,14 +5,14 @@ import pathlib
 
 import pytest
 
-from pptxkit.compile.record import owns
-from pptxkit.qa.geometry import check_placement_fit
-from pptxkit.qa.model import Severity
-from pptxkit.theme.chartstyle import ChartStyle
-from pptxkit.theme import Grid, Scale
-from pptxkit.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
-from pptxkit.theme.model import Theme, TypeStyle
-from pptxkit.theme.palette import build_palette
+from deckwright.compile.record import owns
+from deckwright.qa.geometry import check_placement_fit
+from deckwright.qa.model import Severity
+from deckwright.theme.chartstyle import ChartStyle
+from deckwright.theme import Grid, Scale
+from deckwright.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
+from deckwright.theme.model import Theme, TypeStyle
+from deckwright.theme.palette import build_palette
 
 SCALE = Scale(13.333, 7.5)
 GRID = Grid(

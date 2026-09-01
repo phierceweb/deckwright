@@ -7,10 +7,10 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.errors import LayoutError
-from pptxkit.imagery.draw import paint_scrim
-from pptxkit.imagery.scrim import Scrim, gradient_fraction, scrim_spec
-from pptxkit.theme.model import Rect
+from deckwright.errors import LayoutError
+from deckwright.imagery.draw import paint_scrim
+from deckwright.imagery.scrim import Scrim, gradient_fraction, scrim_spec
+from deckwright.theme.model import Rect
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 

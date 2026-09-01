@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pptxkit.compile.content import render_content, split_name, write_content
+from deckwright.compile.content import render_content, split_name, write_content
 
 
 def _manifest(shapes, **slide):

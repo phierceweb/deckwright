@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 from PIL import Image
 
-from pptxkit.qa.imagery import check_render_contrast
-from pptxkit.qa.model import Severity
+from deckwright.qa.imagery import check_render_contrast
+from deckwright.qa.model import Severity
 
 SLIDE_W, SLIDE_H = 10.0, 5.0
 _PX = 100  # pixels per inch in the fixture renders

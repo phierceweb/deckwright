@@ -1,7 +1,7 @@
 """`BodyResult.height` must cover what the component drew.
 
 `place:` gives the next placement everything below that number, so under-reporting is
-silent: nothing raises, and only `pptxkit qa` on a built deck sees the overhang. A shape
+silent: nothing raises, and only `deckwright qa` on a built deck sees the overhang. A shape
 that exactly fills the placement is excluded.
 """
 
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-ins
-from pptxkit.layouts.components import as_body_result, get_component
+import deckwright.components  # noqa: F401 — registers the built-ins
+from deckwright.layouts.components import as_body_result, get_component
 
 _EMU_PER_INCH = 914400
 _TOLERANCE = 0.01
@@ -88,7 +88,7 @@ def test_a_placement_settles_its_content_where_anchor_says(anchor, where, ctx_fa
     Without this a component that sizes to its content leaves every slide's slack piled at
     the bottom, which is the difference between airy and unfinished.
     """
-    from pptxkit.layouts.compose import _settle
+    from deckwright.layouts.compose import _settle
 
     ctx = ctx_factory({"title": "T", "stats": BODIES["stats"]})
     get_component("stats")(ctx)
@@ -104,7 +104,7 @@ def test_a_placement_settles_its_content_where_anchor_says(anchor, where, ctx_fa
 
 def test_settling_never_pushes_content_out_of_its_placement(ctx_factory):
     """The slack is what is distributed; a component filling its rect must not move."""
-    from pptxkit.layouts.compose import _settle
+    from deckwright.layouts.compose import _settle
 
     ctx = ctx_factory({"title": "T", "bullets": BODIES["bullets"]})
     get_component("bullets")(ctx)

@@ -1,4 +1,4 @@
-# pptxkit's own decks
+# deckwright's own decks
 
 Demonstration specs that exercise the library. They are **committed**, because they are
 part of it: each one is a worked reference for a capability, and a change gets rebuilt
@@ -47,7 +47,7 @@ Stand-in photographs are generated into `out/`, not committed, for the same reas
 ## Adding one
 
 Only if it demonstrates something no existing spec does. A new capability's real home is
-an exercise in `src/pptxkit/conform/exercise.py`, which runs against whatever brand
+an exercise in `src/deckwright/conform/exercise.py`, which runs against whatever brand
 templates are in `templates/` — none, unless you add your own, so the module will skip
 for you; see [`docs/testing.md`](../docs/testing.md). An example here is for
 a *reader*, not for coverage.

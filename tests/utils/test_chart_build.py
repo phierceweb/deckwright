@@ -12,8 +12,8 @@ import pytest
 from pptx import Presentation
 from pptx.oxml.ns import qn
 
-from pptxkit.errors import LayoutError
-from pptxkit.motion import add_chart_build
+from deckwright.errors import LayoutError
+from deckwright.motion import add_chart_build
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"

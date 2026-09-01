@@ -2,7 +2,7 @@ import dataclasses
 
 import pytest
 
-from pptxkit.spec.model import Background, Placement, SlideSpec
+from deckwright.spec.model import Background, Placement, SlideSpec
 
 
 def test_a_slide_defaults_to_the_page_background():

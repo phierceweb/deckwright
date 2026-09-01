@@ -7,17 +7,17 @@ from pptx import Presentation
 from pptx.oxml.ns import qn
 from pptx.util import Inches
 
-import pptxkit.components  # noqa: F401 — registers the built-ins
-from pptxkit.compile.manifest import ManifestRecorder
-from pptxkit.errors import LayoutError, ThemeError
-from pptxkit.layouts.chrome import ChromeField
-from pptxkit.layouts.components import component
-from pptxkit.layouts.compose import render_slide
-from pptxkit.layouts.registry import SlideCtx
-from pptxkit.spec.model import Background, Placement, SlideSpec
-from pptxkit.theme import default_theme
-from pptxkit.utils.color import AA_NORMAL, contrast_ratio
-from pptxkit.utils.shapes import ALIGN, ANCHOR, para, textbox
+import deckwright.components  # noqa: F401 — registers the built-ins
+from deckwright.compile.manifest import ManifestRecorder
+from deckwright.errors import LayoutError, ThemeError
+from deckwright.layouts.chrome import ChromeField
+from deckwright.layouts.components import component
+from deckwright.layouts.compose import render_slide
+from deckwright.layouts.registry import SlideCtx
+from deckwright.spec.model import Background, Placement, SlideSpec
+from deckwright.theme import default_theme
+from deckwright.utils.color import AA_NORMAL, contrast_ratio
+from deckwright.utils.shapes import ALIGN, ANCHOR, para, textbox
 
 _EMU = 914400
 _PML = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -467,7 +467,7 @@ def test_on_click_spends_a_click_per_group(theme):
 
 
 def _themed_transition(theme, **kw):
-    from pptxkit.theme.model import Transition
+    from deckwright.theme.model import Transition
 
     return dataclasses.replace(
         theme, motion=dataclasses.replace(theme.motion, transition=Transition(**kw))
@@ -808,3 +808,105 @@ def test_reveals_and_animate_cannot_share_a_slide(theme):
     )
     with pytest.raises(LayoutError, match="cannot share a slide"):
         render_slide(_ctx(theme, spec))
+
+
+def test_two_placements_revealing_each_other_are_refused(theme):
+    """Both are hidden behind a click on something hidden, so the slide renders empty
+    but for its chrome. It built clean, and nothing downstream could see it: qa reads a
+    slide's final frame, and LibreOffice draws a build mid-reveal as its end state."""
+    _probe("t-ring-a", [])
+    _probe("t-ring-b", [])
+    spec = SlideSpec(
+        index=1,
+        place=(
+            Placement(at={"cols": (0, 6)}, component="t-ring-a", id="left", reveals="right"),
+            Placement(at={"cols": (6, 12)}, component="t-ring-b", id="right", reveals="left"),
+        ),
+    )
+    with pytest.raises(LayoutError, match="left waits on right waits on left"):
+        render_slide(_ctx(theme, spec))
+
+
+def test_a_chain_of_reveals_is_not_a_ring(theme):
+    """Click one to reveal the next is real staging — only a closed ring is stuck."""
+    _probe("t-chain-a", [])
+    _probe("t-chain-b", [])
+    _probe("t-chain-c", [])
+    spec = SlideSpec(
+        index=1,
+        place=(
+            Placement(at={"cols": (0, 4)}, component="t-chain-a", id="first"),
+            Placement(at={"cols": (4, 8)}, component="t-chain-b", id="second", reveals="first"),
+            Placement(at={"cols": (8, 12)}, component="t-chain-c", id="third", reveals="second"),
+        ),
+    )
+    ctx = _ctx(theme, spec)
+
+    render_slide(ctx)
+
+    assert ctx.manifest.slides[0].animations[0]["kind"] == "click_reveals"
+
+
+def test_an_error_inside_a_composite_names_the_component_the_author_wrote(theme):
+    """A `flow` draws its steps as cards, and a card that could not fit its copy
+    reported `component 'card'` — a key nowhere in the author's spec."""
+    spec = SlideSpec(
+        index=1,
+        place=(
+            Placement(
+                at={"cols": (0, 12), "rows": (4, 5)},
+                component="flow",
+                body={
+                    "items": [
+                        {"head": "One", "body": "Copy far too long to fit a plate this shallow"},
+                        {"head": "Two", "body": "And more copy that also cannot fit in it"},
+                    ]
+                },
+            ),
+        ),
+    )
+    with pytest.raises(LayoutError, match=r"component 'flow' \(step plate\)"):
+        render_slide(_ctx(theme, spec))
+
+
+def test_settle_measures_only_the_shapes_the_placement_drew(theme, monkeypatch):
+    """Issue 25. The new-shape test was `id(s._element)`, and lxml frees an element
+    proxy as soon as the comprehension that built it ends — so a shape drawn later can
+    be handed the address a dropped one had. Pre-existing shapes then read as new,
+    `_settle` measures an extent spanning the whole slide, finds no slack, and leaves
+    the placement at its box top. An edit to another slide changes the allocation and
+    therefore which slide loses its centring."""
+    from deckwright.layouts import compose as compose_mod
+
+    _two_shape_component("t-bulk")
+    _probe("t-anchored", [])
+    seen: list[list] = []
+    real = compose_mod._settle
+    monkeypatch.setattr(
+        compose_mod,
+        "_settle",
+        lambda ctx, rect, anchor, drawn: (seen.append(list(drawn)), real(ctx, rect, anchor, drawn))[
+            1
+        ],
+    )
+    spec = SlideSpec(
+        index=1,
+        title="A title, so the slide already carries chrome",
+        place=(
+            Placement(at={"cols": (0, 4), "rows": (0, 5)}, component="t-bulk"),
+            Placement(at={"cols": (4, 8), "rows": (0, 5)}, component="t-bulk"),
+            Placement(at={"cols": (8, 12), "rows": (0, 5)}, component="t-bulk"),
+            Placement(
+                at={"cols": (0, 12), "rows": (6, 11)}, component="t-anchored", anchor="middle"
+            ),
+        ),
+    )
+    ctx = _ctx(theme, spec)
+
+    render_slide(ctx)
+
+    assert len(seen) == 1, "the anchored placement is the only one that settles"
+    drawn = seen[0]
+    # The probe draws exactly one textbox. Anything else in here is a shape drawn by
+    # the title or one of the three placements before it, wrongly read as new.
+    assert len(drawn) == 1, [s.name for s in drawn]

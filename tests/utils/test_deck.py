@@ -9,9 +9,9 @@ import zipfile
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.oxml.ns import qn
 
-from pptxkit.compile import build_deck
-from pptxkit.theme import blank_presentation
-from pptxkit.utils.deck import register_notes_master
+from deckwright.compile import build_deck
+from deckwright.theme import blank_presentation
+from deckwright.utils.deck import register_notes_master
 
 
 def _with_a_note():

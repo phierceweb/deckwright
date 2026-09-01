@@ -1,13 +1,13 @@
 # Flows — process and relationship shapes
 
-Which diagram shape a piece of information earns, which of them pptxkit draws for you,
+Which diagram shape a piece of information earns, which of them deckwright draws for you,
 which you assemble from primitives, and how to tell a real process from a bulleted list
 with arrows on it.
 
 **`flow` the component is not "flow" the chart family.** In the Financial Times' Visual
 Vocabulary, *flow* names quantitative movement between states — Sankey diagrams,
-waterfalls, chord diagrams. pptxkit builds none of those (see
-[What pptxkit cannot draw](#what-pptxkit-cannot-draw)). `flow` here is a **process
+waterfalls, chord diagrams. deckwright builds none of those (see
+[What deckwright cannot draw](#what-deckwright-cannot-draw)). `flow` here is a **process
 diagram**: a run of labelled steps joined in order, carrying no quantity at all.
 
 **To write a `flow:` or `connector:` block, read [`components.md`](components.md)
@@ -34,7 +34,7 @@ this doc is the reference for deciding what shape to draw.
 - [What `flow` decides for you](#what-flow-decides-for-you)
 - [When a flow is a bulleted list in a costume](#when-a-flow-is-a-bulleted-list-in-a-costume)
 - [Assembling a shape by hand](#assembling-a-shape-by-hand)
-- [What pptxkit cannot draw](#what-pptxkit-cannot-draw)
+- [What deckwright cannot draw](#what-deckwright-cannot-draw)
 - [Adding a shape this catalogue does not name](#adding-a-shape-this-catalogue-does-not-name)
 
 ## The arrow test
@@ -66,7 +66,7 @@ still works, you never needed the diagram.
 | [Before-and-after](#before-and-after) | One subject in two qualitative states | two `card`s + `connector`, or a 2-column `table` |
 | [Hierarchy](#hierarchy) | Containment or reporting — not sequence at all | `card` + `connector`, or a `table` with `down:` |
 
-**pptxkit expresses two of these directly.** `flow` is a *linear run*: it joins
+**deckwright expresses two of these directly.** `flow` is a *linear run*: it joins
 consecutive steps in order and stops. Branches, cycles and trees have no component —
 you place `card`s and join them with `connector`s yourself.
 
@@ -108,7 +108,7 @@ with it.
 
 **`flow` spaces its steps evenly regardless of the intervals between them.** If the gaps
 are uneven and that unevenness is the point — eighteen months of nothing, then three
-releases in a quarter — `flow` draws a lie. pptxkit has no proportional timeline: the
+releases in a quarter — `flow` draws a lie. deckwright has no proportional timeline: the
 `xy-scatter` kinds place points at real x positions but carry no data labels at all
 (see [`authoring.md`](authoring.md)), so the dates cannot print. Use a `table`
 with a date column and accept that the reader looks the intervals up, or use `flow` and
@@ -181,7 +181,7 @@ holding one card in memory while reading the other.
 
 ## Hierarchy
 
-pptxkit has no tree layout. Every box is a `card` you place by hand and every edge is a
+deckwright has no tree layout. Every box is a `card` you place by hand and every edge is a
 `connector` you declare, which means an org chart costs a coordinate per box.
 
 **Past about seven boxes or three levels, stop and write a `table`.** Use a `down:` cell
@@ -251,14 +251,14 @@ Everything except a linear run is `card` + `connector` on the grid. Three rules 
    visible gap between the line and the drawing; give it a placement it fills and the join
    is exact.
 
-## What pptxkit cannot draw
+## What deckwright cannot draw
 
 Named here so you do not spend a slide discovering it. None of these has a component or a
 chart kind, and none can be faked: series colour is the theme's business, so the
 invisible-spacer-series trick that fakes a waterfall or a Gantt in Excel has nothing to
 set.
 
-| Shape | Nearest thing pptxkit builds |
+| Shape | Nearest thing deckwright builds |
 |---|---|
 | Sankey, chord, alluvial | A `table` of source → target → volume |
 | Waterfall | `column` with signed values; the running total goes in the title |
@@ -276,4 +276,4 @@ set.
    `flow` itself exists because sixteen slides across six of the eleven sample templates
    laid a process out the same way. Follow
    [Adding a component the spec cannot express](authoring.md#adding-a-component-the-spec-cannot-express),
-   and add an exercise to `src/pptxkit/conform/exercise.py` rather than a unit test.
+   and add an exercise to `src/deckwright/conform/diagrams.py` rather than a unit test.

@@ -2,10 +2,10 @@ import dataclasses
 
 import pytest
 
-import pptxkit.components  # noqa: F401
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
-from pptxkit.theme import Scale
+import deckwright.components  # noqa: F401
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
+from deckwright.theme import Scale
 
 ITEMS = [
     {"head": "One map per subsystem", "body": "A doc for each part of the system."},
@@ -198,7 +198,7 @@ def test_a_long_list_still_uses_the_available_height(ctx_factory):
 
 
 def test_callouts_is_registered():
-    from pptxkit.layouts.components import registered_components
+    from deckwright.layouts.components import registered_components
 
     assert "callouts" in registered_components()
 

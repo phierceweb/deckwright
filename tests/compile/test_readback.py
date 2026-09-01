@@ -7,14 +7,14 @@ import json
 import pytest
 from pptx.util import Inches
 
-from pptxkit.compile.readback import read_back, render_drift
-from pptxkit.errors import SpecError
+from deckwright.compile.readback import read_back, render_drift
+from deckwright.errors import SpecError
 
 
 @pytest.fixture
 def built(project):
     """A real build: a deck, and the manifest that describes it."""
-    from pptxkit.compile import build_deck
+    from deckwright.compile import build_deck
 
     (project / "d.deck.yaml").write_text(
         "theme: testtheme\nout: out/D.pptx\n---\ntitle: A title\n"
@@ -95,7 +95,7 @@ def test_a_shape_deleted_by_hand_is_reported_gone(built):
 def test_one_frame_answers_for_every_line_it_carries(project):
     """Chrome records one manifest row per line but draws one shape named `sN.chrome`, so
     matching from the manifest side reports every line missing."""
-    from pptxkit.compile import build_deck
+    from deckwright.compile import build_deck
 
     (project / "c.deck.yaml").write_text(
         "theme: testtheme\nout: out/C.pptx\n---\nkicker: K\ntitle: T\nsubtitle: S\n"

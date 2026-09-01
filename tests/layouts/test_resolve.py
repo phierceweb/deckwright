@@ -6,8 +6,8 @@ from lxml import etree
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
 
-from pptxkit.errors import ThemeError
-from pptxkit.layouts.resolve import pick_compose_layout
+from deckwright.errors import ThemeError
+from deckwright.layouts.resolve import pick_compose_layout
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"

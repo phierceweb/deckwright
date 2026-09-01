@@ -24,6 +24,8 @@ specifically.
 - [Chart build animation](#chart-build-animation)
 - [Room for the labels a bar chart sets on its left](#room-for-the-labels-a-bar-chart-sets-on-its-left)
 - [Negative values, and why the render cannot check them](#negative-values-and-why-the-render-cannot-check-them)
+- [Turning one series' labels off](#turning-one-series-labels-off)
+- [The unit reaches the axis too](#the-unit-reaches-the-axis-too)
 - [Refusing a truncated axis](#refusing-a-truncated-axis)
 - [The categorical palette](#the-categorical-palette)
 - [Adding a new chart type](#adding-a-new-chart-type)
@@ -32,7 +34,7 @@ specifically.
 
 `ChartSpec.from_body` parses the spec's `chart:` block and hands the renderer a
 frozen `ChartSpec`: a `type`, `categories`, one or more `Series`, an optional
-`highlight` index, `annotate`, and `y_min`/`y_max`.
+`highlight` index, `decimals`, and `y_min`/`y_max`.
 
 The spec's wire format is **row-oriented** — one `data:` row per datapoint, each
 carrying its own category (or `x`/`y`/`size`), its own numbers, and its own
@@ -46,11 +48,10 @@ Two consequences worth knowing when working on the renderer:
   `highlight: true`. The renderer's per-point colour override is unchanged.
 - **`Series.unit` comes from the block, not the row.** `unit:` is a key of the
   `chart:` block, threaded through `_parse_category_rows` onto every `Series`, and
-  `_style_data_labels` writes it into the label number format as a literal. Only
+  `_number_format` turns it into the code both the labels and the value axis print
+  in, so the scale and the values it frames agree. Only
   the point-shaped parser takes no `unit` argument, so it stays `None` on the
   xy-scatter and bubble kinds: `unit:` is accepted there and does nothing.
-
-`annotate` is validated and carried on the spec but **no renderer draws it**.
 
 ## The native renderer
 
@@ -121,8 +122,9 @@ by extending a set, never by branching on `spec.type`. A twelfth,
   are excluded — a bubble's point *is* a visible filled circle, so its
   gradient stays meaningful.
 - `_PERCENT_AXIS_CHART_TYPES` — the 5 `*-stacked-100` types. `_style_axes` forces
-  a `0%` tick format on the value axis, and `_style_data_labels` drops the series'
+  a `0%` tick format on the value axis, and `_number_format` drops the series'
   `unit` — an axis already reading in percent has nothing left for a suffix to add.
+  The `0%` wins over the unit format: the share is what the renderer computed.
 - `_SERIES_FILL_CHART_TYPES` — `area`, `area-stacked`, `area-stacked-100` and
   `radar-filled`: one continuous band per series rather than a mark per point, so
   gradient and shadow are applied to the **series** through `_fill_series`, not
@@ -220,7 +222,7 @@ What was measured, so nobody re-investigates it:
 | The same chart built with **bare python-pptx** | renders identically wrong |
 | A **line** series with the same values | renders correctly, sign and all |
 
-So the file is right and pptxkit is not implicated: LibreOffice 26.2.5.2 plots and labels
+So the file is right and deckwright is not implicated: LibreOffice 26.2.5.2 plots and labels
 the absolute value of a `barChart` datapoint. PowerPoint is expected to draw it correctly;
 the contact sheet you check it on will not, and neither will `qa`. The documented workflow
 for every other chart — build it, render it, look at it — is the one thing that cannot
@@ -232,6 +234,78 @@ draws the same shape as geometry rather than as a chart, which renders identical
 everywhere, at the cost of not being an editable chart object in PowerPoint.
 
 A chart whose values are all positive is unaffected.
+
+## Where the legend and the labels go
+
+A legend goes **under the plot** on every kind but the bar family, which reserves a
+column beside its category labels instead (below). A mid-right legend costs a quarter of
+the frame's width and leaves the plot crowded against it; under the plot it costs one
+line of height.
+
+On the line and scatter kinds a data label sits **above** its point. The theme's
+default `label_position` is `outside_end`, which is a bar position — a line has no bar
+end, so the label lands on the point it names and collides with its own marker. A theme
+that names a position the kind can honour keeps it.
+
+**A position is written only where the chart group offers one.** `inside_end` reaches the
+bar family and a pie; area, doughnut and radar take no position at all, and writing one
+into those parts is what makes PowerPoint ask to repair the file.
+
+## Room the legend takes
+
+A legend sits to the right of the plot, so on the bar family — where the plot area is
+pinned by hand so the left-hand category labels fit — the same manual layout measures
+a column for the longest series name. Both columns come out of one budget, and the
+plot never drops below 45% of the frame however long the words are.
+
+The legend is also taken out of the plot's layout (`c:overlay` off). Left at
+PowerPoint's default it is drawn *over* the plot, which a manual layout cannot then
+account for — that is what put a legend on top of its own bars.
+
+## The places a data label prints
+
+The places are read off the data: the most any plotted value carries, so a series of
+`11.2, 9.6, 5.1, 4.8` labels to one place and a series of whole numbers labels to none.
+Values past four places are taken as arithmetic noise and capped.
+
+`decimals:` overrides that in either direction — `0` rounds a noisy series back to
+whole numbers, `2` pads a mixed series to a fixed width.
+
+The `*-stacked-100` kinds are no exception. Their *axis* shows the share the renderer
+computed, but each data label still prints that series' own authored value, so a
+stack of `11.2` and `88.8` labels those two numbers and needs its decimal place like
+any other chart. What those kinds do drop is `unit:` — the axis already reads in per
+cent, so a `%` on the label would be a second sign.
+
+The places have to be written into the format code because `unit:` is a quoted
+literal (`0.0"%"`) rather than Excel's `%` code — a quoted suffix cannot ride on a
+general format, so a format with a unit and no places stated is a format that rounds.
+
+## Turning one series' labels off
+
+`plot.has_data_labels` and `plot.data_labels` are the whole plot, so the theme's label
+settings arrive all-or-nothing. `labels:` names the series that opt out, and
+`_hide_series_labels` writes a `c:dLbls` carrying `showVal="0"` on that `c:ser`: a series'
+own element overrides the plot's, and it is the only place the dissent can be stated.
+
+The suppressed series keeps its stroke, its palette colour and its legend entry — only the
+numbers go, which is what a benchmark line wants.
+
+python-pptx exposes `series.data_labels` on the five category series classes and on neither
+`XySeries` nor `BubbleSeries`. The block's refusal covers that: those kinds, like the
+`value:` shorthand, fold their rows into a single unnamed series, and `labels:` addresses
+series by name.
+
+## The unit reaches the axis too
+
+A `unit:` says what the numbers are, and that is as true of the scale as of the values on
+it. `_number_format` computes one code and `_style_axes` puts it on the value axis, so a
+line whose points read `11.2%` sits against ticks reading `0.0%` rather than a bare `0-12`.
+
+The axis takes the format **only when the chart carries a unit**. Places and digit grouping
+are label-scoped by design, and pinning a code with no unit would print `12.0` for a tick
+the renderer would otherwise draw as `12`. With no unit the ticks stay the renderer's to
+choose.
 
 ## Refusing a truncated axis
 

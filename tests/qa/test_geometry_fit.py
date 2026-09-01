@@ -1,8 +1,8 @@
 """`text-fit`: the recorded words against the box the shape declared. `bounds` asks whether the
 box is on the slide; nothing asked whether the text fits inside it."""
 
-from pptxkit.qa.geometry import check_text_fit
-from pptxkit.qa.model import Severity
+from deckwright.qa.geometry import check_text_fit
+from deckwright.qa.model import Severity
 from tests.qa.test_geometry_bounds import _manifest, _shape, _theme
 
 _LONG = (

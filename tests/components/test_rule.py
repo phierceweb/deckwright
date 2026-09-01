@@ -1,9 +1,9 @@
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component, registered_components
-from pptxkit.utils.color import AA_LARGE, contrast_ratio
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component, registered_components
+from deckwright.utils.color import AA_LARGE, contrast_ratio
 
 EMU = 914400
 
@@ -126,7 +126,7 @@ def test_the_default_rule_reads_on_both_the_page_and_the_inverse_slide(ctx_facto
 
 
 def test_an_undeclared_role_is_refused_by_name(ctx_factory):
-    from pptxkit.errors import ThemeError
+    from deckwright.errors import ThemeError
 
     ctx = ctx_factory({"rule": {"color": "accent-9"}})
     with pytest.raises(ThemeError, match="no colour role 'accent-9'"):

@@ -1,5 +1,5 @@
-from pptxkit.qa.model import Severity
-from pptxkit.qa.textflow import check_overflow, normalise
+from deckwright.qa.model import Severity
+from deckwright.qa.textflow import check_overflow, normalise
 
 
 def _manifest(*slides):
@@ -138,3 +138,85 @@ def test_a_line_clipped_at_its_hyphen_is_still_flagged():
     m = _manifest(_slide(1, _rec(lines=["it must clear the 3:1 non-text minimum."])))
     findings = check_overflow(m, ["it must clear the 3:1 non-"])
     assert [f.check for f in findings] == ["overflow"]
+
+
+def _two_column_page():
+    """A page pdftotext merged row-wise, splicing the right column into the left line."""
+    return "Left line one RIGHT LINE ONE left line two"
+
+
+def test_a_line_the_page_splices_is_clean_when_its_own_box_holds_it(monkeypatch):
+    """The false positive a multi-column slide produces: the page interleaves, the box does not."""
+    import deckwright.qa.textflow as tf
+
+    monkeypatch.setattr(tf, "crop_text", lambda *a, **k: "Left line one left line two")
+    m = _manifest(_slide(1, _rec(lines=["Left line one left line two"])))
+    assert check_overflow(m, [_two_column_page()], pdf_path="d.pdf") == []
+
+
+def test_a_line_absent_from_its_own_box_is_still_an_error(monkeypatch):
+    """The negative control: the crop must not become a way for real overflow to pass."""
+    import deckwright.qa.textflow as tf
+
+    monkeypatch.setattr(tf, "crop_text", lambda *a, **k: "Left line one")
+    m = _manifest(_slide(1, _rec(lines=["Left line one left line two"])))
+    findings = check_overflow(m, [_two_column_page()], pdf_path="d.pdf")
+    assert len(findings) == 1
+    assert findings[0].check == "overflow"
+
+
+def test_without_a_pdf_path_the_box_is_never_consulted(monkeypatch):
+    import deckwright.qa.textflow as tf
+
+    def _boom(*a, **k):
+        raise AssertionError("crop_text must not run without pdf_path")
+
+    monkeypatch.setattr(tf, "crop_text", _boom)
+    m = _manifest(_slide(1, _rec(lines=["Left line one left line two"])))
+    assert len(check_overflow(m, [_two_column_page()])) == 1
+
+
+def test_a_failed_crop_reports_the_finding_rather_than_swallowing_it(monkeypatch):
+    import deckwright.qa.textflow as tf
+    from deckwright.errors import RenderError
+
+    def _fail(*a, **k):
+        raise RenderError("pdftotext died")
+
+    monkeypatch.setattr(tf, "crop_text", _fail)
+    m = _manifest(_slide(1, _rec(lines=["Left line one left line two"])))
+    assert len(check_overflow(m, [_two_column_page()], pdf_path="d.pdf")) == 1
+
+
+def test_crop_text_converts_inches_to_points_and_pads(monkeypatch):
+    """A real prose box: the inches it records, and the points they crop to."""
+    import deckwright.qa.textflow as tf
+
+    seen = {}
+
+    def _capture(argv, pdf_path, timeout_s):
+        seen["argv"] = argv
+        return "text"
+
+    monkeypatch.setattr(tf, "_run_pdftotext", _capture)
+    tf.crop_text("d.pdf", 25, (0.8, 1.758, 5.767, 1.178))
+    argv = seen["argv"]
+    assert argv[argv.index("-f") + 1] == "25"
+    assert argv[argv.index("-l") + 1] == "25"
+    assert argv[argv.index("-x") + 1] == "53"
+    assert argv[argv.index("-y") + 1] == "122"
+    assert argv[argv.index("-W") + 1] == "423"
+    assert argv[argv.index("-H") + 1] == "92"
+
+
+def test_a_crop_at_the_slide_edge_does_not_ask_for_a_negative_offset(monkeypatch):
+    import deckwright.qa.textflow as tf
+
+    seen = {}
+    monkeypatch.setattr(
+        tf, "_run_pdftotext", lambda argv, p, t: seen.setdefault("argv", argv) and ""
+    )
+    tf.crop_text("d.pdf", 1, (0.0, 0.0, 1.0, 1.0))
+    argv = seen["argv"]
+    assert argv[argv.index("-x") + 1] == "0"
+    assert argv[argv.index("-y") + 1] == "0"

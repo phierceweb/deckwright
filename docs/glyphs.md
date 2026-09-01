@@ -9,7 +9,7 @@ never mentions very probably resolves — guess the upstream one, and a miss nam
 closest real glyphs.
 
 Names are written exactly as you type them into `icon:`. **Bold** entries are curated
-aliases — a name pptxkit maps onto a glyph the set calls something else. Everything else
+aliases — a name deckwright maps onto a glyph the set calls something else. Everything else
 is the glyph's own name, and the hyphenated spelling of an underscored one works too, so
 `rocket-launch` and `rocket_launch` reach the same file. Which glyph each curated name
 lands on is [`docs/icons.md`](icons.md#the-names-decks-are-already-written-against).
@@ -18,6 +18,10 @@ Placing an `icon:` is [`docs/components.md`](components.md#icon--a-vector-mark);
 lookup resolves a name is [`docs/icons.md`](icons.md#the-search-order).
 
 ---
+
+**Have the word already?** `deckwright glyphs find <substring>` searches all 4,001
+names and the aliases, so you need this page only when you are looking for the word
+itself.
 
 ## Table of Contents
 

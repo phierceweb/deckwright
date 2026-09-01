@@ -1,4 +1,4 @@
-"""`pptxkit new` — the deck you get before you know the wire format."""
+"""`deckwright new` — the deck you get before you know the wire format."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ import pytest
 import yaml
 from pptx import Presentation
 
-from pptxkit.compile.scaffold import new_deck, slug_and_title
-from pptxkit.errors import SpecError, ThemeError
+from deckwright.compile.scaffold import SCAFFOLD_WORDS, _spec_text, new_deck, slug_and_title
+from deckwright.errors import SpecError, ThemeError
+from deckwright.qa.placeholder import _hit
 
-import pptxkit.theme as _theme_pkg
+import deckwright.theme as _theme_pkg
 
 _THEMES = Path(_theme_pkg.__file__).parent / "builtin"
 
@@ -21,7 +22,7 @@ def elsewhere(tmp_path, monkeypatch):
     """A working directory of its own. The theme directory is read relative to the process,
     so a scaffold built outside the repo needs it named."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(_THEMES))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(_THEMES))
     return tmp_path
 
 
@@ -48,7 +49,7 @@ def test_the_scaffold_builds(elsewhere):
 def test_the_scaffold_builds_whatever_the_title_is(title, elsewhere):
     """The cover's title box is written once and the title is whatever was typed. Size
     that box for one line and every title that wraps trips the chrome overflow guard —
-    which is `pptxkit new` failing on the deck names people actually use."""
+    which is `deckwright new` failing on the deck names people actually use."""
     made = new_deck(title, root=elsewhere / "authoring")
     assert made.built is not None
     assert len(Presentation(str(made.built.deck)).slides) == 6
@@ -134,3 +135,26 @@ def test_a_name_gives_the_same_deck_however_it_is_typed(name, slug, title):
 def test_a_nameless_deck_is_refused(name):
     with pytest.raises(SpecError, match="a deck needs a name"):
         slug_and_title(name)
+
+
+def test_every_scaffold_word_actually_appears_in_the_scaffold():
+    """`SCAFFOLD_WORDS` is a QA needle list; a phrase the scaffold stopped writing is a
+    needle that can never match, and nothing else would notice."""
+    spec = _spec_text("demo-deck", "Demo Deck", "base")
+    missing = [word for word in SCAFFOLD_WORDS if word not in spec]
+    assert not missing, f"SCAFFOLD_WORDS names copy the scaffold no longer writes: {missing}"
+
+
+def test_no_placeholder_needle_appears_in_copy_this_repo_itself_writes():
+    """The other half of the selection rule: a needle that also matches the library's own
+    example decks makes `deckwright qa` cry wolf on the decks shipped to demonstrate it.
+    `_hit` is the whole needle set, regexes included — the phrases are only half of it."""
+    repo = Path(__file__).resolve().parents[2]
+    examples = sorted((repo / "examples").glob("*.deck.yaml"))
+    exercises = sorted((repo / "src" / "deckwright" / "conform").glob("*.py"))
+    assert examples, "no example deck was swept — the glob no longer finds them"
+    assert exercises, "no conform exercise was swept — the glob no longer finds them"
+    collisions = [
+        (source.name, hit) for source in examples + exercises if (hit := _hit(source.read_text()))
+    ]
+    assert not collisions, f"a placeholder needle collides with the repo's own copy: {collisions}"

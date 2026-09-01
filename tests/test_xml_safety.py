@@ -1,7 +1,7 @@
-"""The XML pptxkit reads did not necessarily come from pptxkit.
+"""The XML deckwright reads did not necessarily come from deckwright.
 
 `conform`, `qa`, `inspect` and `diff` all parse a `.pptx` the user was sent. lxml's
-default parser expands entities declared in an inline DTD; `pptxkit.utils.xml` refuses
+default parser expands entities declared in an inline DTD; `deckwright.utils.xml` refuses
 them. Delete `resolve_entities=False` there and every test here goes red.
 """
 
@@ -11,11 +11,11 @@ import pathlib
 import re
 import zipfile
 
-from pptxkit.conform.sample import MARKER, is_sample
-from pptxkit.utils.xml import fromstring as parse_xml
+from deckwright.conform.sample import MARKER, is_sample
+from deckwright.utils.xml import fromstring as parse_xml
 
 _CP = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
-_SRC = pathlib.Path(__file__).resolve().parents[1] / "src/pptxkit"
+_SRC = pathlib.Path(__file__).resolve().parents[1] / "src/deckwright"
 
 
 def test_an_inline_entity_is_not_expanded():
@@ -69,6 +69,6 @@ def test_no_module_parses_xml_with_the_default_parser():
             if re.search(r"etree\.(fromstring|XML|parse|fromstringlist)\(", line):
                 offenders.append(f"{path.relative_to(_SRC)}:{i}")
     assert offenders == [], (
-        "parse untrusted XML through pptxkit.utils.xml.fromstring, not lxml directly: "
+        "parse untrusted XML through deckwright.utils.xml.fromstring, not lxml directly: "
         + ", ".join(offenders)
     )

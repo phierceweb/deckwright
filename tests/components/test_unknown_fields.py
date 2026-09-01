@@ -8,11 +8,11 @@ import re
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-ins
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
+import deckwright.components  # noqa: F401 — registers the built-ins
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
 
-COMPONENTS = pathlib.Path(__file__).resolve().parents[2] / "src/pptxkit/components"
+COMPONENTS = pathlib.Path(__file__).resolve().parents[2] / "src/deckwright/components"
 
 # Minimal valid bodies for the components a bare ctx can drive. `card`, `connector`,
 # `document`, `icon`, `image` and `table` need a file, a sibling placement or a real glyph.
@@ -121,7 +121,7 @@ def test_a_flow_step_says_it_too(ctx_factory):
 
 
 def test_a_chart_row_says_it_too(ctx_factory):
-    from pptxkit.charts.model import ChartSpec
+    from deckwright.charts.model import ChartSpec
 
     ctx = ctx_factory({"title": "T"})
     with pytest.raises(LayoutError, match=_PROSE):
@@ -153,7 +153,7 @@ def test_an_ordinary_misspelling_gets_no_such_hint(component, body, ctx_factory)
 def test_a_prose_key_never_gets_a_did_you_mean(ctx_factory):
     """The suggestion and the cause are mutually exclusive: a key holding a comma's tail
     has no nearest spelling, and offering one sends the reader hunting for a typo."""
-    from pptxkit.utils.keys import unknown_field
+    from deckwright.utils.keys import unknown_field
 
     message = unknown_field("and the rest", ("cols", "rows", "box"), suggest=True)
     assert "did you mean" not in message
@@ -161,7 +161,7 @@ def test_a_prose_key_never_gets_a_did_you_mean(ctx_factory):
 
 
 def test_a_near_miss_still_gets_a_did_you_mean():
-    from pptxkit.utils.keys import unknown_field
+    from deckwright.utils.keys import unknown_field
 
     message = unknown_field("col", ("cols", "rows", "box"), suggest=True)
     assert "did you mean 'cols'?" in message

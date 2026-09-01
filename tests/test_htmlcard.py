@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-from pptxkit.services.htmlcard import markdown_card, window_card
+from deckwright.services.htmlcard import markdown_card, window_card
 
 
 def test_window_card_has_chrome_and_body():
@@ -39,7 +39,7 @@ def test_markdown_card_renders_fenced_code():
 def test_the_card_paints_with_theme_colours(theme):
     import dataclasses
 
-    from pptxkit.panels.css import panel_css
+    from deckwright.panels.css import panel_css
 
     odd = dataclasses.replace(
         theme,
@@ -53,7 +53,7 @@ def test_the_card_paints_with_theme_colours(theme):
 
 def test_a_card_without_a_theme_falls_back_to_its_own_literals(theme):
     """The fallbacks in var(--c-role, #hex) are what every themeless caller renders with."""
-    from pptxkit.panels.css import panel_css
+    from deckwright.panels.css import panel_css
 
     plain = markdown_card("# T\n\ntext\n", filename="d.md")
     themed = markdown_card("# T\n\ntext\n", filename="d.md", content_css=panel_css(theme))
@@ -64,8 +64,8 @@ def test_a_card_without_a_theme_falls_back_to_its_own_literals(theme):
 def test_every_css_variable_the_card_reads_is_a_role_the_theme_declares():
     """A card styles itself from `panel_css`, which emits `--c-<role>` for the roles the palette
     really has. Ask for a name that is not one and CSS silently takes the fallback."""
-    from pptxkit.services import htmlcard
-    from pptxkit.theme.defaults import DEFAULT_ROLES
+    from deckwright.services import htmlcard
+    from deckwright.theme.defaults import DEFAULT_ROLES
 
     source = pathlib.Path(htmlcard.__file__).read_text()
     used = set(re.findall(r"var\(--c-([a-z0-9-]+)", source))
@@ -78,7 +78,7 @@ def test_every_css_variable_the_card_reads_is_a_role_the_theme_declares():
 def test_no_card_colour_is_a_palette_colour():
     """A fallback is what a card wears with no theme, so it has to be anonymous: none of the fixture
     palette's literals may reappear as a default."""
-    from pptxkit.services import htmlcard
+    from deckwright.services import htmlcard
 
     source = pathlib.Path(htmlcard.__file__).read_text()
     leaked = re.findall(r"(?i)#(?:2d0937|27b94c|18ceda|573c65|4db6ac|a78bd0)", source)
@@ -88,7 +88,7 @@ def test_no_card_colour_is_a_palette_colour():
 def test_the_render_canvas_is_never_themed():
     """`htmlshot._autocrop` crops by difference-from-white, so a `body` that takes a colour makes
     the whole 4000px canvas count as content and the card comes out canvas-height."""
-    from pptxkit.services import htmlcard
+    from deckwright.services import htmlcard
 
     source = pathlib.Path(htmlcard.__file__).read_text()
     body = re.search(r"^body \{[^}]*\}", source, re.S | re.M)

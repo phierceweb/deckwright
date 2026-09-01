@@ -7,7 +7,7 @@ Start one with `bin/run new "<Name>"` — it writes a working six-slide deck her
 builds it, so you edit something that runs instead of composing from nothing.
 
 **Everything here except this README is gitignored.** A deck written for an audience is
-your content, not the library's; it has no business in pptxkit's history. Nothing here
+your content, not the library's; it has no business in deckwright's history. Nothing here
 is ever committed, so nothing has to be kept out by hand.
 
 ```

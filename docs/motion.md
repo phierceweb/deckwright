@@ -39,7 +39,7 @@ Hence [Verification](#verification), which is the most important section here.
 
 ## The modules
 
-`src/pptxkit/motion/` is one module per concern over a shared skeleton.
+`src/deckwright/motion/` is one module per concern over a shared skeleton.
 
 | Module | Writes | Owns |
 |---|---|---|
@@ -81,12 +81,19 @@ output, and re-expressing it as a one-group sequence would forfeit that.
 
 Three different things spend a click, and they compose differently.
 
-| | Clicks | Notes |
-|---|---|---|
-| `animate: together` | 1 for the slide | Every reveal group flattened into one build. |
-| `animate: one_at_a_time` | 1 per group | What a group *is* belongs to the component — a bullet column, a callout row, a stat tile. |
-| `advance: after_previous` | 1 for the slide | The first group waits for a click; the rest are `afterEffect` nodes `beat_ms` apart. |
-| `reveals:` | 0 | An `interactiveSeq` fires on clicking a named shape, in any order, and never advances the slide. A trigger placement contributes one `interactiveSeq` per shape it drew, so any part of it is clickable. |
+**Two of them are slide keys and one is a theme key**, which the `Where` column below
+states because it is the thing readers most often go looking for in the wrong file.
+`animate:` and `reveals:` are written on a slide, in the spec. Everything under
+`motion.` — `advance`, `beat_ms`, `stagger_ms`, `roles`, `transition` — is written in
+the theme, so a deck moves the same way throughout and one edit changes every slide.
+`docs/authoring.md`'s slide-field table correctly does not list `advance:`.
+
+| | Where | Clicks | Notes |
+|---|---|---|---|
+| `animate: together` | slide | 1 for the slide | Every reveal group flattened into one build. |
+| `animate: one_at_a_time` | slide | 1 per group | What a group *is* belongs to the component — a bullet column, a callout row, a stat tile. |
+| `motion.advance: after_previous` | **theme** | 1 for the slide | The first group waits for a click; the rest are `afterEffect` nodes `beat_ms` apart. Deck-wide by design — it is not a slide field. |
+| `reveals:` | slide | 0 | An `interactiveSeq` fires on clicking a named shape, in any order, and never advances the slide. A trigger placement contributes one `interactiveSeq` per shape it drew, so any part of it is clickable. Chain them — click one to reveal the next — but a ring is refused at build: every placement in it would be waiting on something itself hidden. |
 
 `stagger_ms` offsets shapes *within* one click, so it reads very differently in the
 first two rows: across the whole slide under `together`, inside a single group under
@@ -144,7 +151,7 @@ that is invalid the moment it meets `strips`. The table is [`theme.md`](theme.md
 Only the base 21 are written. The 2010-era extension set — ripple, glitter, prestige,
 morph — is deliberately absent: `mc:AlternateContent` does not validate against
 `pml.xsd`, most of them do not survive a LibreOffice round trip even in their fallback,
-and morph additionally needs cross-slide shape identity that pptxkit does not have.
+and morph additionally needs cross-slide shape identity that deckwright does not have.
 
 ## Verification
 

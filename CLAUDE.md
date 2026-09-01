@@ -1,4 +1,4 @@
-# pptxkit — AI assistant context
+# deckwright — AI assistant context
 
 A pf-core consumer: a library/tool in the **src-layout** (no web/DB layers),
 built on the pf-core framework.
@@ -6,7 +6,7 @@ built on the pf-core framework.
 ## Changing the package itself
 
 Most readers want the deck-authoring routes below; what follows only applies to
-changing pptxkit's own code.
+changing deckwright's own code.
 
 `bin/lint` is the gate: ruff lint, `ruff format --check`, mypy, the structural
 file-size check, import direction and framework-first, each naming the rule it applies
@@ -19,7 +19,7 @@ class, retries, caching, parallelism, an atomic file write. It probably has it.
 `bin/check-framework` runs in pre-commit and CI and names the replacement in every
 failure.
 
-**New capability belongs in `src/pptxkit/conform/exercise.py`**, which
+**New capability belongs in `src/deckwright/conform/exercise.py`**, which
 `tests/test_templates.py` drives against every real brand template — not in a new unit
 test file. [`docs/testing.md`](docs/testing.md) is the evidence behind that, and
 `bin/lint` runs the rest of the gates.
@@ -68,12 +68,12 @@ hand — the sidecar exists so tuning survives.
 - **[`docs/pptx-deck-building.md`](docs/pptx-deck-building.md)** — the general
   mechanics + non-negotiables (animation injection, the render/QA loop, versioned
   output, the "don't rebuild after a hand-edit" workflow).
-- **`pptxkit qa <deck>.pptx`** — automated checks (bounds, reserved regions,
+- **`deckwright qa <deck>.pptx`** — automated checks (bounds, reserved regions,
   min font size, WCAG contrast, render-based overflow) against a built deck's
   manifest. Complements, never replaces, the eyeball-the-render loop above —
   see [`docs/qa.md`](docs/qa.md) for what it catches and, just as important,
   what it structurally cannot.
-- **[`docs/cli.md`](docs/cli.md)** — every command and flag, the `PPTXKIT_*`
+- **[`docs/cli.md`](docs/cli.md)** — every command and flag, the `DECKWRIGHT_*`
   env vars, and which external tools each command needs.
 
 **Engine internals.** One doc per subsystem, each covering behaviour only — the
@@ -87,7 +87,7 @@ wire format for all of them is `docs/authoring.md`, never these:
 
 ## Deck compiler
 
-`pptxkit build <spec>.deck.yaml` compiles a declarative `.deck.yaml` (a
+`deckwright build <spec>.deck.yaml` compiles a declarative `.deck.yaml` (a
 deck-config document plus one document per slide) against a theme YAML —
 e.g. `templates/acme.theme.yaml` — into a branded `.pptx` and a build
 manifest. The spec format is documented end-to-end in
@@ -96,8 +96,8 @@ theme is gitignored at `templates/` — never commit it.
 
 The design system a deck gets with no template at all — the semantic colour roles
 and contrast-checked pairs, the type rungs, the fractional grid — is documented in
-[`docs/theme.md`](docs/theme.md). To point pptxkit at a *new* brand template,
-`pptxkit conform <template>.pptx` derives a theme from it and drives every
+[`docs/theme.md`](docs/theme.md). To point deckwright at a *new* brand template,
+`deckwright conform <template>.pptx` derives a theme from it and drives every
 capability through it — see [`docs/conform.md`](docs/conform.md).
 
 **[`docs/README.md`](docs/README.md) indexes every doc in the tree.** Add a row
@@ -105,9 +105,9 @@ there in the same change that adds a doc.
 
 ## Layout
 
-- `src/pptxkit/cli.py` — CLI entry (thin; pf-core `create_cli` / `run_cli`).
-- `src/pptxkit/config.py` — `Config(AppConfig)` subclass; the `cfg` singleton.
-- Add one package per domain under `src/pptxkit/`. Grow a layer dir
+- `src/deckwright/cli.py` — CLI entry (thin; pf-core `create_cli` / `run_cli`).
+- `src/deckwright/config.py` — `Config(AppConfig)` subclass; the `cfg` singleton.
+- Add one package per domain under `src/deckwright/`. Grow a layer dir
   (`<domain>/services/`, `orchestrators/`, `utils/`) only when it has ≥2 files.
 
 ## Where deck work goes
@@ -116,7 +116,7 @@ Split by lifetime, not by topic. Full table in
 [`docs/pptx-deck-building.md`](docs/pptx-deck-building.md#where-everything-goes).
 
 - **`authoring/`** — decks *you* write, gitignored. Your content, not the library's. Named for the activity because a *deck* is the built `.pptx`.
-- **`examples/`** — pptxkit's own demonstration specs, committed. The feature tour, the
+- **`examples/`** — deckwright's own demonstration specs, committed. The feature tour, the
   chart catalogue, the table and shape tours: they exercise the library, so they are
   part of it. A deck written for an audience does not go here.
 - **`templates/`** — brand `.pptx` files **and** the themes derived from them, side by
@@ -129,7 +129,7 @@ Split by lifetime, not by topic. Full table in
 - **`out/<deck>/.build/`** — generated inputs and intermediates, hidden so a deck's
   directory shows the deck, its manifest and `render/` and nothing else. A `.pptx`
   embeds its pictures, so what went into building it is scratch. The name is
-  `pptxkit.paths.SCRATCH`; use `scratch(outdir)` rather than writing it out.
+  `deckwright.paths.SCRATCH`; use `scratch(outdir)` rather than writing it out.
 
 **Scratch belongs outside the repo.** Probes and one-off experiments go in a temp
 directory; ones that land in `out/` outlive their session and become indistinguishable

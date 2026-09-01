@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the pptxkit CLI (or a sibling bin/ command) via the project venv.
+# Run the deckwright CLI (or a sibling bin/ command) via the project venv.
 #
 #   bin/run --help
 #   bin/run build examples/smoke.deck.yaml
@@ -26,4 +26,4 @@ if [[ ! -x "$ROOT/.venv/bin/python" && -z "${VIRTUAL_ENV:-}" ]]; then
   echo "No virtualenv found. Run bin/setup first, or activate your own." >&2
   exit 1
 fi
-exec "$ROOT/bin/py" -m pptxkit.cli "$@"
+exec "$ROOT/bin/py" -m deckwright.cli "$@"

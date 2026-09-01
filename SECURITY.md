@@ -15,13 +15,13 @@ reproduce. You can expect an initial acknowledgement within a few days.
 
 ## Supported versions
 
-pptxkit is pre-1.0 and under active development. Security fixes land in the
+deckwright is pre-1.0 and under active development. Security fixes land in the
 latest tagged release; there is no long-term-support branch yet. Pin to a
 tagged release and upgrade promptly when a fix ships.
 
 ## Scope
 
-pptxkit is a CLI/library, not a deployed service. What follows is what a deck spec,
+deckwright is a CLI/library, not a deployed service. What follows is what a deck spec,
 a theme, and a `.pptx` you were sent can each actually do.
 
 ### A deck spec carries the authority of a script
@@ -57,7 +57,7 @@ it. Every rendered card therefore carries a content policy that denies everythin
 named:
 
 - **No frames, objects or embeds at all** — this is what closes local-file reads.
-- **No script**, except the height probe pptxkit itself appends, allowed by hash.
+- **No script**, except the height probe deckwright itself appends, allowed by hash.
 - **Images and fonts** may load from `data:`, `https:` and `http:` — not from `file:`.
 - **Inline CSS only.**
 
@@ -68,7 +68,7 @@ the section above means.
 
 ### The browser sandbox
 
-Chrome runs **sandboxed by default**. `PPTXKIT_CHROME_NO_SANDBOX=1` passes
+Chrome runs **sandboxed by default**. `DECKWRIGHT_CHROME_NO_SANDBOX=1` passes
 `--no-sandbox`, which is implied when running as root because the sandbox cannot
 work there. Switch it off only where the HTML being rendered is as trusted as a
 script you would run — in a container that denies unprivileged user namespaces,
@@ -78,8 +78,8 @@ for example. A build that fails for want of a sandbox names the variable.
 
 `conform`, `qa`, `inspect` and `diff` all read a `.pptx` that came from somewhere
 else — the documented `conform` workflow is someone handing you a brand template.
-Those packages are zipped XML, and pptxkit parses every part with entity expansion
-and network access refused (`pptxkit.utils.xml`, gated by
+Those packages are zipped XML, and deckwright parses every part with entity expansion
+and network access refused (`deckwright.utils.xml`, gated by
 `tests/test_xml_safety.py`); python-pptx does the same for the parts it owns. A
 malformed or hostile package is reported as a finding rather than trusted.
 
@@ -90,13 +90,13 @@ of unknown size.
 ### External tools
 
 Rendering shells out to local LibreOffice and Poppler; HTML cards go through local
-Chrome/Chromium. Every binary is resolved from a `PPTXKIT_*` setting or a well-known
+Chrome/Chromium. Every binary is resolved from a `DECKWRIGHT_*` setting or a well-known
 install path, invoked as an argument list — never through a shell, and never
 downloaded.
 
 ### Network
 
-`pptxkit glyphs sync` is the only command that itself opens a socket: it re-vendors
+`deckwright glyphs sync` is the only command that itself opens a socket: it re-vendors
 the icon set by `git clone`-ing google/material-design-icons over HTTPS into a
 temporary directory. It is a release-time command, never run by building, rendering or
 QA, and `bin/setup` only falls back to it when the committed bundle fails its hash

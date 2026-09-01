@@ -12,8 +12,8 @@ from pf_core.exceptions import (
     InvalidInputError,
 )
 
-from pptxkit.errors import LayoutError, RenderError, SpecError, ThemeError
-from pptxkit.utils.deck import open_presentation
+from deckwright.errors import LayoutError, RenderError, SpecError, ThemeError
+from deckwright.utils.deck import open_presentation
 
 
 def test_spec_error_is_a_flow_exception():

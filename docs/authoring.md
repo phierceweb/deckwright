@@ -1,6 +1,6 @@
 # Authoring a deck
 
-How to write a `.deck.yaml` that `pptxkit build` compiles into a branded PowerPoint file. This is the wire format — the structure of the file, every slide field, how a component is placed, and the chart block — plus the index that says which component you want.
+How to write a `.deck.yaml` that `deckwright build` compiles into a branded PowerPoint file. This is the wire format — the structure of the file, every slide field, how a component is placed, and the chart block — plus the index that says which component you want.
 
 Three companions carry the bulk, and you pull each in only when you need it:
 
@@ -38,6 +38,7 @@ Read this first. Several of these words are jargon kept deliberately in the code
 ## Table of Contents
 
 - [Glossary](#glossary)
+- [Where a spec comes from](#where-a-spec-comes-from)
 - [A complete deck, start to finish](#a-complete-deck-start-to-finish)
 - [The two-document structure](#the-two-document-structure)
 - [The deck document](#the-deck-document)
@@ -54,6 +55,29 @@ Read this first. Several of these words are jargon kept deliberately in the code
 - [Adding a component the spec cannot express](#adding-a-component-the-spec-cannot-express)
 
 Every build error, beside its fix, is [`docs/errors.md`](errors.md).
+
+---
+
+## Where a spec comes from
+
+Three ways a spec starts.
+
+- **`deckwright new "<Name>"`** writes a deck directory under `authoring/` holding a spec
+  that already builds, and builds it. Start here for a new deck: editing a working
+  file is faster than filling an empty one.
+- **`deckwright extract <deck>.pptx`** drafts a spec from a deck that already exists, when
+  what you want out of it is its words. Chrome, bullets, tables and speaker notes
+  convert, inside grouped shapes as well as on the slide; every shape it cannot turn into
+  words becomes a `# not converted:` comment naming what you have to put back by hand.
+  `--as md` writes a plain transcript instead of a spec.
+- **The example below**, copied and rewritten.
+
+An extracted draft carries the deck's words and none of its design. A deck from elsewhere
+comes back as chrome plus bullets, with only its placeholders and its type sizes to say
+which line was the title; a deck deckwright built keeps its kicker, title and subtitle,
+because the extractor reads the shape names `build` writes. Treat either as source
+material, and read [`docs/treatments.md`](treatments.md) before it goes anywhere.
+[`docs/cli.md`](cli.md) has what converts and what does not.
 
 ---
 
@@ -117,7 +141,7 @@ Build it:
 bin/run build authoring/example/example.deck.yaml
 ```
 
-That writes the `.pptx` named by `out:` — resolved against the spec's own directory, so a spec in `authoring/example/` and an `out:` of `../../out/example/…` land it in `out/example/` — plus a sibling `.manifest.json` and a `.content.md` of the deck's words. Then look at it — rendering and eyeballing the result is the real check:
+That writes the `.pptx` named by `out:` — resolved against the spec's own directory, so a spec in `authoring/example/` and an `out:` of `../../out/example/…` land it in `out/example/` — plus a sibling `.manifest.json`, a `.content.md` of the deck's words and a `.beats.md` of its reveal order. Then look at it — rendering and eyeballing the result is the real check:
 
 ```bash
 bin/run render "out/example/Example v1.pptx" --contact-sheet
@@ -153,7 +177,7 @@ Do not put a `---` before the deck document. A deck needs at least one slide doc
 
 | Field | Required | What it does |
 |---|---|---|
-| `theme` | **yes** | Names the theme file, resolved against the theme directory (`templates` by default) and then the packaged built-ins — so `theme: base` resolves anywhere pptxkit is installed. |
+| `theme` | **yes** | Names the theme file, resolved against the theme directory (`templates` by default) and then the packaged built-ins — so `theme: base` resolves anywhere deckwright is installed. |
 | `out` | yes, unless `--out` is passed | Where to write the `.pptx`. Relative paths resolve **against the spec file's own directory**. |
 | `sections` | no | The deck's chapter names, in order. Every slide's `section:` must be one of them. |
 | `extends` | no | A Python module registering bespoke components. Resolved relative to the spec file. **It is imported and executed**, before any placement is validated — so building someone else's `.deck.yaml` runs their code on your machine. See [Adding a component](#adding-a-component-the-spec-cannot-express). |
@@ -170,6 +194,8 @@ out: ../out/deck/Deck v1.pptx
 ```
 
 **`sections` is the single source of truth for chapter order.** Every slide's `section:` must be a name from this list; a name that is not in it is an error naming both. Omit `sections` entirely and any `section:` value is accepted.
+
+A chapter also has to run **once**. A slide that resumes a section after another has begun is refused, naming both slides — otherwise a reorder that scattered one chapter builds clean, and a theme that draws no section rail shows nothing. A slide carrying no `section:` of its own sits in whichever run it falls in and does not break it.
 
 Nothing is derived from a section any more — no kicker, no part number, no navigation strip. If a slide should say `PART 2 OF 3`, write that in its `kicker:`.
 
@@ -230,7 +256,7 @@ chrome:
 
 | Key | Values |
 |---|---|
-| `at` | The same grammar as a placement's `at:` — `cols`, `cols`+`rows`, or `box` — but resolved against the **whole canvas**, since chrome is what decides where the content band starts. |
+| `at` | The same grammar as a placement's `at:` — `cols`, `cols`+`rows`, or `box` — but resolved against the **whole canvas**, since chrome is what decides where the content band starts. A `box` may write `h: auto` for a depth that follows the text: the line takes as many lines as it wraps to, so re-shuffling content cannot leave a hand-measured height behind. Every other value stays a percent. |
 | `align` | `left` (default), `center`, `right`. |
 | `anchor` | `top` (default), `middle`, `bottom`. Needs an `at:`. |
 | `rung` | Any type-ramp role, e.g. `display` for a cover title. Defaults to the field's own name. |
@@ -291,7 +317,7 @@ A background names **any pair the theme's palette declares**, or an image.
 | `accent-1`, `surface`, … | That pair's background colour, full bleed. Text takes that pair, so an accent nothing readable sits on is rejected rather than drawn. |
 | `{image: cover.png}` | The same painted surface, with your image over it. Resolved like any deck image: beside the deck spec first, then beside the theme's template, then out of the template's own `ppt/media/`. A relative name may not climb out of those directories with `..` — that name stays inside none of them — though an absolute path is still taken as written. Text takes the `inverse` pair. |
 
-The background is what decides the slide's colour pair, and a pair is contrast-checked when the theme loads. That is the whole reason it exists: a slide cannot end up with white text on a white surface, because the ink and the surface always come from the same validated pair.
+The background is what decides the slide's colour pair, and a pair is contrast-checked when the theme loads. Ink and surface always come from the same validated pair, so a slide cannot end up with white text on a white surface.
 
 **For a section opener, reach for the brand's accent before `inverse`.** A template's
 own colours live in its accents; the darkest slot of a `clrScheme` is pure black on
@@ -441,17 +467,31 @@ deck-local component into the library, are [`docs/extending.md`](extending.md).
 |---|---|---|
 | `kind` | **yes** | Which chart to draw. One of the [29 kinds](#all-29-chart-kinds). |
 | `data` | **yes** | The datapoints, one row per point. Non-empty list. |
-| `unit` | no | A unit on every data label — `%`, `k`, `pt`. A currency sign (`$`, `£`, `€`, `¥`, `₹`) is written *before* the number, everything else after. **Category-shaped kinds only**; an XY or bubble row has no single unit to carry, and one written there is accepted and does nothing. Written into the label's number format as a literal, so `36` reads `36%` without Excel's `%` code multiplying it by a hundred. Ignored on the `*-stacked-100` kinds, whose axis is already a percentage. |
+| `unit` | no | A unit on every data label — `%`, `k`, `pt`. A currency sign (`$`, `£`, `€`, `¥`, `₹`) is written *before* the number, everything else after. **Category-shaped kinds only**; an XY or bubble row has no single unit to carry, and one written there is accepted and does nothing. Written into the number format as a literal, so `36` reads `36%` without Excel's `%` code multiplying it by a hundred. The **value axis takes the same format**, so the scale and the values it frames agree. Ignored on the `*-stacked-100` kinds, whose axis is already a percentage. |
+| `decimals` | no | How many decimal places the data labels print, 0 to 6. Omit it and the places are read off the data — a series of `11.2, 9.6` labels to one place, whole numbers to none — so this is only for overriding that: `0` rounds a noisy series to whole numbers, a larger number pads to a fixed width. |
+| `labels` | no | Which named series print their data labels — a mapping of series name to `true` or `false`. Reach for it when a flat reference series would otherwise stamp the same number over every point: `labels: {Platform average: false}` keeps the line, its colour and its legend entry, and drops only its labels. Every series prints them by default and `true` is that default written out, so this key only ever takes labels away. It needs named series, which means `values:` rows — the `value:` shorthand and the xy/bubble kinds have one unnamed series and refuse it. |
 | `y_min` / `y_max` | no | Pin the value axis. Set them to stop auto-scaling from making a 12-point move look like a 90-point one. |
-| `annotate` | no | `{at, title, detail}` — `at` is a 0-based category index. **Validated but not drawn by any renderer.** Leave it out. |
 
 ```yaml
 chart:
   kind: bar
-  unit: "%"          # labels read 36%, 64% — not 3600%
+  unit: "%"          # labels and the value axis read 36%, 64% — not 3600%
   data:
     - {category: Urban, value: 36}
     - {category: Rural, value: 64, highlight: true}
+```
+
+A flat reference series repeats one number at every point, which says nothing after the
+first. `labels:` drops that series' labels and keeps everything else about it:
+
+```yaml
+chart:
+  kind: line-markers
+  unit: "%"
+  labels: {Platform average: false}   # the reference line keeps its line, drops its labels
+  data:
+    - {category: Jan, values: {Your store: 11.2, Platform average: 7}}
+    - {category: Feb, values: {Your store: 9.6, Platform average: 7}}
 ```
 
 No other field is accepted. There is no `colour`, no `legend`, no `title` inside the chart block — the slide's own `title:` is what names the chart, the legend appears by itself once there are two series, and colour is the theme's business.
@@ -646,6 +686,8 @@ What counts as a group for `one_at_a_time`:
 
 `by_category` and `by_series` on anything other than a chart is an error. Any value outside these five is an error listing all five. With several placements on a slide, `one_at_a_time` clicks through all of their groups in placement order.
 
+A slide's chrome never animates — the title and subtitle are on screen when the slide arrives, whatever `animate:` says. That is what lets a claim land a beat before its evidence.
+
 A slide carries **one** animation timeline. Two charts on one slide both asked to build is an error naming the collision — give one a slide of its own, or drop it to `together`.
 
 How a beat *looks* is the theme's, not the spec's: `motion.stagger_ms` cascades whatever a single click reveals — the whole slide under `together`, one group's parts under `one_at_a_time`. See [`theme.md`](theme.md#motion).
@@ -680,7 +722,7 @@ Leave it out and the slide takes whatever the theme says — which, for a theme 
 `motion.transition`, is no transition at all.
 
 > A still render cannot show a transition: `bin/run render` produces identical images
-> with and without one, and `pptxkit qa` never sees it. Only presentation mode does.
+> with and without one, and `deckwright qa` never sees it. Only presentation mode does.
 
 ---
 
@@ -723,7 +765,7 @@ Every aesthetic decision lives in the theme file — `templates/<name>.theme.yam
 | In the theme | Covers |
 |---|---|
 | `bind` | Semantic colour roles — `page`, `ink`, `muted`, `line`, `surface`, `inverse`, `accent-1`…`accent-N` — mapped onto slots in the brand template's own palette. Every unbound role keeps the design system's default, so a theme with no `bind:` still renders correctly. An accent bound to a slot that still holds Microsoft's shipped value is ignored. |
-| `type` | `face` (body) and `heading_face` (display), the mono face, and the size/bold/italic of every rung of the type ramp — `kicker`, `caption`, `body`, `lead`, `head`, `stat`, `subtitle`, `title`, `display`, `hero`. A rung states a **point size** at the theme's `reference_height` — `pt: 13.5` is 13.5pt on a 7.5in-tall slide and 27pt on a 15in one, so one theme reads correctly at any slide size. A ramp rung may name its own face — `face: heading`, `face: body`, or a literal typeface. Both faces fall back to the template's `fontScheme`, which is often stale — a template routinely declares one face while its slides use another — so a theme states them outright. |
+| `type` | `face` (body) and `heading_face` (display), the mono face, and the size/bold/italic of every rung of the type ramp — `kicker`, `caption`, `body`, `lead`, `head`, `stat`, `subtitle`, `title`, `display`, `hero`. A rung states a **point size** at the theme's `reference_height` — `pt: 13.5` is 13.5pt on a 7.5in-tall slide and 27pt on a 15in one, so one theme reads correctly at any slide size. A ramp rung may name its own face by role — `face: heading`, `face: body`, `face: mono` — or a literal typeface. Both faces fall back to the template's `fontScheme`, which is often stale — a template routinely declares one face while its slides use another — so a theme states them outright. |
 | `scale` | Page margins, the column grid, the gutter, and where the body starts below the title — all as fractions of the canvas. `left`, `right` and `gutter` are fractions of width; `top`, `bottom` and `body_top` fractions of height. The canvas itself comes from the template. |
 | `marks` | Art laid over a painted background. A mark's name *is* the background it decorates, so `marks.inverse` is the only one there is — any other name is rejected at load rather than silently ignored. Mark media is resolved beside the brand template or out of it, so `marks:` needs a `template:`. |
 | `compose_layout` | Names the template layout generated slides are built on. Optional — the compiler picks the emptiest layout across every master, and this is only needed when two equally empty layouts would compose differently, which it reports rather than guessing. |
@@ -745,9 +787,9 @@ When no built-in component fits, register your own in a Python module and point 
 
 ```python
 # my_components.py
-from pptxkit.layouts.components import component
-from pptxkit.layouts.registry import SlideCtx
-from pptxkit.utils.shapes import para, textbox
+from deckwright.layouts.components import component
+from deckwright.layouts.registry import SlideCtx
+from deckwright.utils.shapes import para, textbox
 
 
 @component("banner")
@@ -783,7 +825,7 @@ Rules for a custom component:
 - For accent *text*, use `ctx.accent(size_pt=...)` (hex, drawable via `ctx.rgb(...)`), not `ctx.color("accent-1")`: it keeps the accent only where it measurably reads at that size and falls back to the ink that does. If your component painted the fill the text sits on — a tile, a badge — measure against that fill with `ctx.accent_on(fill, size_pt=...)` / `ctx.ink_on(fill)`, not against the slide. `ctx.color(role)` is the unguarded read, for fills and strokes.
 - Pass `ctx.text_align()` to `para(align=...)` and `ctx.text_anchor()` to `textbox(anchor=...)` so the placement's `align:`/`anchor:` reach the type. A component that draws no type of its own calls `require_default_align(ctx)` instead, so those keys fail loudly rather than being ignored.
 - Draw inside `ctx.body_rect` — the rectangle its own placement resolved to, already clear of the theme's reserved regions.
-- **Record every shape you draw** with `ctx.manifest.record(shape, lines=..., font_pt=..., fg=..., bg=...)`. Nothing else records it. An unrecorded shape is absent from the build manifest, and `pptxkit qa` reads only the manifest — so bounds, reserved regions, minimum font size, contrast and render overflow all measure nothing for it and report clean. This fails silently: the slide looks right and QA agrees, which is the worst combination.
+- **Record every shape you draw** with `ctx.manifest.record(shape, lines=..., font_pt=..., fg=..., bg=...)`. Nothing else records it. An unrecorded shape is absent from the build manifest, and `deckwright qa` reads only the manifest — so bounds, reserved regions, minimum font size, contrast and render overflow all measure nothing for it and report clean. This fails silently: the slide looks right and QA agrees, which is the worst combination.
 - Return the reveal groups: a list of lists of shape ids, one inner list per revealable unit. Return `[]` for a component that does not animate.
 
 For the wider component API — `BodyResult`, reported heights, panels — see [`docs/pptx-deck-building.md`](pptx-deck-building.md).

@@ -1,5 +1,5 @@
-"""Validate the raw OOXML `pptxkit.motion` writes against ISO/IEC 29500-4:2016 — nothing else in the
-project can. LibreOffice converts schema-invalid timing to PDF without complaint and `pptxkit qa`
+"""Validate the raw OOXML `deckwright.motion` writes against ISO/IEC 29500-4:2016 — nothing else in the
+project can. LibreOffice converts schema-invalid timing to PDF without complaint and `deckwright qa`
 renders only a slide's final state; schema-valid is itself only a floor, since real PowerPoint is
 what says whether a file opens without a repair prompt. See `docs/pptx-deck-building.md`."""
 
@@ -17,14 +17,14 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.util import Inches
 
-from pptxkit.motion import (
+from deckwright.motion import (
     add_chart_build,
     add_click_build,
     add_click_reveals,
     add_click_sequence,
     add_transition,
 )
-from pptxkit.motion.transition import EFFECTS, SPEEDS
+from deckwright.motion.transition import EFFECTS, SPEEDS
 
 SCHEMA = pathlib.Path(__file__).parent / "schemas" / "ooxml" / "pml.xsd"
 _PML = "http://schemas.openxmlformats.org/presentationml/2006/main"

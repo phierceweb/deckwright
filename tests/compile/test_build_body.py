@@ -4,8 +4,8 @@ import textwrap
 import pytest
 from pptx import Presentation
 
-from pptxkit.compile import build_deck
-from pptxkit.compile.record import box_of
+from deckwright.compile import build_deck
+from deckwright.compile.record import box_of
 
 DECK = """
     theme: testtheme
@@ -47,7 +47,7 @@ def test_a_body_key_fails_the_build_pointing_at_the_new_shape(project):
     (project / "bad.deck.yaml").write_text(
         "theme: testtheme\nout: bad.pptx\n---\ntitle: T\nbody:\n  type: nonesuch\n"
     )
-    from pptxkit.errors import SpecError
+    from deckwright.errors import SpecError
 
     with pytest.raises(SpecError, match=r"'body' is gone.*'place:'"):
         build_deck(

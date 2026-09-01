@@ -29,14 +29,14 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-      - id: pptxkit-layers
-        name: pptxkit import-layering
+      - id: deckwright-layers
+        name: deckwright import-layering
         entry: bin/py bin/check-layers
         language: system
         pass_filenames: false
         always_run: true
-      - id: pptxkit-framework
-        name: pptxkit framework-first (pf-core)
+      - id: deckwright-framework
+        name: deckwright framework-first (pf-core)
         entry: bin/py bin/check-framework
         language: system
         pass_filenames: false

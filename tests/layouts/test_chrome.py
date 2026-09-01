@@ -1,10 +1,10 @@
 import pytest
 
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.chrome import CHROME_ORDER, ChromeField, chrome_bands, chrome_field
-from pptxkit.layouts.place import content_rect
-from pptxkit.theme.scale import Grid, Scale
-from pptxkit.utils.text import LINE_HEIGHT
+from deckwright.errors import LayoutError
+from deckwright.layouts.chrome import CHROME_ORDER, ChromeField, chrome_bands, chrome_field
+from deckwright.layouts.place import content_rect
+from deckwright.theme.scale import Grid, Scale
+from deckwright.utils.text import LINE_HEIGHT
 
 SCALE = Scale(slide_w=13.333, slide_h=7.5)
 GRID = Grid(
@@ -273,3 +273,64 @@ def test_a_column_chrome_line_still_pushes_the_content_band_down():
         {"title": (WRAPS, 31.2)}, fields={"title": ChromeField(at={"cols": (5, 12)})}, grid=GRID
     )
     assert content_rect(grid=GRID, chrome=placed).top > GRID.body_top
+
+
+def test_a_chrome_box_too_short_for_its_text_names_the_slide(theme):
+    """The most-met error in the project, and the only one of five in run 3 that did
+    not say which slide it was about."""
+    lines = {"title": ("A title long enough that it certainly wraps to two lines", 40.0)}
+    fields = {
+        "title": chrome_field(
+            {"at": {"box": {"x": "6%", "y": "20%", "w": "60%", "h": "8%"}}}, name="title"
+        )
+    }
+    with pytest.raises(LayoutError, match=r"^slide 7: chrome field 'title' wraps to"):
+        chrome_bands(lines, fields=fields, grid=theme.grid, slide=7)
+
+
+def _title_field(h):
+    return chrome_field({"at": {"box": {"x": "6%", "y": "20%", "w": "60%", "h": h}}}, name="title")
+
+
+def test_an_auto_height_box_takes_the_depth_its_text_wraps_to(theme):
+    """A hand-measured `h:` is tuned against one title at one rung, and every run of the
+    drift test has had a build fail because re-shuffling changed the title."""
+    short = chrome_bands(
+        {"title": ("Short", 40.0)}, fields={"title": _title_field("auto")}, grid=theme.grid
+    )
+    long = chrome_bands(
+        {"title": ("A title long enough that it certainly wraps to several lines", 40.0)},
+        fields={"title": _title_field("auto")},
+        grid=theme.grid,
+    )
+    assert long[0].rect.height > short[0].rect.height
+
+
+def test_an_auto_height_box_never_refuses_its_own_text(theme):
+    """The declared-height branch raises when the text outgrows the box; `auto` has no
+    declared height to outgrow."""
+    bands = chrome_bands(
+        {"title": ("A title long enough that it certainly wraps to several lines", 40.0)},
+        fields={"title": _title_field("auto")},
+        grid=theme.grid,
+        slide=1,
+    )
+    assert bands[0].rect.height > 0
+
+
+def test_a_declared_height_still_refuses_text_that_outgrows_it(theme):
+    """`auto` is opt-in; a number keeps meaning exactly what it did."""
+    with pytest.raises(LayoutError, match="wraps to"):
+        chrome_bands(
+            {"title": ("A title long enough that it certainly wraps to several lines", 40.0)},
+            fields={"title": _title_field("8%")},
+            grid=theme.grid,
+        )
+
+
+def test_an_auto_height_box_keeps_the_top_it_was_given(theme):
+    """Only the depth is content-sized; x, y and w are still the author's."""
+    bands = chrome_bands(
+        {"title": ("Short", 40.0)}, fields={"title": _title_field("auto")}, grid=theme.grid
+    )
+    assert bands[0].rect.top == pytest.approx(0.20 * theme.grid.slide_h)

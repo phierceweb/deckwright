@@ -15,29 +15,28 @@ import pathlib
 
 import pytest
 
-from pptxkit.conform import conform
-from pptxkit.qa.geometry import (
+from deckwright.conform import conform
+from deckwright.qa.geometry import (
     check_bounds,
     check_contrast,
     check_placement_fit,
     check_reserved,
 )
-from pptxkit.conform.sample import is_sample
-from pptxkit.qa.package import check_package
-from pptxkit.theme import load_theme
+from deckwright.conform.sample import is_sample
+from deckwright.qa.package import check_package
+from deckwright.theme import load_theme
 
 SAMPLES = pathlib.Path(__file__).resolve().parents[1] / "templates"
-# A -4-3 file is the same design at another aspect, so one of each pair is enough; a generated
-# `pptxkit sample` is refused by its own docProps mark, since it varies in nothing.
+# The aspect is exactly what a fixed percentage stops fitting at, so a -4-3 file earns its
+# own run rather than being folded into its 16:9 twin; a generated `deckwright sample` is
+# refused by its own docProps mark, since it varies in nothing.
 TEMPLATES = (
-    sorted(p for p in SAMPLES.glob("*.pptx") if not p.stem.endswith("-4-3") and not is_sample(p))
-    if SAMPLES.is_dir()
-    else []
+    sorted(p for p in SAMPLES.glob("*.pptx") if not is_sample(p)) if SAMPLES.is_dir() else []
 )
 
 #: Release gate. Unset, any number of templates is accepted; set, a thinner set fails
 #: rather than passing quietly.
-_MIN_ENV_VAR = "PPTXKIT_TEMPLATES_MIN"
+_MIN_ENV_VAR = "DECKWRIGHT_TEMPLATES_MIN"
 
 
 def _required_templates() -> int:
@@ -83,7 +82,7 @@ def built(request, tmp_path_factory):
 
 def _derived(built) -> dict:
     """The theme YAML `conform` wrote — what `derive` actually decided. Read as YAML, never through
-    `load_theme`, which fills every unbound role from pptxkit's own defaults."""
+    `load_theme`, which fills every unbound role from deckwright's own defaults."""
     import yaml
 
     return yaml.safe_load(pathlib.Path(built.theme).read_text())
@@ -93,7 +92,7 @@ def _scheme_of(built) -> dict[str, str]:
     """The template's own clrScheme, so a bound slot can be resolved to a colour."""
     from pptx import Presentation
 
-    from pptxkit.theme.clrscheme import parse_color_scheme, read_theme_xml
+    from deckwright.theme.clrscheme import parse_color_scheme, read_theme_xml
 
     # Through the theme's own pointer, which is how the loader reaches it — nothing
     # copies the binary any more, so a hardcoded layout here would be a second guess.
@@ -146,7 +145,7 @@ def test_no_text_is_unreadable_on_what_was_really_painted_behind_it(built):
     warning is a brand accent a percent under AA rather than a defect."""
     import json
 
-    from pptxkit.qa.model import Severity
+    from deckwright.qa.model import Severity
 
     manifest = json.loads(built.deck.with_suffix(".manifest.json").read_text())
     theme = load_theme(built.theme)
@@ -222,7 +221,7 @@ def test_nothing_intrudes_on_a_region_the_brand_reserves(built):
 def test_every_brand_accent_the_template_owns_is_bound(built):
     """Skipped for a template that never edited the Office palette: it has no brand to bind, which
     is a fact about that template, not a defect. Asserted against `derive`'s own `bind` —
-    `Theme.palette.accents` is filled from pptxkit's defaults when nothing was bound."""
+    `Theme.palette.accents` is filled from deckwright's defaults when nothing was bound."""
     if not _brand_accents_in_scheme(built):
         pytest.skip(f"{built.template}: every accent slot holds a stock Office colour")
     assert _bound_accents(built), (

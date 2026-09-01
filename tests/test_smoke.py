@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-from pptxkit.cli import app
+from deckwright.cli import app
 
 runner = CliRunner()
 

@@ -18,14 +18,14 @@ build → render → QA loop; this doc is the reference for the compiler itself.
 
 ## Calling it from Python
 
-`pptxkit.build_deck` is the compiler as a function, re-exported from the package for a
+`deckwright.build_deck` is the compiler as a function, re-exported from the package for a
 caller generating specs rather than writing them:
 
 ```python
-import pptxkit
+import deckwright
 
-result = pptxkit.build_deck("deck.deck.yaml")          # theme from the spec's `theme:`
-result = pptxkit.build_deck("deck.deck.yaml", theme_path="templates/brand.theme.yaml",
+result = deckwright.build_deck("deck.deck.yaml")          # theme from the spec's `theme:`
+result = deckwright.build_deck("deck.deck.yaml", theme_path="templates/brand.theme.yaml",
                             out="out/deck/Deck v2.pptx")
 print(result.deck, result.manifest, result.slides)
 ```
@@ -35,19 +35,19 @@ the exceptions the package exports: `SpecError`, `ThemeError`, `LayoutError`,
 `MissingToolError` when an external tool is absent, and `RenderError` when one ran and
 failed.
 
-`pptxkit.load_theme` reads a theme without building anything, taking either a bare theme
+`deckwright.load_theme` reads a theme without building anything, taking either a bare theme
 name — resolved the same way a spec's `theme:` is — or a path to a theme file:
 
 ```python
-theme = pptxkit.load_theme("base")                     # the packaged built-in
-theme = pptxkit.load_theme("acme")                     # templates/acme.theme.yaml
-theme = pptxkit.load_theme("templates/acme.theme.yaml")  # an explicit file
-theme = pptxkit.load_theme()                           # the design system, no template
+theme = deckwright.load_theme("base")                     # the packaged built-in
+theme = deckwright.load_theme("acme")                     # templates/acme.theme.yaml
+theme = deckwright.load_theme("templates/acme.theme.yaml")  # an explicit file
+theme = deckwright.load_theme()                           # the design system, no template
 print(theme.palette.pair("page"), theme.grid.columns)
 ```
 
 A name that resolves to nothing raises `ThemeError` naming the directory searched, the
-`PPTXKIT_THEME_DIR` that moves it, and the `pptxkit conform … --adopt` that creates the
+`DECKWRIGHT_THEME_DIR` that moves it, and the `deckwright conform … --adopt` that creates the
 file; a path that does not exist is reported as a path, not as an unknown name.
 
 There is no Python API for *composing* a slide. Components are chosen by name in the
@@ -78,7 +78,7 @@ place by the one after it:
    exists and the packaged built-in otherwise, unless `theme_path` overrides both. That
    fallback is what lets `theme: base` resolve from an installed wheel with no checkout
    around it, and a same-named file in the theme directory always wins. `theme_dir()`
-   reads `PPTXKIT_THEME_DIR` at call time, never at import — copy that shape for a new
+   reads `DECKWRIGHT_THEME_DIR` at call time, never at import — copy that shape for a new
    knob. Both resolvers live beside `load_theme`, one layer below the compiler, so a
    caller can load a theme by name without importing the build.
 2. **Open the starting presentation, drop the template's slides, flatten the master
@@ -95,9 +95,9 @@ place by the one after it:
 5. **Set `manifest.provenance`, then write the manifest.** Provenance carries `deck_hash`,
    so it cannot be assembled until the deck exists — which is why a build interrupted
    mid-deck leaves no manifest at all, the honest state.
-6. **Write `<deck>.content.md`** from the same recorder.
+6. **Write `<deck>.content.md` and `<deck>.beats.md`** from the same recorder.
 
-`build_id` is a digest of the spec hash, the theme hash and the pptxkit version, so the
+`build_id` is a digest of the spec hash, the theme hash and the deckwright version, so the
 same three inputs give the same id. `_version()` records `"unknown"` when nothing is
 installed rather than guessing — a fabricated version is worse than an absent one.
 
@@ -245,7 +245,7 @@ build machine had.
 ## The spec snapshot
 
 Every build copies the spec that made it to `<out dir>/.build/<deck stem>.deck.yaml`
-(`SCRATCH` in `src/pptxkit/paths.py`; use `scratch(outdir)` rather than the literal). One
+(`SCRATCH` in `src/deckwright/paths.py`; use `scratch(outdir)` rather than the literal). One
 snapshot per version, so overwriting a spec leaves the builds that came from earlier
 states of it still rebuildable.
 
@@ -267,6 +267,14 @@ labelled with its component (`*(chart)*`) so a slide that is one chart does not 
 empty — except for the components in `_UNSPOKEN`, which are the slide's own paint, a
 divider and a join, and say nothing a reader wants. It is written from the same
 `to_dict()` that produced the JSON, so the two cannot disagree.
+
+**`<deck>.beats.md`** (`compile/beats.py`) is the same build's *timing*: which click
+reveals what, in words. Its section headings carry the slide **title**, not just the index,
+so a diff across two builds shows an animation that moved to a different slide — the failure
+a count of animated slides reports as no change. It reads `clicks` off each recorded
+animation rather than counting steps, because those differ: `animate: together` fades every
+group onto one click, an `after_previous` chain spends one for the whole build, a chart build
+spends one per part plus one for its axes, and an interactive `reveals:` spends none.
 
 **Read-back** (`compile/readback.py`) compares a deck on disk against the manifest that
 built it. `_edited` hashes the file and compares against `deck_hash`; the shape comparison

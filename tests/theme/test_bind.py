@@ -5,9 +5,9 @@ import logging
 
 import pytest
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme import load_theme
-from pptxkit.theme.defaults import DEFAULT_ROLES
+from deckwright.errors import ThemeError
+from deckwright.theme import load_theme
+from deckwright.theme.defaults import DEFAULT_ROLES
 
 
 def _midtone_template(tmp_path) -> pathlib.Path:
@@ -218,3 +218,13 @@ def test_a_value_that_is_neither_a_slot_nor_a_colour_is_rejected(tmp_path, synth
     body = BASE.replace("      page: lt1", "      page: navyish")
     with pytest.raises(ThemeError, match="unknown template slot 'navyish'"):
         load_theme(_write(tmp_path, synthetic_template, body))
+
+
+def test_a_literal_accent_is_kept_even_when_it_equals_a_stock_office_colour(
+    tmp_path, synthetic_template
+):
+    """The stock-accent guard means "the brand edited no slot here". A literal is what
+    the author typed, so it survives whatever it happens to equal."""
+    body = BASE.replace("      page: lt1", "      page: lt1\n      accent-1: '4472C4'")
+    theme = load_theme(_write(tmp_path, synthetic_template, body))
+    assert theme.palette.role("accent-1") == "4472C4"

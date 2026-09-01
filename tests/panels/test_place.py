@@ -3,14 +3,14 @@ import io
 import pytest
 from PIL import Image
 
-from pptxkit.panels.model import Panel, Region
-from pptxkit.panels.place import place_panel
+from deckwright.panels.model import Panel, Region
+from deckwright.panels.place import place_panel
 
 
 @pytest.fixture
 def fake_render(tmp_path, monkeypatch):
     """Stand in for headless Chrome: write a solid PNG of the requested size."""
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
 
     def render(html, path, width, scale):
         Image.new("RGB", (width * scale, 400 * scale), "white").save(path)
@@ -42,7 +42,7 @@ def test_slicing_places_one_picture_per_region(ctx_factory, fake_render):
 
 
 def test_the_panel_renders_only_once_when_sliced(ctx_factory, tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
     calls = []
 
     def render(html, path, width, scale):
@@ -93,7 +93,7 @@ def test_every_sliced_picture_is_recorded_as_an_image(ctx_factory, fake_render):
 
 
 def test_slicing_an_unregioned_panel_is_rejected(ctx_factory, fake_render):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"title": "T"})
     with pytest.raises(LayoutError, match="no regions"):
@@ -109,7 +109,7 @@ def test_slicing_an_unregioned_panel_is_rejected(ctx_factory, fake_render):
 
 
 def test_width_and_height_are_mutually_exclusive(ctx_factory, fake_render):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"title": "T"})
     with pytest.raises(LayoutError, match="exactly one"):
@@ -125,7 +125,7 @@ def test_width_and_height_are_mutually_exclusive(ctx_factory, fake_render):
 
 
 def test_max_height_rejects_a_picture_taller_than_the_budget(ctx_factory, fake_render):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"title": "T"})
     # fake_render's fixed aspect makes width=6.0 place ~3.43in tall — over a 1.0in budget.
@@ -156,7 +156,7 @@ def test_a_picture_within_the_budget_is_placed_normally(ctx_factory, fake_render
 
 
 def test_a_region_that_overflows_the_rendered_panel_is_rejected(ctx_factory, fake_render):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"title": "T"})
     # fake_render always renders a fixed 400px-tall panel; this region's bottom edge
@@ -167,7 +167,7 @@ def test_a_region_that_overflows_the_rendered_panel_is_rejected(ctx_factory, fak
 
 
 def test_each_region_is_cut_from_its_own_part_of_the_panel(ctx_factory, tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path))
 
     def render(html, path, *, width, scale):
         img = Image.new("RGB", (width * scale, 400 * scale), "red")

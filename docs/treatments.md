@@ -39,6 +39,13 @@ it.** Only the first choice has a doc. A deck where every slide is individually 
 all of them are the same rectangle is a deck nobody watches, and no per-slide test will ever
 say so.
 
+**Let the claim land before the evidence.** [`choosing.md`](choosing.md) says the chart's only
+job is to make the title visible, and it follows that the two should not arrive together — a
+chart that appears with its own headline competes with it. A slide's chrome is never part of a
+build, so `animate: together` leaves the title and subtitle on screen and holds the body back a
+click. One beat of separation is usually enough, and a deck built to be read rather than
+presented has none to spend.
+
 ## The intent table
 
 The rows below are the treatments *not* reached by having numbers or arrows. With either of
@@ -126,6 +133,11 @@ scale:
 - `examples/tables.deck.yaml` — ten consecutive table slides, three of them the same
   rows with `rules:` changed.
 
+**The run test applies to motion too.** Read the `animate:` values in the same pass. Five
+slides that each reveal in three left-to-right beats teach the room the rhythm, and the
+reveal stops carrying meaning — the build is pacing the deck instead of the content. No
+number attaches to this one; the tell is a click that stops changing what the room learns.
+
 **A long run is sometimes right.** A catalogue, a chart appendix, a reference deck: the
 repetition *is* the structure. The test is not "never repeat" — it is know the number and
 decide it on purpose.
@@ -209,11 +221,11 @@ writing one:
 
 1. Check the two catalogues that route by information shape rather than by name —
    [`choosing.md`](choosing.md#the-intent-table) and [`flows.md`](flows.md#the-six-shapes).
-   Both also name what pptxkit cannot draw, and what to build instead.
+   Both also name what deckwright cannot draw, and what to build instead.
 2. Try the composition. Levers 3 and 5 above cover most of what looks like a missing
    component.
 3. If it is genuinely new, the API is
    [`authoring.md`](authoring.md#adding-a-component-the-spec-cannot-express) and the traps and
    promotion checklist are [`extending.md`](extending.md). An exercise in
-   `src/pptxkit/conform/exercise.py` is how it gets tested, and a row in the cost table above
+   `src/deckwright/conform/` is how it gets tested, and a row in the cost table above
    is how anyone else finds it.

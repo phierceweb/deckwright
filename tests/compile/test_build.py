@@ -7,14 +7,14 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
-from pptxkit.compile import build_deck
-from pptxkit.compile.build import _drop_template_slides
-from pptxkit.errors import SpecError, ThemeError
-from pptxkit.theme.chartstyle import ChartStyle
-from pptxkit.theme import Grid, Scale
-from pptxkit.theme.defaults import DEFAULT_PAIRS
-from pptxkit.theme.model import Theme, TypeStyle
-from pptxkit.theme.palette import build_palette
+from deckwright.compile import build_deck
+from deckwright.compile.build import _drop_template_slides
+from deckwright.errors import SpecError, ThemeError
+from deckwright.theme.chartstyle import ChartStyle
+from deckwright.theme import Grid, Scale
+from deckwright.theme.defaults import DEFAULT_PAIRS
+from deckwright.theme.model import Theme, TypeStyle
+from deckwright.theme.palette import build_palette
 
 FIXTURE_ROLES = {
     "page": "FFFFFF",
@@ -93,6 +93,40 @@ def test_out_override_wins_over_the_spec(project, tmp_path):
     dest = tmp_path / "elsewhere" / "Other.pptx"
     result = build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml", out=dest)
     assert result.deck == dest and dest.is_file()
+
+
+def test_out_pointing_at_the_spec_itself_is_refused(project):
+    """A deck written over its own spec leaves nothing to rebuild from — `out/` is
+    disposable only while its spec exists. Drop the identity check and the spec comes back
+    as the deck's own bytes, with no error."""
+    spec = project / "d.deck.yaml"
+    before = spec.read_bytes()
+
+    with pytest.raises(SpecError, match="is the spec being compiled"):
+        build_deck(spec, theme_path=project / "testtheme.yaml", out=spec)
+
+    assert spec.read_bytes() == before
+
+
+@pytest.mark.parametrize("name", ["other.yaml", "other.yml", "Other.YAML", "d.deck.yml"])
+def test_out_naming_any_yaml_path_is_refused(project, tmp_path, name):
+    """The identity check alone misses `--out` a directory or a character off the spec,
+    which is how it lands on one. A deck is never written to a YAML path."""
+    with pytest.raises(SpecError, match="is a YAML path"):
+        build_deck(
+            project / "d.deck.yaml", theme_path=project / "testtheme.yaml", out=tmp_path / name
+        )
+
+
+def test_rebuilding_over_an_existing_deck_is_still_allowed(project):
+    """The guard is about specs, not about existence: rebuilding is the normal case and a
+    blanket exists-check would break every second build."""
+    first = build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml")
+    assert first.deck.is_file()
+
+    again = build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml")
+
+    assert again.deck == first.deck and again.deck.is_file()
 
 
 def test_a_failed_save_leaves_the_previous_deck_intact(project, monkeypatch):
@@ -185,8 +219,8 @@ def test_a_deck_with_no_out_and_no_override_is_rejected(project):
 def test_extends_module_components_are_available(project):
     (project / "ext.py").write_text(
         textwrap.dedent("""
-        from pptxkit.layouts.components import component
-        from pptxkit.utils.shapes import para, textbox
+        from deckwright.layouts.components import component
+        from deckwright.utils.shapes import para, textbox
 
         @component("t-custom-body")
         def custom(ctx):
@@ -239,7 +273,7 @@ def test_theme_dir_env_var_redirects_theme_lookup(project, monkeypatch, tmp_path
     (custom_dir / "testtheme.theme.yaml").write_text(
         (project / "testtheme.yaml").read_text().replace("assets/t.pptx", "t.pptx")
     )
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(custom_dir))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(custom_dir))
 
     result = build_deck(project / "d.deck.yaml", out=project / "env_out.pptx")
 
@@ -457,33 +491,33 @@ def test_a_theme_name_missing_from_the_theme_dir_resolves_to_the_packaged_builti
     tmp_path, monkeypatch
 ):
     """An install with no `templates/` dir; `theme: base` must still build."""
-    from pptxkit.compile.build import resolve_theme
+    from deckwright.compile.build import resolve_theme
 
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path / "no-such-dir"))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path / "no-such-dir"))
     resolved = resolve_theme("base")
     assert resolved.is_file()
     assert resolved.parent.name == "builtin"
 
 
 def test_a_theme_dir_file_wins_over_the_packaged_builtin(tmp_path, monkeypatch):
-    from pptxkit.compile.build import resolve_theme
+    from deckwright.compile.build import resolve_theme
 
     (tmp_path / "base.theme.yaml").write_text("name: local\n")
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     assert resolve_theme("base") == tmp_path / "base.theme.yaml"
 
 
 def test_an_unknown_theme_name_resolves_to_the_theme_dir_candidate(tmp_path, monkeypatch):
     """The not-found error must name the directory the caller controls, not the package."""
-    from pptxkit.compile.build import resolve_theme
+    from deckwright.compile.build import resolve_theme
 
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     assert resolve_theme("nope") == tmp_path / "nope.theme.yaml"
 
 
 def test_a_deck_naming_base_builds_with_no_theme_dir_at_all(tmp_path, monkeypatch):
     """End to end: the fallback reaches build_deck, not just the resolver."""
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path / "no-such-dir"))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path / "no-such-dir"))
     spec = tmp_path / "d.deck.yaml"
     spec.write_text("theme: base\nout: Demo.pptx\n---\ntitle: Hello\n")
     result = build_deck(spec)
@@ -494,7 +528,7 @@ def test_a_deck_naming_base_builds_with_no_theme_dir_at_all(tmp_path, monkeypatc
 def test_an_unknown_spec_theme_name_is_reported_as_a_name(tmp_path, monkeypatch):
     """Resolving to a path before loading turned a bad `theme:` into 'file not found:
     /abs/candidate.theme.yaml', which names neither the name nor the way to fix it."""
-    monkeypatch.setenv("PPTXKIT_THEME_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     spec = tmp_path / "d.deck.yaml"
     spec.write_text("theme: acme\nout: Demo.pptx\n---\ntitle: Hello\n")
 

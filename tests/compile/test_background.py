@@ -6,7 +6,7 @@ from pptx import Presentation
 from pptx.oxml import parse_xml
 from pptx.oxml.ns import nsdecls, qn
 
-from pptxkit.compile.background import _flatten, flatten_master_background
+from deckwright.compile.background import _flatten, flatten_master_background
 
 _BG_EMBED = re.compile(rb"<p:bg>.*?r:embed=\"(rId\d+)\"", re.DOTALL)
 

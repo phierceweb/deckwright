@@ -1,5 +1,5 @@
 """Every chart module must import cleanly in a fresh interpreter — a plain pytest run
-cannot see a cycle here, because ``conftest`` resolves ``pptxkit.layouts`` first."""
+cannot see a cycle here, because ``conftest`` resolves ``deckwright.layouts`` first."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-_CHART_MODULES = ("pptxkit.charts.model", "pptxkit.charts.native")
+_CHART_MODULES = ("deckwright.charts.model", "deckwright.charts.native")
 
 
 @pytest.mark.parametrize("module", _CHART_MODULES)

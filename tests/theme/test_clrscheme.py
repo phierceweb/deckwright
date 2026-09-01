@@ -3,8 +3,8 @@ import types
 import pytest
 from pptx import Presentation
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme.clrscheme import parse_color_scheme, parse_font_scheme, read_theme_xml
+from deckwright.errors import ThemeError
+from deckwright.theme.clrscheme import parse_color_scheme, parse_font_scheme, read_theme_xml
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 

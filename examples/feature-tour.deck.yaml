@@ -1,21 +1,21 @@
 theme: base
-title: pptxkit
+title: deckwright
 sections:
 - Chrome
 - Theme
 - Spec
 - QA
-out: ../out/feature-tour/pptxkit Feature Tour.pptx
+out: ../out/feature-tour/deckwright Feature Tour.pptx
 ---
 background: inverse
 kicker: THE FEATURE TOUR
-title: pptxkit
+title: deckwright
 subtitle: Decks compiled from a spec, not assembled by hand
 chrome:
   kicker: {at: {box: {x: 5.5%, y: 52%, w: 50%, h: 5%}}, anchor: bottom}
   title: {at: {box: {x: 5.5%, y: 57%, w: 75%, h: 14%}}, rung: display, anchor: bottom}
   subtitle: {at: {box: {x: 5.5%, y: 72%, w: 60%, h: 6%}}, anchor: top}
-notes: 'Every slide after this one was produced by `pptxkit build` from a single
+notes: 'Every slide after this one was produced by `deckwright build` from a single
 
   YAML file, and no Python at all — every body on it is a component that ships.
 
@@ -94,7 +94,7 @@ notes: 'A bind: never lists a hex value. It says ink -> dk1, accent-1 -> accent1
 
   '
 place:
-- at: {cols: full, rows: {from: 0, to: 7}}
+- at: {cols: full, rows: {from: 0, to: 8}}
   swatches:
     roles:
     - ink
@@ -103,26 +103,25 @@ place:
     - accent-3
     - muted
     - line
-    caption: Every role a theme leaves unbound keeps the design system's own default, and the values
-      above were read out of the .pptx at build time.
-- at: {cols: full, rows: {from: 7, to: 12}}
+    caption: Every value above was read out of the .pptx at build time.
+- at: {cols: full, rows: {from: 8, to: 12}}
   split:
   - card:
       pair: accent-1
       heading: accent-1
-      body: A pair is a ground and the ink already checked against it.
+      body: A ground, and ink checked against it.
   - card:
       pair: accent-2
       heading: accent-2
-      body: The ink comes from the pair, so no component picks its own.
+      body: The pair supplies the ink.
   - card:
       pair: accent-3
       heading: accent-3
-      body: Every pair clears WCAG AA before a shape is drawn.
+      body: Every pair clears WCAG AA.
   - card:
       pair: inverse
       heading: inverse
-      body: A pair below AA is logged at build and failed by qa, never shipped quietly.
+      body: Below AA fails qa, never ships.
 ---
 kicker: THEME
 title: The grid every placement resolves against
@@ -196,7 +195,7 @@ place:
       heading: my_components.py
       accent: ['@component']
       lines:
-      - from pptxkit.layouts.components import component
+      - from deckwright.layouts.components import component
       - ''
       - '@component("org-chart")'
       - 'def org_chart(ctx):'
@@ -618,7 +617,7 @@ kicker: QA
 title: What the checker catches
 subtitle: Every check reads the manifest the build already writes — no second source of truth
 section: QA
-notes: 'Run as `pptxkit qa <deck>.pptx`. The manifest records what the build intended;
+notes: 'Run as `deckwright qa <deck>.pptx`. The manifest records what the build intended;
 
   the checks compare that against the geometry and, for overflow, against a real render.
 
@@ -715,7 +714,7 @@ place:
     caption: The component reports how tall it came out; the layout bounds it from that.
 ---
 background: inverse
-title: pptxkit
+title: deckwright
 notes: Close on the two commands that produced this deck.
 place:
 - at: {cols: full}

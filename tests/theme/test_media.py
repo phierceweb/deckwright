@@ -8,14 +8,14 @@ from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.errors import ThemeError
-from pptxkit.theme.media import resolve_media
+from deckwright.errors import ThemeError
+from deckwright.theme.media import resolve_media
 
 
 @pytest.fixture(autouse=True)
 def _isolated_cache(tmp_path, monkeypatch):
     """Redirect the module's cache dir under tmp_path so tests never write into the repo."""
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "cache"))
 
 
 @pytest.fixture
@@ -63,12 +63,12 @@ def test_media_absent_loosely_is_extracted_from_the_template(template_with_media
     assert result.stat().st_size > 0
 
 
-def test_the_extracted_copy_lands_under_pptxkit_cache_dir(
+def test_the_extracted_copy_lands_under_deckwright_cache_dir(
     template_with_media, tmp_path, monkeypatch
 ):
     """The env var is the only way to move extracted art off the default relative
-    ``.pptxkit-cache`` — an operator who redirects it must not still get the default."""
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path / "elsewhere"))
+    ``.deckwright-cache`` — an operator who redirects it must not still get the default."""
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "elsewhere"))
     name = _embedded_media_name(template_with_media)
 
     result = resolve_media(name, template=template_with_media)
@@ -110,7 +110,7 @@ def test_a_climbing_name_is_refused_before_anything_is_written(tmp_path, monkeyp
     with zipfile.ZipFile(evil) as archive:
         assert "ppt/media/../../escaped.txt" in archive.namelist()
 
-    monkeypatch.setenv("PPTXKIT_CACHE_DIR", str(tmp_path / "cache" / "deep" / "deeper"))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "cache" / "deep" / "deeper"))
     before = {p for p in tmp_path.rglob("*") if p.is_file()}
 
     with pytest.raises(ThemeError, match="climbs out"):

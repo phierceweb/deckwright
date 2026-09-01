@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from pptx import Presentation
 
-from pptxkit.conform import demo as demo_mod
-from pptxkit.conform.demo import demo
-from pptxkit.errors import ThemeError
+from deckwright.conform import demo as demo_mod
+from deckwright.conform.demo import demo
+from deckwright.errors import ThemeError
 
 
 def test_an_unknown_theme_names_where_it_looked(tmp_path):

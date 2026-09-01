@@ -13,7 +13,7 @@ import re
 import pytest
 from rich.console import Console
 
-SRC = pathlib.Path(__file__).resolve().parents[1] / "src/pptxkit"
+SRC = pathlib.Path(__file__).resolve().parents[1] / "src/deckwright"
 _BRACKETED = re.compile(r"\[[^\[\]\n]{1,60}\]")
 
 

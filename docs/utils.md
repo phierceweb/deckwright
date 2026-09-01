@@ -1,8 +1,9 @@
 # Utils — the shared primitives, and why none of them is a pf-core call
 
-What lives in `src/pptxkit/utils/`: colour maths, string measurement, the fraction
-vocabulary, polygon geometry, and the python-pptx primitives every component draws
-with. This doc covers what each module is for, the constraints that keep it callable
+What lives in `src/deckwright/utils/`: colour maths, string measurement, the fraction
+vocabulary, polygon geometry, the deck-name rules, the one wording for an unknown key,
+the typed narrowing over pf-core's env resolver, and the python-pptx primitives every
+component draws with. This doc covers what each module is for, the constraints that keep it callable
 from every layer above it, and the pf-core check each one has already been through.
 
 These are library internals with no project content in them. Nothing here reads a deck
@@ -21,6 +22,9 @@ with teeth, and `bin/check-framework` is what enforces it.
 - [`color.py` — the WCAG maths](#colorpy--the-wcag-maths)
 - [`text.py` and `_metrics.py` — measuring a string](#textpy-and-_metricspy--measuring-a-string)
 - [`spans.py` — names, never inches](#spanspy--names-never-inches)
+- [`naming.py` — one answer per deck name](#namingpy--one-answer-per-deck-name)
+- [`keys.py` — one wording for an unknown key](#keyspy--one-wording-for-an-unknown-key)
+- [`env.py` — the resolver, narrowed to `str`](#envpy--the-resolver-narrowed-to-str)
 - [`poly.py` — reserved-region geometry](#polypy--reserved-region-geometry)
 - [`shapes.py` and `deck.py` — the python-pptx primitives](#shapespy-and-deckpy--the-python-pptx-primitives)
 - [`xml.py` — parsing XML somebody else wrote](#xmlpy--parsing-xml-somebody-else-wrote)
@@ -30,10 +34,10 @@ with teeth, and `bin/check-framework` is what enforces it.
 ## The tier utils sits in
 
 `bin/check-layers` ranks `utils` at L2, beside `motion` and `services`. It may import
-the standard library, python-pptx, and the L1 modules — `src/pptxkit/errors.py`,
+the standard library, python-pptx, and the L1 modules — `src/deckwright/errors.py`,
 `config.py`, `paths.py`. It may not import `theme`, `spec`, `layouts`, `components`,
 `charts`, `qa` or anything above them, and the refusal is exercised rather than assumed:
-`tests/test_layer_gate.py` writes `import pptxkit.components` into a copy of
+`tests/test_layer_gate.py` writes `import deckwright.components` into a copy of
 `utils/deck.py` and asserts the gate exits 1 naming it.
 
 That rank is the whole admission test. **A helper that needs the theme, the grid or a
@@ -56,7 +60,7 @@ Two consequences, both easy to break by habit:
 `AA_NORMAL` / `AA_LARGE` / `LARGE_PT` constants. `theme/palette.py`, every component that
 picks ink against a fill, `imagery/scrim.py`'s auto-opacity solve and `qa/geometry.py`'s
 contrast check all decide against this one implementation, so a slide that passes at
-build time and a `pptxkit qa` finding cannot disagree about what 4.5:1 means.
+build time and a `deckwright qa` finding cannot disagree about what 4.5:1 means.
 
 The constants stay in code and out of both the theme and the environment. WCAG's
 thresholds are the standard the QA check claims to implement, not an operational knob —
@@ -145,6 +149,57 @@ Two design points to preserve when adding a name or a parser:
   that is deliberate: an axis key that is neither `cols` nor `rows` is a caller's
   mistake, not an author's, so it has no place in an error an author will read.
 
+## `naming.py` — one answer per deck name
+
+`slug_and_title(name)` returns a deck's directory name and its display title from
+whichever of the two was typed; `deck_filename(title)` folds the separators a path would
+read (`/`, `\`, `:`) out of a leaf filename; `NO_FOLD` is the PyYAML dump width that
+keeps a long title on one line.
+
+Like `spans.py` it is here for its two readers: `compile/scaffold.py` writes the spec for
+a new deck and `spec/draft.py` writes one drafted from a `.pptx` deckwright did not build.
+Both have to land on the same directory and the same `out:` path for the same name.
+
+The slug keeps letters and digits only, so a name carrying a slash or a `..` cannot steer
+a write out of the deck root. Case past a word's first letter survives, so `ML-pipeline`
+titles as *ML Pipeline*. A name with nothing left after slugging raises `SpecError` unless
+the caller passed a `fallback`.
+
+## `keys.py` — one wording for an unknown key
+
+`unknown_field(key, known, *, where=, lead=, label=, suggest=)` is the sentence every
+"you named a key nobody declared" error ends in, and `prose_hint(key)` is the clause it
+appends when the key holds a space. Spec parsing, placement, charts, the shape
+components and the theme's chart block all raise through it, so `docs/errors.md` can
+document one shape and an author sees the same wording from every layer.
+
+Two behaviours to keep when touching it:
+
+- **A key with a space in it is an unquoted comma.** Every declared field is snake_case,
+  so a space means YAML split a flow mapping and truncated the value with it. The hint
+  says to quote the value, and the "did you mean" suggestion is suppressed for that key:
+  the nearest spelling of `items: one, two` is never the answer.
+- **The caller owns the sentence around it.** Pass `where=` for a full message, or
+  leave it off for a fragment the caller prefixes; `lead=` and `label=` are the only
+  wording that differs between callers. Do not build a second unknown-key message by
+  hand — the `errors.md` rows quote this one.
+
+## `env.py` — the resolver, narrowed to `str`
+
+`env_str(arg, env_var, *, default=)` is `pf_core.utils.env.resolve_str` with its return
+narrowed from `str | None` to `str`. Every deckwright knob passes a real default, so the
+None arm never happens; the wrapper says so once for the type checker instead of at each
+call site. Use it for every `DECKWRIGHT_*` string knob — a binary path, a directory — and
+keep the precedence it gives you: the caller's argument, then the variable, then the
+default. Integer and boolean knobs call pf-core's `resolve_int` / `resolve_bool`
+directly; those already return the narrow type.
+
+This is the one module here whose whole body is a pf-core call, and it must never grow
+into a resolver of its own. Two of pf-core's semantics ride through it unchanged: an
+empty string is a value, not an absence — `DECKWRIGHT_CHROME=` is "configured to nothing",
+and `services/htmlshot.py` strips and tests for exactly that — and only an unset
+variable falls to the default.
+
 ## `poly.py` — reserved-region geometry
 
 `point_in_poly`, `segments_cross`, `poly_hits_box` and `poly_x_span`, in whatever units
@@ -200,7 +255,7 @@ python-pptx surfaces, not a house style.
 ## `xml.py` — parsing XML somebody else wrote
 
 ```python
-from pptxkit.utils.xml import fromstring
+from deckwright.utils.xml import fromstring
 root = fromstring(archive.read("ppt/slides/slide1.xml"))
 ```
 
@@ -210,11 +265,11 @@ network access, and refuses the huge-tree relaxation.
 
 That matters because a `.pptx` is usually **not ours**: `conform`, `qa`, `inspect` and
 `diff` all read a package the user was handed. With expansion on, a file that merely
-*declares* pptxkit's own sample marker as an entity is accepted as one of ours, and a
+*declares* deckwright's own sample marker as an entity is accepted as one of ours, and a
 DTD a few lines long expands to whatever size it likes.
 
 `tests/test_xml_safety.py` is the gate, and it has two halves: the behaviour, and a
-sweep refusing any direct `etree.fromstring` elsewhere in `src/pptxkit`. Reach for the
+sweep refusing any direct `etree.fromstring` elsewhere in `src/deckwright`. Reach for the
 helper, not the library.
 
 ## What was checked against pf-core
@@ -231,6 +286,8 @@ be redone from memory:
 | `shapes.py`, `deck.py` | nothing | pf-core knows nothing about OOXML or python-pptx |
 | `xml.py` | `pf_core.parsers` | not a match: that is a stdlib `html.parser` walker rendering article HTML to plain text plus link records. pf-core does not depend on `lxml` at all, and has no XML tree parser to harden |
 | `closest_match` | `pf_core.utils.similarity` | different question, and the numbers say so — below |
+| `keys.py` | nothing | pf-core's `InvalidInputError` carries a message, not a vocabulary; the wording is deckwright's |
+| `env.py` | `pf_core.utils.env.resolve_str` | it *is* the call, wrapped once to narrow the return type |
 
 `pf_core.utils.similarity.is_near_duplicate` is the one that looks like a hit and is not.
 It answers "are these two bodies of text near-duplicates" with a boolean, over character
@@ -243,7 +300,7 @@ also standard library, not the third-party reach the framework-first rule is aim
 
 Nothing here hand-rolls what the framework does provide either: no `logging`, no
 `os.environ`, no atomic-write dance, and no builtin `ValueError` or `RuntimeError` where
-a `pptxkit.errors` class belongs. `bin/check-framework` enforces all of that and names
+a `deckwright.errors` class belongs. `bin/check-framework` enforces all of that and names
 the replacement in every failure.
 
 ## Adding a helper here
@@ -257,7 +314,7 @@ the replacement in every failure.
 3. **Keep it pure.** Inputs and outputs, no logging, no environment reads, no file
    writes. Take units from the caller rather than assuming inches or fractions —
    `poly.py` is unit-agnostic for exactly this reason.
-4. **Raise a `pptxkit.errors` class.** Default it (as `deck.py` does with `ThemeError`)
+4. **Raise a `deckwright.errors` class.** Default it (as `deck.py` does with `ThemeError`)
    when one class is nearly always right; take it as an `error:` parameter (as
    `spans.py` does) when the same failure means different things to different callers.
 5. **Test the thing a build cannot see.** A helper's arithmetic is usually exercised by

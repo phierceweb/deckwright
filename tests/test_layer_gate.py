@@ -19,12 +19,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 UPWARD = [
-    ("utils/deck.py", "pptxkit.components"),
-    ("theme/load.py", "pptxkit.qa"),
-    ("motion/builds.py", "pptxkit.layouts"),
-    ("services/render.py", "pptxkit.conform"),
-    ("errors.py", "pptxkit.utils"),
-    ("qa/inspect.py", "pptxkit.cli"),
+    ("utils/deck.py", "deckwright.components"),
+    ("theme/load.py", "deckwright.qa"),
+    ("motion/builds.py", "deckwright.layouts"),
+    ("services/render.py", "deckwright.conform"),
+    ("errors.py", "deckwright.utils"),
+    ("qa/inspect.py", "deckwright.cli"),
 ]
 
 
@@ -51,7 +51,7 @@ def top_level(gate):
 def sandbox(gate, tmp_path, monkeypatch):
     """The package's .py files under a throwaway ROOT, with the gate pointed at them."""
     root = tmp_path / "tree"
-    src = root / "src" / "pptxkit"
+    src = root / "src" / "deckwright"
     for path in gate.SRC.rglob("*.py"):
         target = src / path.relative_to(gate.SRC)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -118,14 +118,14 @@ def test_the_package_passes_its_own_gate():
 
 
 def test_the_package_facade_outranks_every_layer_it_re_exports(gate):
-    """`pptxkit/__init__.py` imports from `compile` and `theme`, so ranking a bare `pptxkit` at the
+    """`deckwright/__init__.py` imports from `compile` and `theme`, so ranking a bare `deckwright` at the
     bottom makes that an upward import and the gate refuses the package's own front door."""
-    assert gate.rank("pptxkit") == gate.FACADE
+    assert gate.rank("deckwright") == gate.FACADE
     assert gate.FACADE > max(gate.RANK.values())
 
 
 def test_nothing_inside_the_package_reaches_back_through_the_facade(gate):
-    """The converse the ranking buys: a module importing bare `pptxkit` would be
+    """The converse the ranking buys: a module importing bare `deckwright` would be
     importing the thing that imports it."""
-    assert gate.rank("pptxkit") > gate.rank("pptxkit.cli")
-    assert gate.rank("pptxkit.compile.build") == gate.RANK["compile"]
+    assert gate.rank("deckwright") > gate.rank("deckwright.cli")
+    assert gate.rank("deckwright.compile.build") == gate.RANK["compile"]

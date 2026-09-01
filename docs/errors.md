@@ -1,13 +1,15 @@
-# Errors — every message, beside its fix
+# Errors — every build message, beside its fix
 
 A lookup doc. Arrive with the message in hand and search this page for the words in it.
 Every message below is the real output of `bin/run build` on a real broken spec: the
 compiler prints one line and exits `1`. (Long messages wrap in a terminal; they are
-single lines.)
+single lines.) The last three sections carry the refusals the other commands make before
+they write anything; a tool or runtime failure from `render` and `qa` is
+[`docs/services.md`](services.md).
 
 Nothing here explains the format — that is [`docs/authoring.md`](authoring.md), and the
 per-component field tables are [`docs/components.md`](components.md). A finding on a deck
-that *did* build comes from `pptxkit qa` instead: [`docs/qa.md`](qa.md).
+that *did* build comes from `deckwright qa` instead: [`docs/qa.md`](qa.md).
 
 ---
 
@@ -24,6 +26,7 @@ that *did* build comes from `pptxkit qa` instead: [`docs/qa.md`](qa.md).
 - [Images, themes and templates](#images-themes-and-templates)
 - [Too much content](#too-much-content)
 - [External tools](#external-tools)
+- [The command line](#the-command-line)
 - [The glyph bundle](#the-glyph-bundle)
 
 ---
@@ -36,6 +39,7 @@ Every deleted construct fails with a message naming its replacement.
 |---|---|
 | `bad.deck.yaml: slide 1: 'layout' is gone — a slide has no layout; put components under 'place:' and pick a backdrop with 'background:'` | Delete `layout:`. Add `background: inverse` if the slide was a `title`, `divider` or `close`; put its component in a `place:` entry. |
 | `bad.deck.yaml: slide 1: 'body' is gone — a component's name is its own key inside a 'place:' entry, e.g. place: [{at: {cols: [0, 12]}, bullets: {items: [...]}}]` | Delete the `body:` wrapper and put the component in a placement, keyed by its own name. |
+| `slide 1 (component 'chart'): chart kind 'pie' takes one series, got 2 ('Ours', 'Theirs') — a pie is one whole cut into named parts, so a second series has nowhere to go. Chart the one that matters, or use 'column-stacked-100' to compare both` | A pie or doughnut colours one series per point; a second has nowhere to go, and python-pptx keeps only the first. |
 | `slide 1 (component 'chart'): 'type' is gone — a chart's type is now 'kind', e.g. kind: column-stacked` | Rename `type:` to `kind:`. |
 | `slide 1 (component 'chart'): 'categories' is gone — each category is a row in 'data', e.g. data: [{category: Q1, values: {Ads: 20, Organic: 15}}, ...]` | Replace the `categories` list with one `data:` row per category. |
 | `slide 1 (component 'chart'): 'series' is gone — series names are the keys of each row's 'values' mapping in 'data', e.g. data: [{category: Q1, values: {Ads: 20, Organic: 15}}, ...]` | Move each series' numbers into the `values:` mapping on the row they belong to. |
@@ -69,12 +73,16 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `bad.deck.yaml: slide 1 (component 'bullets'): item 2 is a dict, not a line of text — a bullet holding a comma or a colon needs quoting, or YAML reads it as a mapping` | `- One thing, then another` is a YAML *mapping*, not a string. Quote it: `- "One thing, then another"`. |
 | `bad.deck.yaml: slide 1 placement 2 (card): [11.20, 3.00, 3.00, 1.00]in falls outside the canvas [0.00, 0.00, 13.33, 7.50]in` | A `box:` may leave the content band but not the slide. To run off an edge deliberately, add `bleed: true`. |
 | `bad.deck.yaml: slide 1: section 'Three' is not in the deck's sections (One, Two)` | Use a name from the deck's `sections:` list, or add it to that list. |
+| `bad.deck.yaml: slide 3 resumes section 'Alpha', which ended at slide 1 when 'Beta' began — a chapter runs once, so 'sections:' cannot describe this order` | A reorder left one chapter's slides scattered. Move the slide back into its run, or give it the section it now sits in. A slide with no `section:` does not break a run. |
 | `bad.deck.yaml: slide 1: expected a mapping, got list` | A slide document must be a mapping. You probably left a `-` at the start of a line. |
 | `slide 1: unknown animate 'per-item'; expected one of none, together, one_at_a_time, by_category, by_series` | Use one of the five listed values. |
 | `slide 1: animate 'by_category' only applies to a native chart` | `by_category`/`by_series` need a `chart:`. Use `one_at_a_time` or `together` otherwise. |
 | `slide 1 (component 'chart'): a 'radar-filled' chart cannot build by category — its categories are vertices of one outline, not separate marks…` | A radar, scatter or bubble has no per-category mark to reveal. Use `animate: together`, or one of the kinds the message lists. |
 | `this slide already carries an animation timeline, and a slide can hold only one…` | Two charts on one slide both asked to build. PowerPoint allows one timeline per slide; a second is an invalid file that LibreOffice converts without complaint. Give one chart a slide of its own, or drop the slide to `animate: together`. |
 | `theme t.yaml: unknown motion key 'staggerms'; known keys: stagger_ms, advance, beat_ms, roles, transition` | A typo in the theme's `motion:` block. |
+| `theme t.yaml 'scale': unknown key 'gutterr'; known keys: body_top, columns, gutter, margin, rows` | A typo in `scale:`. The value was previously dropped and the default stood, so the theme read as if it had been honoured. |
+| `theme t.yaml 'scale.margin': unknown key 'topp'; known keys: bottom, left, right, top` | A typo in the `margin:` sub-block. The four sides are the whole vocabulary. |
+| `theme t.yaml 'type': unknown key 'wibble'; known keys: face, heading_face, line_weight_pt, min_pt, mono, ramp, reference_height` | A typo in `type:`. A rung goes inside `ramp:`, not beside it. |
 | `theme t.yaml: motion advance must be one of on_click, after_previous, got 'whenever'` | `advance:` takes those two. `after_previous` chains a build onto one click. |
 | `theme t.yaml: motion beat_ms is -50; a pause between groups cannot be negative` | `beat_ms` is the gap between auto-advanced groups. |
 | `theme t.yaml: unknown motion role 'squiggle'; known roles: datum, figure, line, surface, text` | Those five are the whole vocabulary. A component reports one; the theme binds it. |
@@ -85,6 +93,7 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `theme t.yaml: transition speed must be one of slow, med, fast, got 'quick'` | The base schema has three speeds and no duration attribute. |
 | `slide 1: component 'rule' reports motion role 'squiggle', which the theme does not bind; known roles: …` | A custom component returned a role outside the five. Return one of them, or a bare shape id. |
 | `slide 1 (card): 'reveals: answer' names itself` | A placement cannot be its own trigger. |
+| `slide 1: left waits on right waits on left — every placement in that ring is hidden until one of the others is clicked` | The `reveals:` graph closes on itself, so nothing on the slide can ever be shown. Give one placement in the ring no `reveals:` — that is the one the room clicks first. |
 | `slide 1 (card): 'reveals:' needs both placements to draw something that can be revealed, and one of them reported no shapes` | One end is a component that returns no reveal groups, so there is nothing to hide or to click. |
 | `this slide already carries a transition` | Internal: two `add_transition` calls on one slide. A spec cannot cause this — a slide takes the theme's transition once. |
 | `slide 1 (card): 'reveals: answer' names no placement on this slide; ids here: question` | `reveals:` names another placement's `id:` on the same slide. Give the trigger an `id:`. |
@@ -129,7 +138,7 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `bad.deck.yaml: slide 1: unknown chrome field 'eyebrow'; known fields: kicker, title, subtitle` | Those are the three chrome fields. A fourth line is a placement, not chrome. |
 | `bad.deck.yaml: slide 1: 'chrome' sets 'subtitle' but the slide has no 'subtitle' text, so there is no line to place` | Give the slide the text, or drop the override. |
 | `bad.deck.yaml: slide 1: chrome field 'title': box {…} leaves the canvas — a chrome box is percents of the canvas, never inches` | Divide the inches by the canvas size and write a percent. `11.3in` of `13.333in` is `84.7%`. |
-| `chrome field 'title' wraps to 1.12in but its box is only 0.60in tall — it would be drawn through the line below; deepen the box, shorten the text, or drop to a smaller rung` | Deepen the box, shorten the text, or drop to a smaller rung; the estimate is the same wrap measure the stacked chrome uses. |
+| `slide 1: chrome field 'title' wraps to 1.12in but its box is only 0.60in tall — it would be drawn through the line below; deepen the box, shorten the text, or drop to a smaller rung` | Deepen the box, shorten the text, or drop to a smaller rung; the estimate is the same wrap measure the stacked chrome uses. Better, write `h: auto` in that box and the depth follows the text — a title that changes between builds then cannot leave a hand-measured height behind. |
 | `bad.deck.yaml: slide 1: chrome field 'title': align must be one of left, center, right, got 'justify'` | Those are the three. |
 | `chrome field 'title' sets anchor 'bottom' but no 'at:' — a stacked line shares the stack's frame, so it has no frame of its own to anchor in; give it an 'at:'` | Add an `at:` to the same field. |
 | `theme 'base' has no type role 'headline'; known roles: body, caption, display, head, hero, kicker, lead, stat, subtitle, title` | A chrome `rung:` names a rung of the theme's ramp. |
@@ -153,7 +162,7 @@ Shape errors above come from the parser, before any inch exists. These come from
 
 | Message | Fix |
 |---|---|
-| `slide 1 (component 'chart'): unknown field 'legend'; known fields: kind, data, unit, annotate, y_min, y_max` | Delete it. The chart block takes exactly those six. |
+| `slide 1 (component 'chart'): unknown field 'legend'; known fields: kind, data, unit, decimals, labels, y_min, y_max` | Delete it. The chart block takes exactly those seven. |
 | `slide 1 (component 'chart'): 'kind' must be one of bar, column, column-stacked, … got 'donut'` | Use a name from [the 29](authoring.md#all-29-chart-kinds). It is `doughnut`, not `donut`. |
 | `slide 1 (component 'chart'): 'data' must be a non-empty list of rows` | Add `data:` with at least one row. |
 | `slide 1 (component 'chart'): row 1 needs a 'category'` | Every category row needs its own label. |
@@ -173,8 +182,13 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'chart'): row 1 needs a 'y'` | Both `x` and `y` are required on every xy and bubble row. |
 | `slide 1 (component 'chart'): row 1 needs 'size' for chart kind 'bubble'` | Bubble rows need a third number. |
 | `slide 1 (component 'chart'): row 1 has a non-positive bubble size: 0.0` | A bubble of zero area cannot be drawn. |
-| `slide 1 (component 'chart'): 'annotate' is missing 'detail'` | `annotate` needs all three of `at`, `title`, `detail` — or leave it out, since nothing draws it. |
-| `slide 1 (component 'chart'): 'annotate' index 4 is out of range for 1 categories` | `at` is a 0-based index into `data`. |
+| `slide 1 (component 'chart'): 'annotate' is gone — it was validated but no renderer ever drew it` | Delete it. For a callout on one point, place a `callouts` or `prose` beside the chart. |
+| `slide 1 (component 'chart'): 'decimals' is 99; it must be between 0 and 6` | Data labels print at most six places. Omit the key and the places are read off the data. |
+| `slide 1 (component 'chart'): 'decimals' is how many decimal places the data labels print, so it must be a whole number, got 1.5` | It counts places, so `2` — not `0.01`, not `'two'`. |
+| `slide 1 (component 'chart'): 'labels' is a mapping of series name to true or false, e.g. labels: {Platform average: false}; got False` | It names series, so it takes a mapping — not a bare flag. To print no labels anywhere, set the theme's `label_position` to `none`. |
+| `slide 1 (component 'chart'): 'labels' names the series whose data labels are turned off, so the chart's series need names. The 'value' shorthand and the xy/bubble kinds have one unnamed series; name them with a 'values' mapping on each row` | Convert the rows to `values: {Name: n}`. With one unnamed series there is nothing to single out. |
+| `slide 1 (component 'chart'): 'labels' names series 'Platfrom average', which no data row defines; known series: Ours, Platform average` | A typo, or a name that differs from the one in the first row's `values:`. The rows define the set. |
+| `slide 1 (component 'chart'): 'labels' entry 'Ours' must be true or false, got 3` | It is a flag, not a count. Write `false` unquoted. |
 | `slide 1 (component 'chart'): 'y_min' must be a number, got 'zero'` | Use a number. |
 | `slide 1 (component 'chart'): must be a mapping, got str` | `chart:` takes a block, not a bare value. You wrote `chart: column` instead of `chart:` then `kind: column`. |
 | `slide 1 (component 'chart'): chart kind 'line' cannot show 'highlight' — its data points have no fill of their own. Kinds that can: …` | The only `highlight` error whose fix is the *kind*, not the row. Switch to a bar/column, pie/doughnut or bubble kind, or drop `highlight:` and make the point with the title or `animate:`. The kinds that take one are listed under [the chart block](authoring.md#the-chart-block). |
@@ -231,7 +245,7 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'versus'): 'left' needs a 'value' and a 'label' — a versus is two named magnitudes` | Each side names itself and carries a number. |
 | `slide 1 (component 'versus'): 'left' has the unknown field 'colour'; a side reads: highlight, label, note, value` | A side carries those four. Colour comes from `highlight:` and the theme. |
 | `slide 1 (component 'versus'): both sides set 'highlight' — it marks the one the slide is arguing for, so only one side takes it` | Drop one. Marking both says nothing. |
-| `slide 1 (component 'versus'): each side gets 0.98in across — widen the placement` | Two plates and the glyph between them need the room. |
+| `slide 1 (component 'versus'): the two sides need 2.06in and 2.06in to set their own type but the placement leaves 2.73in for both — widen the placement, or shorten the longest value or label` | Each plate has to hold the longest word of its value, label and note without breaking it; the two floors and the glyph between them need the room. |
 | `slide 1 (component 'diverge'): 'items' must be a non-empty list` | Add `items:` with at least one row. Also what you get for a misspelled `items`. |
 | `slide 1 (component 'diverge'): item 1 needs a 'label' and a 'value'` | Every row names itself and carries the signed number its bar draws. |
 | `slide 1 (component 'diverge'): item 1 has value 'lots' — a value is the signed number the bar draws` | A value is a number. The sign is what decides which side of the rule it draws on. |
@@ -290,8 +304,16 @@ whether your path or your theme is at fault.
 | `image 'cover.jpg' was not found in authoring/q4, and the theme names no template to fall back on — put the file beside the deck spec, or give the theme a 'template:' that carries it` | A themeless theme has no archive to fall back into, so the deck's own directory was the only place to look. |
 | `image 'cover.jpg' was not found in authoring/q4, nor inside brand.pptx at ppt/media/cover.jpg` | Every place was searched and named. Either the file is somewhere else, or the name it carries inside the template's archive is not the one you wrote. |
 | `image '../shared/cover.jpg' climbs out of every directory it would be looked for in — name it relative to the deck spec or the theme's template, or give the full path` | A `..` leaves every search directory, so no search order can apply to it. Move the file beside the spec, or write the absolute path. |
-| `unknown theme 'acme': no theme file at templates/acme.theme.yaml (set PPTXKIT_THEME_DIR to search elsewhere) and no packaged theme of that name (packaged: base). Onboard a brand template with 'pptxkit conform <brand>.pptx --adopt acme', or pass a path to a theme file` | The deck's `theme:` (or `--theme`) is a name, and neither the theme directory nor the package holds it. Onboard the brand template with `pptxkit conform templates/Brand.pptx --adopt acme`, point `PPTXKIT_THEME_DIR` at wherever your themes live, or use `theme: base`. |
+| `unknown theme 'acme': no theme file at templates/acme.theme.yaml (set DECKWRIGHT_THEME_DIR to search elsewhere) and no packaged theme of that name (packaged: base). Onboard a brand template with 'deckwright conform <brand>.pptx --adopt acme', or pass a path to a theme file` | The deck's `theme:` (or `--theme`) is a name, and neither the theme directory nor the package holds it. Onboard the brand template with `deckwright conform templates/Brand.pptx --adopt acme`, point `DECKWRIGHT_THEME_DIR` at wherever your themes live, or use `theme: base`. |
 | `theme file not found: templates/acme.theme.yaml — that is read as a path, and nothing is searched. To load a theme by name, pass the bare name (e.g. 'base'), which is looked up in templates and then in the packaged themes` | Anything with a suffix or a directory in it is a path, taken exactly as written. Fix the path, or drop to the bare name so the theme directory and the packaged themes are searched. |
+| `theme 'tidewater' binds 'accent-1' to 'accent1', which reads as a template slot name, but the theme names no 'template:' — give a literal RRGGBB, or name a template to bind its slots` | A slot name needs a template's `clrScheme` to resolve against. Write the colour itself (`accent-1: E4572E`), or give the theme a `template:`. |
+| `theme 'scale': rows is a whole number of rows, got 'twelve'` | The `scale:` block's `rows:` and `columns:` are counts — write the number. `columns:` gives the same message under its own name, and `.inf` (`got inf`) is refused with everything else that is not a count. |
+| `type ramp entry 'title': pt is a point size, got 'huge'` | A ramp entry's `pt:` is a number of points at the theme's `type.reference_height`. |
+| `theme templates/acme.theme.yaml: type is a mapping of settings, got 5` | A block was written as a scalar or a list. `scale`, `bind`, `marks`, `chart`, `motion`, `type.ramp` and the `scale:` block's own `margin` all give this message under their own name. |
+| `theme templates/acme.theme.yaml: type.reference_height is a canvas height in inches, got 'tall'` | `type.reference_height` is the canvas height in inches the ramp's point sizes are written for. |
+| `theme templates/acme.theme.yaml: type.reference_height is 0.0; it is the canvas height the ramp's point sizes are written for, so it must be above zero` | Give it a positive number (7.5 by default), or drop the key and keep the default. Every size in `type:` is a ratio to it, so zero has no meaning even with no `ramp:` at all. |
+| `theme templates/acme.theme.yaml: type.min_pt is a point size, got 'small'` | `type.min_pt` and `type.line_weight_pt` are numbers of points at the theme's `reference_height`; `line_weight_pt` gives the same message under its own name. |
+| `theme templates/acme.theme.yaml: motion stagger_ms is a whole number of milliseconds, got 'soon'` | `motion.stagger_ms` and `motion.beat_ms` are counts of milliseconds; `beat_ms` gives the same message under its own name. |
 | `template brand.pptx is not a readable .pptx: PackageNotFoundError: Package not found at 'brand.pptx'` | The theme's `template:` is corrupt, truncated, or another application's format under a `.pptx` name. The message names the path and what python-pptx made of it. |
 | `deck Deck v3.pptx is not a readable .pptx: PackageNotFoundError: Package not found at 'Deck v3.pptx'` | The same refusal from `inspect`, about the deck you handed it rather than a template. `qa` reports an unreadable deck as a `package` finding instead. |
 
@@ -312,17 +334,19 @@ These fire at build time with the real measurements, so the number in the messag
 | `slide 1 (component 'card'): the card's type wants 4.59in but only 0.05in is left inside the plate — shorten the copy or grow the placement` | A card is a plate with an inset, so the type gets less room than the placement suggests. Cut the `body:`, or give it more rows. |
 | `slide 1 (component 'card'): the icon alone wants 1.20in of the 0.90in inside the plate — grow the placement or drop the icon` | The glyph is sized off the `head` rung, so a short placement cannot hold one. |
 | `slide 1 (component 'card'): the placement is smaller than the 0.18in the theme's gutter insets a card by on every side` | The placement is smaller than the plate's own padding. Widen the `at:`. |
-| `content is 8375px tall but the render canvas is only 4000px — the browser clipped it; raise PPTXKIT_SHOT_CANVAS_H to at least 8375 or shorten the source` | A far longer `document:` source — the browser clipped it before the card guard above could measure it. Shorten the file. |
-| `the height probe did not run and the content reaches the last row of the 4000px render canvas, so the browser clipped it — raise PPTXKIT_SHOT_CANVAS_H or shorten the source` | The same clip, caught in the pixels because the source swallowed the height probe: a raw `<plaintext>`, `<textarea>` or `<xmp>`, or an unterminated `<script>`, ends the parse before the appended script. Fix the stray tag, or raise the canvas. |
+| `content is 8375px tall but the render canvas is only 4000px — the browser clipped it; raise DECKWRIGHT_SHOT_CANVAS_H to at least 8375 or shorten the source` | A far longer `document:` source — the browser clipped it before the card guard above could measure it. Shorten the file. |
+| `the height probe did not run and the content reaches the last row of the 4000px render canvas, so the browser clipped it — raise DECKWRIGHT_SHOT_CANVAS_H or shorten the source` | The same clip, caught in the pixels because the source swallowed the height probe: a raw `<plaintext>`, `<textarea>` or `<xmp>`, or an unterminated `<script>`, ends the parse before the appended script. Fix the stray tag, or raise the canvas. |
 
 The last two are the only messages here that arrive with a Python traceback above them: a browser that clipped the page is an external-renderer failure, not a spec mistake, so they are logged as errors rather than reported as validation messages. Every other message on this page is a single clean line and an exit code of `1`.
 
 ## External tools
 
-Four commands shell out — LibreOffice, Poppler's `pdftoppm` and `pdftotext`, and a
-Chromium-family browser. Each failure names the binary it could not use, so the fix is
-always "install that one, or point the matching `PPTXKIT_*` variable at it"; which
-command needs which tool is in [`docs/cli.md`](cli.md#external-tools).
+Five commands shell out — LibreOffice, Poppler's `pdftoppm` and `pdftotext`, a
+Chromium-family browser, and fontconfig's `fc-list`. The first four raise when the
+binary is absent, and each failure names the one it could not use, so the fix is always
+"install that one, or point the matching `DECKWRIGHT_*` variable at it"; which command
+needs which tool is in [`docs/cli.md`](cli.md#external-tools). `fc-list` has no message
+here — the `doctor` row and the `font-substituted` check that ask it go silent instead.
 
 A tool that is **absent** and a tool that **ran and failed** are different errors. The
 first is about the machine and prints as one line; the second is a renderer fault and is
@@ -330,17 +354,34 @@ logged with a traceback, because there is a crash to report.
 
 | Message | Fix |
 |---|---|
-| `soffice not found (/path/to/soffice) — needed by render, and QA's render-based checks; brew install --cask libreoffice, or set PPTXKIT_SOFFICE to the path of an installed one` | LibreOffice is not installed, or `PPTXKIT_SOFFICE` names something that is not there. The message carries the install command for this platform. |
-| `pdftoppm not found (/path/to/pdftoppm) — needed by render, and QA's render-based checks; brew install poppler, or set PPTXKIT_PDFTOPPM to the path of an installed one` | Poppler is not installed, or `PPTXKIT_PDFTOPPM` names something that is not there. |
-| `no Chrome/Chromium binary found — needed by shot and any 'document:' slide; brew install --cask google-chrome, or set PPTXKIT_CHROME to the path of an installed one` | Only `shot` and a `document:` component need a browser; everything else builds without one. |
-| `could not start the browser at '/path/to/chrome' — brew install --cask google-chrome, or set PPTXKIT_CHROME to the path of an installed one` | `PPTXKIT_CHROME` (or a `chrome=` argument) names something that is not there, or is not executable. Correct the path, or unset the variable to fall back to autodetection. |
+| `soffice not found (/path/to/soffice) — needed by render, and QA's render-based checks; brew install --cask libreoffice, or set DECKWRIGHT_SOFFICE to the path of an installed one` | LibreOffice is not installed, or `DECKWRIGHT_SOFFICE` names something that is not there. The message carries the install command for this platform. |
+| `pdftoppm not found (/path/to/pdftoppm) — needed by render, and QA's render-based checks; brew install poppler, or set DECKWRIGHT_PDFTOPPM to the path of an installed one` | Poppler is not installed, or `DECKWRIGHT_PDFTOPPM` names something that is not there. |
+| `no Chrome/Chromium binary found — needed by shot and any 'document:' slide; brew install --cask google-chrome, or set DECKWRIGHT_CHROME to the path of an installed one` | Only `shot` and a `document:` component need a browser; everything else builds without one. |
+| `could not start the browser at '/path/to/chrome' — brew install --cask google-chrome, or set DECKWRIGHT_CHROME to the path of an installed one` | `DECKWRIGHT_CHROME` (or a `chrome=` argument) names something that is not there, or is not executable. Correct the path, or unset the variable to fall back to autodetection. |
 | `<any of the above>` + `Or re-run with --no-render for the checks that need no external tool: bounds, placement, reserved regions, type sizes and contrast.` | `qa` adds this line to any missing-tool failure. `--no-render` runs every manifest-based check and skips only overflow and render contrast. |
 | `LibreOffice PDF conversion failed` | `soffice` ran and exited non-zero — installing it is no fix. The deck, or the profile directory, is what it refused; the log record carries both. |
+| `LibreOffice reported success but wrote no PDF. Two things cause this: an input path it could not read (<path>), or a leftover soffice process holding the profile this run needed — check with 'pgrep -fl soffice'` | `soffice` exited 0 having converted nothing. The message names the absolute path it tried, so check that first; otherwise end the leftover process. The previous run's PDF is removed before every conversion, so this is reported rather than rasterised as if it were this deck. |
+| `no deck to render at /abs/path/deck.pptx` | The input does not exist at the path it resolved to. Both the input and `--outdir` are resolved before LibreOffice sees them, so a relative path is taken from your shell's directory. |
 
 A missing tool is a configuration failure, not a validation one: the CLI prints the
 message alone and exits 1, since the fix is on the machine and not in the stack. In a
 `conform` run either kind fails the one exercise that needed the tool and the run
 continues.
+
+## The command line
+
+An argument the command cannot use, and a destination already holding a file, are both
+checked before the command reads or writes anything.
+
+| Message | Fix |
+|---|---|
+| `--as must be 'yaml' or 'md', got 'txt'` | `deckwright extract` writes a draft spec (`yaml`) or a transcript (`md`). Those are the two. |
+| `a deck needs a name, got '———'` | `deckwright new` slugs the name down to letters and digits for the deck's directory, and this one left nothing. Give it a name carrying at least one of those. |
+| `authoring/q4/q4.deck.yaml is the spec being compiled — writing the deck there would leave nothing to rebuild it from. Give --out a .pptx path` | `deckwright build --out` aimed at its own input. Rebuilding over an existing `.pptx` is fine and stays fine; a spec is the one destination nothing can rebuild. |
+| `out/q4/q4.yml is a YAML path, and a deck is never written to one — this is how --out lands on a spec. Give it a .pptx path` | The same refusal, widened: `--out` a character off the spec's name, or aimed at a directory of specs, reaches a spec without being the spec. |
+| `deck decks/Bord Update.pptx is not a readable .pptx: no file at that path` | `deckwright extract` names its default destination after the deck, so it checks the deck is there before deriving anything from the name. A typo, or a directory where a file was meant. |
+| `Board Update.deck.yaml already exists — pass --force to replace it` | `deckwright extract` will not write over what is at its destination, which on a second run of the same deck is the draft you have been editing. Give `--out` another path, or pass `--force` if the edits are expendable. `deckwright sample` refuses the same way about the template it writes. |
+| `authoring/q4-review/q4-review.deck.yaml already exists — a scaffold never overwrites a deck you have written. Pick another name, or edit that one.` | `deckwright new` has no `--force`: a scaffold is one command to re-run, and the spec at that path is not. Pick another name, or edit the one that is there. |
 
 ## The glyph bundle
 
@@ -350,12 +391,12 @@ pinning it. These fire when that pair is missing or disagrees — see
 
 | Message | Fix |
 |---|---|
-| `no icon 'rocket_launch': the built-in glyph bundle is missing from …/glyphs.zip — run 'bin/setup', or 'pptxkit glyphs sync' to rebuild it` | The archive is absent, so *every* name misses. This is an install problem, not a typo, which is why no near-miss is offered. |
+| `no icon 'rocket_launch': the built-in glyph bundle is missing from …/glyphs.zip — run 'bin/setup', or 'deckwright glyphs sync' to rebuild it` | The archive is absent, so *every* name misses. This is an install problem, not a typo, which is why no near-miss is offered. |
 | `the glyph bundle …/glyphs.zip is gone` | It disappeared between being opened and being read — a rebuild or a `git clean` mid-run. Re-run the command. |
 | `no glyph manifest at …/glyphs.sum — the checkout is incomplete` | `glyphs.sum` is committed beside the archive; restore it (`git checkout` it) rather than regenerating, or the pin is lost. |
-| `glyph manifest …/glyphs.sum names no upstream commit` | Its header carries the upstream ref. Restore the file, or re-run `pptxkit glyphs sync --ref <commit>` to write both files together. |
-| `glyphs can only be synced from a source checkout` | `pptxkit glyphs sync` rewrites files in the repo; an installed wheel has nowhere to put them. Run it from a clone. |
+| `glyph manifest …/glyphs.sum names no upstream commit` | Its header carries the upstream ref. Restore the file, or re-run `deckwright glyphs sync --ref <commit>` to write both files together. |
+| `glyphs can only be synced from a source checkout` | `deckwright glyphs sync` rewrites files in the repo; an installed wheel has nowhere to put them. Run it from a clone. |
 | `could not fetch the glyph upstream at <ref>` | `sync` needs `git` and a network, and clones ~119MB into a temp directory. The error's context carries git's own stderr. |
 
-`pptxkit glyphs verify` reports the same disagreements without raising — it is what
-`bin/setup` runs, and what `pptxkit doctor` reports as `glyphs.bundle`.
+`deckwright glyphs verify` reports the same disagreements without raising — it is what
+`bin/setup` runs, and what `deckwright doctor` reports as `glyphs.bundle`.

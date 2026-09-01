@@ -6,9 +6,9 @@ from __future__ import annotations
 import pytest
 from pptx.util import Inches
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
 
 
 def _draw(ctx):

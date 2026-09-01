@@ -10,17 +10,17 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.compile.manifest import ManifestRecorder
-from pptxkit.layouts.components import registered_components
-from pptxkit.layouts.place import content_rect
-from pptxkit.layouts.registry import SlideCtx
-from pptxkit.spec.model import Background, SlideSpec
-from pptxkit.theme import Grid, Scale
-from pptxkit.theme.chartstyle import ChartStyle
-from pptxkit.theme.defaults import DEFAULT_PAIRS
-from pptxkit.theme.model import Theme, TypeStyle
-from pptxkit.theme.palette import build_palette
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.compile.manifest import ManifestRecorder
+from deckwright.layouts.components import registered_components
+from deckwright.layouts.place import content_rect
+from deckwright.layouts.registry import SlideCtx
+from deckwright.spec.model import Background, SlideSpec
+from deckwright.theme import Grid, Scale
+from deckwright.theme.chartstyle import ChartStyle
+from deckwright.theme.defaults import DEFAULT_PAIRS
+from deckwright.theme.model import Theme, TypeStyle
+from deckwright.theme.palette import build_palette
 
 
 LEGACY_GLYPHS = (
@@ -73,7 +73,7 @@ LEGACY_GLYPHS = (
 """Glyph names decks in the wild are written against. Every one has to keep resolving.
 
 They are the library's oldest public surface and the only names guaranteed to be
-spelled pptxkit's way rather than Material's, so they are what a rename or a
+spelled deckwright's way rather than Material's, so they are what a rename or a
 re-vendoring breaks first.
 """
 
@@ -107,8 +107,8 @@ def wide_template(tmp_path):
 def _isolated_registries():
     """Registrations made in a test never leak. ``_LOADED_EXTENSIONS`` is half of the same
     state — roll back only the registry and an extension reloads with its components gone."""
-    from pptxkit.layouts import components as components_mod
-    from pptxkit.layouts import registry as registry_mod
+    from deckwright.layouts import components as components_mod
+    from deckwright.layouts import registry as registry_mod
 
     saved = dict(components_mod._REGISTRY)
     loaded = set(registry_mod._LOADED_EXTENSIONS)

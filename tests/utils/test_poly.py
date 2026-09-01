@@ -1,4 +1,4 @@
-from pptxkit.utils.poly import point_in_poly, poly_hits_box, poly_x_span, segments_cross
+from deckwright.utils.poly import point_in_poly, poly_hits_box, poly_x_span, segments_cross
 
 WEDGE = ((1.0, 0.7227), (1.0, 1.0), (0.8250, 1.0))
 BAND = ((0.0, 0.0), (1.0, 0.0), (1.0, 0.1), (0.0, 0.1))

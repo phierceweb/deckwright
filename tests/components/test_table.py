@@ -3,12 +3,12 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 
-import pptxkit.components  # noqa: F401
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
-from pptxkit.qa.geometry import check_contrast
-from pptxkit.utils.color import contrast_ratio
-from pptxkit.theme.model import Rect
+import deckwright.components  # noqa: F401
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
+from deckwright.qa.geometry import check_contrast
+from deckwright.utils.color import contrast_ratio
+from deckwright.theme.model import Rect
 
 HEADER = ["Item", "Where", "Count"]
 ROWS = [["The first thing", "On the left", "12"], ["The second thing", "In the middle", "34"]]
@@ -250,7 +250,7 @@ def test_the_whole_table_is_one_reveal_group(ctx_factory):
 
 
 def test_table_is_registered():
-    from pptxkit.layouts.components import registered_components
+    from deckwright.layouts.components import registered_components
 
     assert "table" in registered_components()
 
@@ -436,7 +436,7 @@ def test_a_span_of_zero_is_refused(ctx_factory):
 def test_merging_reclaims_the_padding_between_the_columns_it_swallowed():
     """Two merged columns hold more text than their two measures added up. On the arithmetic:
     whether the extra measure changes the line count depends on where the text falls."""
-    from pptxkit.components._tablegeom import measure
+    from deckwright.components._tablegeom import measure
 
     widths, pad = [2.0, 2.0, 2.0], 0.2
     one = measure(widths, 0, 1, pad)
@@ -851,8 +851,8 @@ def test_a_row_with_a_cell_too_many_is_told_so_rather_than_told_to_add_one(ctx_f
 def test_the_tight_packing_pays_each_claim_off_in_the_row_where_it_ends():
     """Taking the claims in order of where they end is the whole of what makes the packing
     minimal: a long span settled first leaves depth past the reach of the shorter claims."""
-    from pptxkit.components._tablegeom import _tight
-    from pptxkit.components._tablespec import Cell, Placed, Row
+    from deckwright.components._tablegeom import _tight
+    from deckwright.components._tablespec import Cell, Placed, Row
 
     rows = [Row(cells=()), Row(cells=()), Row(cells=())]
     deep = Placed(Cell(text="a", down=3), row=0, col=0)  # rows 0-2, wants 4.0
@@ -885,7 +885,7 @@ def test_an_over_long_row_with_nothing_reaching_into_it_blames_the_comma(ctx_fac
 def test_a_band_shifts_toward_the_ink_it_will_be_read_against(ctx_factory):
     """Which way the shift goes is the whole of whether banding is visible — away from the ink
     and a light table's band goes lighter still, invisible on the page it sits on."""
-    from pptxkit.utils.color import relative_luminance
+    from deckwright.utils.color import relative_luminance
 
     def band_bg(pair_name):
         ctx = ctx_factory(

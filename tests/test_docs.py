@@ -10,7 +10,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
-COMPONENTS = ROOT / "src/pptxkit/components"
+COMPONENTS = ROOT / "src/deckwright/components"
 
 # Components whose keys are checked somewhere other than a module-level _FIELDS tuple. The field
 # gate cannot read them; their section is still required. Only `chart` remains — its keys are
@@ -121,7 +121,7 @@ def test_every_item_key_is_documented(component):
 def test_the_chart_block_documents_every_key_it_accepts():
     """The table says "no other field is accepted", so it has to list them all. Read from the
     table's rows, not the prose, which names `legend` only to deny it."""
-    from pptxkit.charts.model import _CHART_KEYS
+    from deckwright.charts.model import _CHART_KEYS
 
     block = re.search(r"### The block's own fields(.*?)###", _doc("authoring.md"), re.S).group(1)
     rows = "\n".join(re.findall(r"^\| `[^|]+\|.*$", block, re.M))
@@ -129,7 +129,7 @@ def test_the_chart_block_documents_every_key_it_accepts():
 
 
 def test_every_chart_kind_is_named_in_the_authoring_reference():
-    from pptxkit.charts.native import _CHART_TYPES
+    from deckwright.charts.native import _CHART_TYPES
 
     assert _missing(_CHART_TYPES, _doc("authoring.md")) == []
 
@@ -137,7 +137,7 @@ def test_every_chart_kind_is_named_in_the_authoring_reference():
 def test_every_animate_value_is_in_the_authoring_reference():
     """`animate:` was the one author-facing vocabulary with no gate: a sixth value leaves
     `authoring.md`'s five-row table and `errors.md`'s hardcoded message both lying."""
-    from pptxkit.layouts.motion import _ANIMATIONS
+    from deckwright.layouts.motion import _ANIMATIONS
 
     assert _missing(_ANIMATIONS, _doc("authoring.md")) == []
 
@@ -145,19 +145,19 @@ def test_every_animate_value_is_in_the_authoring_reference():
 def test_the_documented_animate_error_lists_exactly_the_legal_values():
     """`errors.md` quotes the compiler's own message. Asserting the joined list, not each value —
     a bare substring check passes on 'none' appearing anywhere in English prose."""
-    from pptxkit.layouts.motion import _ANIMATIONS
+    from deckwright.layouts.motion import _ANIMATIONS
 
     assert f"expected one of {', '.join(_ANIMATIONS)}" in _doc("errors.md")
 
 
 def test_the_documented_unknown_field_error_lists_every_slide_field():
-    from pptxkit.spec.parse import _SLIDE_FIELDS
+    from deckwright.spec.parse import _SLIDE_FIELDS
 
     assert f"known fields: {', '.join(_SLIDE_FIELDS)}" in _doc("errors.md")
 
 
 def test_every_slide_field_is_documented_in_the_authoring_reference():
-    from pptxkit.spec.parse import _SLIDE_FIELDS
+    from deckwright.spec.parse import _SLIDE_FIELDS
 
     assert _missing(_SLIDE_FIELDS, _doc("authoring.md")) == []
 
@@ -165,7 +165,7 @@ def test_every_slide_field_is_documented_in_the_authoring_reference():
 def test_every_transition_effect_is_in_the_theme_reference():
     """Every effect has its own direction vocabulary. A reader picking one the doc does not
     list gets a build error the doc cannot explain."""
-    from pptxkit.motion.transition import EFFECTS
+    from deckwright.motion.transition import EFFECTS
 
     assert _missing(EFFECTS, _doc("theme.md")) == []
 
@@ -173,33 +173,33 @@ def test_every_transition_effect_is_in_the_theme_reference():
 def test_every_transition_direction_is_in_the_theme_reference():
     """The per-element direction table is the point — a shared l/u/r/d list produces a
     schema-invalid file at `strips`."""
-    from pptxkit.motion.transition import EFFECTS
+    from deckwright.motion.transition import EFFECTS
 
     directions = {d for dirs in EFFECTS.values() for d in dirs}
     assert _missing(directions, _doc("theme.md")) == []
 
 
 def test_every_transition_speed_is_in_the_theme_reference():
-    from pptxkit.motion.transition import SPEEDS
+    from deckwright.motion.transition import SPEEDS
 
     assert _missing(SPEEDS, _doc("theme.md")) == []
 
 
 def test_every_motion_theme_key_is_documented():
-    from pptxkit.theme.blocks_motion import MOTION_KEYS, TRANSITION_KEYS
+    from deckwright.theme.blocks_motion import MOTION_KEYS, TRANSITION_KEYS
 
     assert _missing(MOTION_KEYS, _doc("theme.md")) == []
     assert _missing(TRANSITION_KEYS, _doc("theme.md")) == []
 
 
 def test_every_theme_key_is_in_the_theme_files_own_table():
-    from pptxkit.theme.blocks import _KNOWN_KEYS
+    from deckwright.theme.blocks import _KNOWN_KEYS
 
     assert _missing(_KNOWN_KEYS, _doc("theme.md"), "| `{}` |") == []
 
 
 def test_every_palette_role_and_pair_is_documented():
-    from pptxkit.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
+    from deckwright.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
 
     theme = _doc("theme.md")
     assert _missing(DEFAULT_ROLES, theme) == []
@@ -207,13 +207,21 @@ def test_every_palette_role_and_pair_is_documented():
 
 
 def test_every_type_rung_is_documented():
-    from pptxkit.theme.defaults import DEFAULT_RAMP
+    from deckwright.theme.defaults import DEFAULT_RAMP
 
     assert _missing(DEFAULT_RAMP, _doc("theme.md")) == []
 
 
+def test_every_ramp_face_alias_is_documented():
+    """The alias set is a vocabulary an author types; a name missing from the doc is a
+    face that silently becomes a literal typeface no machine has."""
+    from deckwright.theme.blocks import _FACE_ALIASES
+
+    assert _missing(_FACE_ALIASES, _doc("theme.md"), "`face: {}`") == []
+
+
 def test_every_legacy_glyph_name_is_listed():
-    """These are the names spelled pptxkit's way rather than Material's, so they are
+    """These are the names spelled deckwright's way rather than Material's, so they are
     the ones an author cannot guess. A doc that drops one hides that it still works."""
     from tests.conftest import LEGACY_GLYPHS
 
@@ -222,15 +230,15 @@ def test_every_legacy_glyph_name_is_listed():
 
 def test_every_curated_alias_is_in_the_glyph_catalogue():
     """An alias is a name invented for authors. One no doc names is one nobody reaches."""
-    from pptxkit.icons.aliases import ALIASES, OVERRIDES
+    from deckwright.icons.aliases import ALIASES, OVERRIDES
 
     assert _missing(list(ALIASES) + list(OVERRIDES), _doc("glyphs.md")) == []
 
 
 def test_every_glyph_the_catalogue_names_still_resolves():
     """A catalogue of dead names is worse than none, and re-vendoring is what kills one."""
-    from pptxkit.errors import SpecError
-    from pptxkit.icons.load import load
+    from deckwright.errors import SpecError
+    from deckwright.icons.load import load
 
     seen, dead = [], []
     for cell in re.findall(r"^\|([^|]+)\|", _doc("glyphs.md"), re.M):
@@ -245,7 +253,7 @@ def test_every_glyph_the_catalogue_names_still_resolves():
 
 
 def test_every_chrome_field_and_key_is_documented():
-    from pptxkit.layouts.chrome import CHROME_ORDER, _CHROME_KEYS
+    from deckwright.layouts.chrome import CHROME_ORDER, _CHROME_KEYS
 
     authoring = _doc("authoring.md")
     assert _missing(CHROME_ORDER, authoring) == []
@@ -253,19 +261,19 @@ def test_every_chrome_field_and_key_is_documented():
 
 
 def test_every_at_form_is_documented():
-    from pptxkit.layouts.place import AT_KEYS
+    from deckwright.layouts.place import AT_KEYS
 
     assert _missing(AT_KEYS, _doc("placement.md")) == []
 
 
 def test_every_table_cell_key_is_documented():
-    from pptxkit.components._tablespec import CELL_KEYS
+    from deckwright.components._tablespec import CELL_KEYS
 
     assert _missing(CELL_KEYS, _doc("components.md")) == []
 
 
 def test_every_cli_command_has_a_section():
-    cli = (pathlib.Path(__file__).resolve().parents[1] / "src/pptxkit/cli.py").read_text()
+    cli = (pathlib.Path(__file__).resolve().parents[1] / "src/deckwright/cli.py").read_text()
     commands = re.findall(r"@app\.command\(\)\ndef (\w+)", cli)
     assert _missing(commands, _doc("cli.md"), "## `{}`") == []
 
@@ -274,7 +282,7 @@ def test_every_qa_check_is_named_in_the_qa_reference():
     """A check nobody can find is a check nobody reads a finding from, and `qa.md` is the only place
     a `check=` string is explained."""
     names = set()
-    for path in (ROOT / "src/pptxkit/qa").rglob("*.py"):
+    for path in (ROOT / "src/deckwright/qa").rglob("*.py"):
         names |= set(re.findall(r'check="([a-z][a-z-]*)"', path.read_text()))
     assert names, "no check names found at all — the Finding call shape changed"
     assert _missing(names, _doc("qa.md")) == []
@@ -283,7 +291,7 @@ def test_every_qa_check_is_named_in_the_qa_reference():
 def test_every_cli_flag_has_a_mention_in_the_cli_reference():
     """The command gate above passes a command whose flags are all undocumented — a
     reader then knows `qa` exists and not that `--fail-on` is how they gate CI on it."""
-    cli = (ROOT / "src/pptxkit/cli.py").read_text()
+    cli = (ROOT / "src/deckwright/cli.py").read_text()
     flags = set(re.findall(r'"(--[a-z][a-z-]*)"', cli))
     assert flags, "no flags found at all — the declaration shape changed"
     assert _missing(flags, _doc("cli.md")) == []
@@ -291,10 +299,10 @@ def test_every_cli_flag_has_a_mention_in_the_cli_reference():
 
 def test_every_env_var_the_code_reads_is_documented():
     """A knob nobody can find is a knob nobody can turn."""
-    src = pathlib.Path(__file__).resolve().parents[1] / "src/pptxkit"
+    src = pathlib.Path(__file__).resolve().parents[1] / "src/deckwright"
     used = set()
     for path in src.rglob("*.py"):
-        used |= set(re.findall(r'"(PPTXKIT_\w+)"', path.read_text()))
+        used |= set(re.findall(r'"(DECKWRIGHT_\w+)"', path.read_text()))
     assert _missing(used, _doc("cli.md")) == []
 
 
@@ -322,7 +330,7 @@ def test_no_doc_names_a_file_or_module_that_is_gone():
             r"|spec|compile|conform|panels|services|utils)/[\w./-]+\.py)`",
             text,
         ):
-            if not (root / "src/pptxkit" / ref).exists():
+            if not (root / "src/deckwright" / ref).exists():
                 dangling.append(f"{doc.name}: {ref}")
     assert dangling == []
 
@@ -340,7 +348,7 @@ def test_every_component_that_refuses_a_spec_has_a_row_in_the_error_reference():
     known-components enumerations."""
     errors = _doc("errors.md")
     emitted = set()
-    for path in (ROOT / "src/pptxkit").rglob("*.py"):
+    for path in (ROOT / "src/deckwright").rglob("*.py"):
         emitted |= set(re.findall(r"\(component '(\w+)'\)", path.read_text()))
     assert emitted, "no component prefixes found at all — the message shape changed"
     undocumented = sorted(c for c in emitted if f"(component '{c}')" not in errors)
@@ -349,7 +357,7 @@ def test_every_component_that_refuses_a_spec_has_a_row_in_the_error_reference():
 
 @pytest.mark.parametrize("relpath,pattern", sorted(_QUOTED_EXERCISE_COUNT.items()))
 def test_the_exercise_count_the_docs_quote_is_the_real_one(relpath, pattern):
-    from pptxkit.conform.exercise import EXERCISE
+    from deckwright.conform.exercise import EXERCISE
 
     found = re.search(pattern, (ROOT / relpath).read_text())
     # Without this the gate goes vacuous the moment someone rewords the sentence —
@@ -411,19 +419,19 @@ def _component_count() -> int:
 
 
 def _chart_kind_count() -> int:
-    from pptxkit.charts.native import _CHART_TYPES
+    from deckwright.charts.native import _CHART_TYPES
 
     return len(_CHART_TYPES)
 
 
 def _glyph_count() -> int:
-    from pptxkit.icons.load import available
+    from deckwright.icons.load import available
 
     return len(available())
 
 
 def _exercise_count() -> int:
-    from pptxkit.conform.exercise import EXERCISE
+    from deckwright.conform.exercise import EXERCISE
 
     return len(EXERCISE)
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from pptxkit.errors import SpecError, ThemeError
-from pptxkit.icons.load import VENDORED, available, load, roots
-from pptxkit.theme import load_theme
+from deckwright.errors import SpecError, ThemeError
+from deckwright.icons.load import VENDORED, available, load, roots
+from deckwright.theme import load_theme
 
 SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
@@ -46,7 +46,7 @@ def test_a_theme_directory_is_searched_before_the_shipped_set(tmp_path, syntheti
 def test_an_env_directory_outranks_the_theme(tmp_path, monkeypatch):
     override = tmp_path / "override"
     override.mkdir()
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(override))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(override))
     assert roots(None)[0] == override
 
 
@@ -65,7 +65,7 @@ def test_a_name_that_is_not_a_slug_is_rejected(name):
 
 
 def test_an_svg_without_a_viewbox_is_rejected(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     (tmp_path / "flat.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 H 1"/></svg>'
     )
@@ -75,7 +75,7 @@ def test_an_svg_without_a_viewbox_is_rejected(tmp_path, monkeypatch):
 
 def test_an_svg_of_shapes_rather_than_paths_is_rejected(tmp_path, monkeypatch):
     """<circle>/<rect> are not read; saying so beats drawing an empty shape."""
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     (tmp_path / "shapes.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
         '<circle cx="5" cy="5" r="4"/></svg>'
@@ -85,7 +85,7 @@ def test_an_svg_of_shapes_rather_than_paths_is_rejected(tmp_path, monkeypatch):
 
 
 def test_unreadable_svg_names_the_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     (tmp_path / "broken.svg").write_text("<svg><path")
     with pytest.raises(SpecError, match="not readable SVG"):
         load("broken")
@@ -110,3 +110,32 @@ def test_the_shipped_directory_is_inside_the_package():
     """It ships in the wheel; a path outside the package would resolve only in a checkout."""
     assert VENDORED.is_dir()
     assert VENDORED.parents[1].name == "icons"
+
+
+def test_search_finds_names_containing_the_term():
+    from deckwright.icons.load import search
+
+    assert "globe_asia" in search("globe")
+
+
+def test_search_returns_the_alias_an_author_would_write():
+    """`arrow-left` resolves through OVERRIDES to `arrow_back`. Returning only the
+    vendored name would send the author to a word that draws a different glyph."""
+    from deckwright.icons.load import search
+
+    assert "arrow-left" in search("arrow-left")
+
+
+def test_search_matches_across_the_hyphen_underscore_spelling():
+    """Both spellings must reach the vendored underscore name, so neither side can be
+    computed with the other."""
+    from deckwright.icons.load import search
+
+    assert "keyboard_arrow_left" in search("arrow_left")
+    assert "keyboard_arrow_left" in search("arrow-left")
+
+
+def test_search_for_nothing_returns_empty():
+    from deckwright.icons.load import search
+
+    assert search("zzzznotaglyph") == ()

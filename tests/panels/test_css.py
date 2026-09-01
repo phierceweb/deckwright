@@ -1,6 +1,6 @@
 import dataclasses
 
-from pptxkit.panels.css import panel_css
+from deckwright.panels.css import panel_css
 
 
 def test_every_colour_role_becomes_a_custom_property(theme):

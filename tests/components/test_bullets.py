@@ -2,13 +2,13 @@ import dataclasses
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import LayoutError
-from pptxkit.layouts.components import get_component
-from pptxkit.theme import Scale
-from pptxkit.theme.defaults import DEFAULT_PALETTE
-from pptxkit.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio
-from pptxkit.utils.shapes import ALIGN, ANCHOR
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import get_component
+from deckwright.theme import Scale
+from deckwright.theme.defaults import DEFAULT_PALETTE
+from deckwright.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio
+from deckwright.utils.shapes import ALIGN, ANCHOR
 
 TALL = Scale(26.666, 15.0)
 
@@ -92,7 +92,7 @@ def test_items_is_required(ctx_factory):
 
 
 def test_bullets_is_registered():
-    from pptxkit.layouts.components import registered_components
+    from deckwright.layouts.components import registered_components
 
     assert "bullets" in registered_components()
 
@@ -264,7 +264,7 @@ def test_an_uneven_split_gives_the_remainder_to_the_leftmost_columns(ctx_factory
 def test_a_bullet_that_yaml_read_as_a_mapping_is_rejected(ctx_factory):
     """An unquoted comma turns `- One thing, then another` into a mapping. Rendering
     its repr onto the slide is the silent-wrong-output this spec exists to refuse."""
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"bullets": {"items": [{"One thing": "then another"}]}})
     with pytest.raises(LayoutError, match="item 1 is a dict, not a line of text"):
@@ -272,7 +272,7 @@ def test_a_bullet_that_yaml_read_as_a_mapping_is_rejected(ctx_factory):
 
 
 def test_the_rejection_names_which_item_it_was(ctx_factory):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     ctx = ctx_factory({"bullets": {"items": ["fine", "also fine", {"bad": "one"}]}})
     with pytest.raises(LayoutError, match="item 3 is a dict"):

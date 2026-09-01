@@ -1,13 +1,13 @@
 import pathlib
 
-from pptxkit.qa.geometry import check_bounds, check_reserved
-from pptxkit.qa.model import Severity
-from pptxkit.theme.chartstyle import ChartStyle
-from pptxkit.theme import Grid, Scale
-from pptxkit.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
-from pptxkit.layouts.place import Reserved
-from pptxkit.theme.model import Theme, TypeStyle
-from pptxkit.theme.palette import build_palette
+from deckwright.qa.geometry import check_bounds, check_reserved
+from deckwright.qa.model import Severity
+from deckwright.theme.chartstyle import ChartStyle
+from deckwright.theme import Grid, Scale
+from deckwright.theme.defaults import DEFAULT_PAIRS, DEFAULT_ROLES
+from deckwright.layouts.place import Reserved
+from deckwright.theme.model import Theme, TypeStyle
+from deckwright.theme.palette import build_palette
 
 SCALE = Scale(13.333, 7.5)
 PALETTE = build_palette(DEFAULT_ROLES, pairs=DEFAULT_PAIRS)

@@ -7,8 +7,8 @@ from __future__ import annotations
 import pytest
 from pptx import Presentation
 
-from pptxkit.conform import conform
-from pptxkit.paths import SCRATCH
+from deckwright.conform import conform
+from deckwright.paths import SCRATCH
 
 # One that any template can draw, and one that no placement can hold — 60 columns
 # leave less width than the theme's gutter pads a cell by, which is a LayoutError.

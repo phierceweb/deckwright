@@ -1,7 +1,7 @@
 """Prove the variance guard can still tell a designed template from an empty one: hand
 `tests/test_templates.py`'s own assertions a blank `Presentation()` and fail if they accept it.
 
-Three of them read `Theme.palette`, which pptxkit fills from its own defaults, and so passed.
+Three of them read `Theme.palette`, which deckwright fills from its own defaults, and so passed.
 This needs no brand template, so unlike that module it runs everywhere, always."""
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-from pptxkit.conform.derive import derive
-from pptxkit.theme.stock import is_stock_accent
+from deckwright.conform.derive import derive
+from deckwright.theme.stock import is_stock_accent
 
 
 @pytest.fixture(scope="module")
@@ -33,7 +33,7 @@ def blank_bind(blank):
 
 def test_a_blank_office_file_binds_no_brand_accent(blank_bind):
     """Stock accents say nothing about a brand, so `derive` rejects all six. Read `bind` here, never
-    a loaded `Theme` — `palette.accents` answers with pptxkit's own four defaults for this file."""
+    a loaded `Theme` — `palette.accents` answers with deckwright's own four defaults for this file."""
     bound = [role for role in blank_bind if role.startswith("accent-")]
     assert bound == [], (
         f"a blank Office file bound {bound} — either derive stopped rejecting stock "
@@ -44,7 +44,7 @@ def test_a_blank_office_file_binds_no_brand_accent(blank_bind):
 def test_every_accent_in_a_blank_file_is_one_microsoft_ships(blank):
     """Why the assertion above holds, stated over the file rather than the code path,
     so a `derive` that silently stopped filtering cannot make both agree."""
-    from pptxkit.theme.clrscheme import parse_color_scheme, read_theme_xml
+    from deckwright.theme.clrscheme import parse_color_scheme, read_theme_xml
 
     scheme = parse_color_scheme(read_theme_xml(Presentation(str(blank)).slide_masters[0]))
     accents = {slot: scheme[slot] for slot in scheme if slot.startswith("accent")}
@@ -55,7 +55,7 @@ def test_every_accent_in_a_blank_file_is_one_microsoft_ships(blank):
 def test_the_generated_sample_does_pass_that_same_gate(tmp_path):
     """The negative control: if a blank file and a designed one both fail, the gate is broken rather
     than discriminating."""
-    from pptxkit.conform.sample import write_sample
+    from deckwright.conform.sample import write_sample
 
     bind = derive(write_sample(tmp_path / "sample.pptx")).get("bind", {})
     bound = [role for role in bind if role.startswith("accent-")]
@@ -65,7 +65,7 @@ def test_the_generated_sample_does_pass_that_same_gate(tmp_path):
 def test_a_loaded_theme_still_reports_accents_for_a_template_that_bound_none(blank):
     """Asserts the `Theme.palette` fallback EXISTS — correct behaviour for rendering, and wrong as
     evidence about a template."""
-    from pptxkit.theme import load_theme
+    from deckwright.theme import load_theme
 
     theme = load_theme(None)
     assert theme.palette.accents, (
@@ -99,7 +99,7 @@ def blank_built(blank, tmp_path_factory):
 def test_a_blank_office_file_offers_no_brand_accent_to_bind(blank_built):
     """What makes the accent assertions in `test_templates.py` non-vacuous: they read the
     template's own scheme, so a file carrying only stock colours has nothing for them to examine.
-    Revert either to reading `Theme.palette` — which pptxkit fills from its own defaults — and this
+    Revert either to reading `Theme.palette` — which deckwright fills from its own defaults — and this
     reddens, because the blank file would suddenly appear to own brand accents."""
     import tests.test_templates as corpus
 
@@ -113,7 +113,7 @@ def test_those_same_assertions_accept_the_generated_sample(tmp_path):
     import yaml
 
     import tests.test_templates as corpus
-    from pptxkit.conform.sample import write_sample
+    from deckwright.conform.sample import write_sample
 
     sample = write_sample(tmp_path / "sample.pptx")
     theme = derive(sample)

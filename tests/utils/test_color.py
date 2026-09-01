@@ -1,7 +1,7 @@
 import pytest
 
-from pptxkit.errors import ThemeError
-from pptxkit.utils.color import contrast_ratio, normalize_hex, relative_luminance
+from deckwright.errors import ThemeError
+from deckwright.utils.color import contrast_ratio, normalize_hex, relative_luminance
 
 
 def test_white_has_full_luminance():

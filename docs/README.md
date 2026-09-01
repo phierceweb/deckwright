@@ -1,4 +1,4 @@
-# pptxkit docs
+# deckwright docs
 
 Index of everything in this directory. Every doc in the tree is listed here — if you add
 one, add its row.
@@ -31,17 +31,17 @@ then the message if it failed.
 | [`glyphs.md`](glyphs.md) | Which `icon:` name to reach for, grouped by what the slide is about. A shortlist into the 4,001 glyphs that ship. |
 | [`choosing.md`](choosing.md) | From a claim and some numbers to a treatment: which chart kind, or a `table`, or `stats`, or no graphic at all. Decides *what* to draw. |
 | [`treatments.md`](treatments.md) | Which shape a slide earns when it is neither a dataset nor a sequence, what each treatment costs in depth, and how to keep a deck from becoming one rectangle repeated. |
-| [`flows.md`](flows.md) | Which process or relationship shape a piece of information earns, which pptxkit draws, and which you assemble from primitives. |
+| [`flows.md`](flows.md) | Which process or relationship shape a piece of information earns, which deckwright draws, and which you assemble from primitives. |
 | [`pptx-deck-building.md`](pptx-deck-building.md) | The build → render → QA loop, animation injection, versioned output, and the rule against rebuilding after a hand-edit. |
-| [`cli.md`](cli.md) | Every command, its flags, the `PPTXKIT_*` environment variables, and the external tools each needs. |
-| [`compile.md`](compile.md) | Calling the compiler from Python — `pptxkit.build_deck` — and the pipeline behind it. |
+| [`cli.md`](cli.md) | Every command, its flags, the `DECKWRIGHT_*` environment variables, and the external tools each needs. |
+| [`compile.md`](compile.md) | Calling the compiler from Python — `deckwright.build_deck` — and the pipeline behind it. |
 
 ## The design system
 
 | Doc | Owns |
 |---|---|
 | [`theme.md`](theme.md) | What a deck gets with **no template at all**: semantic colour roles, contrast-checked pairs, type rungs, the fractional grid, chrome treatment. |
-| [`conform.md`](conform.md) | Onboarding a brand template: what `pptxkit conform` derives, what it refuses to trust, and how to read its report. |
+| [`conform.md`](conform.md) | Onboarding a brand template: what `deckwright conform` derives, what it refuses to trust, and how to read its report. |
 
 ## Engine internals
 
@@ -58,7 +58,7 @@ always [`authoring.md`](authoring.md).
 | [`icons.md`](icons.md) | SVG → DrawingML: the search order, what an SVG must contain, even-odd filling, and how a glyph is coloured. The names themselves are [`glyphs.md`](glyphs.md). |
 | [`motion.md`](motion.md) | Builds, interactive reveals and slide transitions: motion roles, what a click covers, the build-list rules, and the four-layer verification stack. |
 | [`services.md`](services.md) | The four external-tool boundaries: what LibreOffice, Poppler, Chrome and Pillow are each asked for, which command needs which binary, and every way they fail. |
-| [`utils.md`](utils.md) | The shared primitives: WCAG colour maths, the baked font-advance tables behind every wrap estimate, the fraction vocabulary, reserved-region geometry, the python-pptx drawing floor — and why none of them is a pf-core call. |
+| [`utils.md`](utils.md) | The shared primitives: WCAG colour maths, the baked font-advance tables behind every wrap estimate, the fraction vocabulary, reserved-region geometry, the unknown-key wording, the python-pptx drawing floor — and why none of them is a pf-core call. |
 
 ## Quality
 

@@ -3,7 +3,7 @@ import textwrap
 import pytest
 from typer.testing import CliRunner
 
-from pptxkit.cli import app
+from deckwright.cli import app
 
 runner = CliRunner()
 
@@ -52,7 +52,7 @@ def test_build_reports_the_deck_and_slide_count(project):
 
 def test_build_reports_where_the_manifest_went(project):
     """The manifest path is never passed in and never printed anywhere else, so this
-    line is the only thing that tells an author where `pptxkit qa` should look."""
+    line is the only thing that tells an author where `deckwright qa` should look."""
     result = runner.invoke(
         app, ["build", str(project / "d.deck.yaml"), "--theme", str(project / "cli.yaml")]
     )

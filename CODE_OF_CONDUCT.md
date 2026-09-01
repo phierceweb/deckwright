@@ -2,7 +2,7 @@
 
 ## Our standard
 
-pptxkit is a small, focused project. Everyone interacting in its issues, pull
+deckwright is a small, focused project. Everyone interacting in its issues, pull
 requests, and discussions is expected to be respectful and constructive.
 
 **Expected:** thoughtful feedback, good-faith disagreement, patience with

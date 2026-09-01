@@ -8,9 +8,9 @@ import pytest
 from pptx import Presentation
 from pptx.oxml.ns import qn
 
-from pptxkit.errors import LayoutError
-from pptxkit.motion import add_click_build, add_transition, transition_xml
-from pptxkit.motion.transition import EFFECTS
+from deckwright.errors import LayoutError
+from deckwright.motion import add_click_build, add_transition, transition_xml
+from deckwright.motion.transition import EFFECTS
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 

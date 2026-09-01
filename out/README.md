@@ -12,6 +12,8 @@ out/
   my-deck/
     My Deck v1.pptx            the deck
     My Deck v1.manifest.json   what `qa` reads; it pairs with the deck by name
+    My Deck v1.content.md      the same build as words, for a human to read
+    My Deck v1.beats.md        the same build as its reveal order, click by click
     render/                    slide-NNN.jpg, the PDF, qa.md, qa.json, contact sheets
     .build/                    generated inputs and intermediates, hidden on purpose
   conform/<template>/          a derived theme, the exercise deck, and its .build/

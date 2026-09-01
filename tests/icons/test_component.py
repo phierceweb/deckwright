@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-import pptxkit.components  # noqa: F401 — registers the built-in components
-from pptxkit.errors import SpecError
-from pptxkit.layouts.components import get_component
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import SpecError
+from deckwright.layouts.components import get_component
+from deckwright.theme.model import Rect
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
@@ -15,6 +16,18 @@ _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 def _draw(ctx):
     get_component("icon")(ctx)
     return list(ctx.slide.shapes)[-1]
+
+
+_EMU = 914400
+# The rect, and the size, from the overrun BAKEOFF_ISSUES issue 4 reported.
+_ISSUE_RECT = Rect(0.8, 2.7, 2.267, 1.95)
+
+
+def _placed(ctx_factory, size, *, align="left", anchor="top"):
+    ctx = ctx_factory({"icon": {"name": "square", "size": size}})
+    ctx.rect, ctx.align, ctx.anchor = _ISSUE_RECT, align, anchor
+    shape = _draw(ctx)
+    return tuple(round(v / _EMU, 3) for v in (shape.left, shape.top, shape.width, shape.height))
 
 
 def test_an_icon_is_drawn_as_path_geometry_not_as_a_box(ctx_factory):
@@ -28,7 +41,7 @@ def test_an_icon_is_drawn_as_path_geometry_not_as_a_box(ctx_factory):
 def test_every_legacy_name_lands_as_real_geometry(ctx_factory, legacy_glyphs):
     """A path that parsed to nothing draws an invisible shape and reports no error. A glyph
     carries an outline, a plain shape a preset; neither may carry no geometry at all."""
-    from pptxkit.icons.shapes import SHAPES
+    from deckwright.icons.shapes import SHAPES
 
     for name in legacy_glyphs:
         xml = _draw(ctx_factory({"icon": {"name": name}}))._element.xml
@@ -61,7 +74,7 @@ def test_a_configured_directory_still_beats_the_preset(ctx_factory, tmp_path, mo
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
         '<path d="M2 2 H22 V22 H2 Z"/></svg>'
     )
-    monkeypatch.setenv("PPTXKIT_ICON_DIR", str(tmp_path))
+    monkeypatch.setenv("DECKWRIGHT_ICON_DIR", str(tmp_path))
     xml = _draw(ctx_factory({"icon": {"name": "diamond"}}))._element.xml
     assert "<a:custGeom" in xml and "<a:prstGeom" not in xml
 
@@ -69,8 +82,6 @@ def test_a_configured_directory_still_beats_the_preset(ctx_factory, tmp_path, mo
 def test_a_box_no_colour_reads_across_gets_a_plate_like_a_chrome_line(ctx_factory):
     """Half the box white, half the fixture ink: nothing reads across it, so the mark must
     plate rather than go invisible."""
-    from pptxkit.theme.model import Rect
-
     ctx = ctx_factory({"icon": {"name": "check"}})
     rect = ctx.body_rect
     # The glyph squares off to the placement's short side, anchored at the left.
@@ -90,10 +101,31 @@ def test_an_icon_is_squared_off_inside_a_wide_placement(ctx_factory):
     assert shape.width == shape.height
 
 
-def test_size_scales_the_glyph_within_its_placement(ctx_factory):
-    full = _draw(ctx_factory({"icon": {"name": "square"}})).width
-    half = _draw(ctx_factory({"icon": {"name": "square", "size": 0.5}})).width
-    assert half == pytest.approx(full / 2, rel=0.02)
+def test_size_draws_the_square_the_rule_states_at_the_rect_that_was_reported(ctx_factory):
+    """A build refused with this rect and 0.9, claiming a 0.19in overrun. It draws 1.755in
+    inside 1.95in. Literal numbers: recomputing the rule with the rule agrees with `max`,
+    with `size` dropped, and with `align`/`anchor` ignored."""
+    for size, side in ((0.5, 0.975), (0.7, 1.365), (0.9, 1.755), (1.0, 1.95)):
+        assert _placed(ctx_factory, size) == (0.8, 2.7, side, side), size
+
+
+def test_a_sized_glyph_stays_inside_its_placement_at_every_align_and_anchor(ctx_factory):
+    """The invariant `placement-fit` measures. Nine literal boxes, not nine comparisons
+    against the rect — a rect-relative assertion passes for a shape of any size."""
+    boxes = {
+        ("left", "top"): (0.8, 2.7),
+        ("left", "middle"): (0.8, 2.797),
+        ("left", "bottom"): (0.8, 2.895),
+        ("center", "top"): (1.056, 2.7),
+        ("center", "middle"): (1.056, 2.797),
+        ("center", "bottom"): (1.056, 2.895),
+        ("right", "top"): (1.312, 2.7),
+        ("right", "middle"): (1.312, 2.797),
+        ("right", "bottom"): (1.312, 2.895),
+    }
+    for (align, anchor), (left, top) in boxes.items():
+        got = _placed(ctx_factory, 0.9, align=align, anchor=anchor)
+        assert got == (left, top, 1.755, 1.755), (align, anchor)
 
 
 def test_an_ink_role_is_painted_verbatim(ctx_factory):
@@ -109,7 +141,7 @@ def test_an_unnamed_icon_points_at_the_catalogue(ctx_factory):
 
 
 def test_an_unknown_field_is_rejected(ctx_factory):
-    from pptxkit.errors import LayoutError
+    from deckwright.errors import LayoutError
 
     with pytest.raises(LayoutError, match="unknown field 'colour'"):
         _draw(ctx_factory({"icon": {"name": "check", "colour": "red"}}))
@@ -130,3 +162,44 @@ def test_shape_ids_stay_unique_when_several_glyphs_land(ctx_factory):
         get_component("icon")(ctx)
     ids = [s.shape_id for s in ctx.slide.shapes]
     assert len(ids) == len(set(ids)), ids
+
+
+def test_a_marks_plate_never_reaches_past_the_placement_that_asked_for_it(ctx_factory):
+    """On artwork no accent reads across, the mark gets a plate — and the plate, not the
+    glyph, is the shape that leaves the rect. It is drawn first, so it is `#1`, which is
+    what the overrun BAKEOFF_ISSUES issue 4 reported named. `placement-fit` skips plates,
+    so nothing else in the project would say."""
+    ctx = ctx_factory({"icon": {"name": "square", "size": 0.9}})
+    ctx.rect = _ISSUE_RECT
+    # Half the rect white, half black: no single ink reads across it, which is the branch
+    # that plates.
+    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top, 2.267, 0.975), "FFFFFF"))
+    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top + 0.975, 2.267, 0.975), "000000"))
+    get_component("icon")(ctx)
+
+    drawn = [s for s in ctx.manifest.slides[0].shapes]
+    plates = [s for s in drawn if s.plate]
+    assert plates, "no plate was drawn — this test no longer exercises the branch it names"
+    right, bottom = _ISSUE_RECT.left + _ISSUE_RECT.width, _ISSUE_RECT.top + _ISSUE_RECT.height
+    for shape in drawn:
+        box = shape.box
+        assert box.x >= _ISSUE_RECT.left - 0.001, (shape.name, box)
+        assert box.y >= _ISSUE_RECT.top - 0.001, (shape.name, box)
+        assert box.x + box.w <= right + 0.001, (shape.name, box)
+        assert box.y + box.h <= bottom + 0.001, (shape.name, box)
+
+
+def test_a_plate_still_covers_the_glyph_it_was_drawn_for(ctx_factory):
+    """Clipping the plate to the placement must not shrink it inside the glyph — a plate
+    that no longer covers the mark buys nothing and the mark stops reading."""
+    ctx = ctx_factory({"icon": {"name": "square", "size": 0.9}})
+    ctx.rect = _ISSUE_RECT
+    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top, 2.267, 0.975), "FFFFFF"))
+    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top + 0.975, 2.267, 0.975), "000000"))
+    get_component("icon")(ctx)
+
+    plate = next(s for s in ctx.manifest.slides[0].shapes if s.plate)
+    glyph = next(s for s in ctx.manifest.slides[0].shapes if not s.plate)
+    assert plate.box.x <= glyph.box.x and plate.box.y <= glyph.box.y
+    assert plate.box.x + plate.box.w >= glyph.box.x + glyph.box.w
+    assert plate.box.y + plate.box.h >= glyph.box.y + glyph.box.h
