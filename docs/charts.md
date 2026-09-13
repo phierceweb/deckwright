@@ -26,7 +26,7 @@ specifically.
 - [Negative values, and why the render cannot check them](#negative-values-and-why-the-render-cannot-check-them)
 - [Turning one series' labels off](#turning-one-series-labels-off)
 - [The unit reaches the axis too](#the-unit-reaches-the-axis-too)
-- [Refusing a truncated axis](#refusing-a-truncated-axis)
+- [A bar starts at zero](#a-bar-starts-at-zero)
 - [The categorical palette](#the-categorical-palette)
 - [Adding a new chart type](#adding-a-new-chart-type)
 
@@ -251,6 +251,22 @@ that names a position the kind can honour keeps it.
 bar family and a pie; area, doughnut and radar take no position at all, and writing one
 into those parts is what makes PowerPoint ask to repair the file.
 
+**A label drawn on a fill is inked for that fill.** On a pie or doughnut wedge, an area
+band, a stacked bar, or a bar whose theme sets `inside_end`, the label reads against the
+shape's colour rather than the slide. Each such series gets its own `c:dLbls` holding a
+copy of the plot's label settings in the ink `Palette.ink_for` picks for that fill, and a
+point filled differently (each pie wedge, a highlighted bar) gets its own `c:dLbl`. For a
+gradient, the ink is the one whose weakest stop reads best. A label set beside its shape
+(`outside_end` on a clustered bar, a line, radar, bubble) keeps the slide's ink. The code
+is `charts/labels.py`.
+
+**An area chart's first and last labels are moved in off the plot edge.** An area's points
+sit on its category ticks, so the first and last are on the plot's left and right edges,
+and a label centred there lands on the value axis. Area takes no label position, so each
+of those two labels gets its own `c:dLbl` with a manual offset of half its measured width
+plus half an em, inward. Leader lines are turned off for the series, since LibreOffice
+otherwise draws one from a moved label back to its point.
+
 ## Room the legend takes
 
 A legend sits to the right of the plot, so on the bar family — where the plot area is
@@ -307,12 +323,17 @@ are label-scoped by design, and pinning a code with no unit would print `12.0` f
 the renderer would otherwise draw as `12`. With no unit the ticks stay the renderer's to
 choose.
 
-## Refusing a truncated axis
+## A bar starts at zero
 
-`y_min` / `y_max` reach the native chart's value axis directly. Set them
-explicitly to stop auto-scaling to the data's own min/max — the same
-auto-scale that can make a 12-point move look identical to a 90-point one.
-Leaving both unset keeps automatic scaling.
+A bar or column encodes its value as a length from the baseline, so the bar family's
+value axis starts at `0` whenever every plotted value is zero or more. Left to automatic
+scaling, `284, 297, 290` draws on an axis from 275 and the first bar looks a third the
+height of the second. A family holding a negative value keeps automatic scaling, which
+already spans zero.
+
+`y_min` / `y_max` reach the value axis directly and win over that default. Line, area,
+radar, scatter and bubble keep automatic scaling unless you set them: a line encodes
+change, and a floor at zero flattens it.
 
 ## The categorical palette
 

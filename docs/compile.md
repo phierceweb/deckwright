@@ -325,7 +325,8 @@ A component records through `ctx.manifest.record(...)`. What to pass:
 - **Something that is not a shape** — build a small frozen dataclass exposing `shape_id`,
   `name` and EMU `left`/`top`/`width`/`height`, as `components/table.py` does for cells. It
   is recorded and checked but never renamed in the package, because there is no element to
-  rename.
+  rename. A chart records its text this way (`charts/record.py`): `labels`, `labels.s2` and
+  `labels.s1.2` for a series or a run of points sharing an ink and ground, `axis`, `legend`.
 - **A repeated element with a meaningful identity** — pass `part=` so its name says what it
   is (`r2c3`) rather than where it fell in the draw order. A numbered `#N` beats an
   invented label.

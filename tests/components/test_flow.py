@@ -158,3 +158,15 @@ def test_a_step_too_shallow_for_its_own_disc_is_refused(ctx_factory):
     ctx.rect = Rect(1.0, 1.0, 9.0, 0.5)
     with pytest.raises(LayoutError, match="numbered disc is 0.60in across"):
         _flow(ctx, {"numbered": True, "items": STEPS})
+
+
+def test_a_step_head_wider_than_its_plate_is_refused_through_the_card_it_draws(ctx_factory):
+    heads = [
+        "Internationalization",
+        "Indistinguishability",
+        "Counterrevolutionaries",
+        "Uncharacteristically",
+    ]
+    ctx = ctx_factory({"flow": {"items": [{"head": h, "body": "Step."} for h in heads]}})
+    with pytest.raises(LayoutError, match=r"component 'flow'.*would break mid-word"):
+        get_component("flow")(ctx)

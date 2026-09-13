@@ -156,7 +156,7 @@ def test_the_disc_is_recorded_for_qa_with_its_label_and_its_own_fill(ctx_factory
 def test_the_reveal_group_is_the_disc_itself(ctx_factory):
     ctx = ctx_factory({"ellipse": {}})
     result = get_component("ellipse")(ctx)
-    assert result.groups == [[ctx.slide.shapes[0].shape_id]]
+    assert result.groups == [[(ctx.slide.shapes[0].shape_id, "surface")]]
 
 
 def test_the_label_takes_the_discs_own_ink_not_the_slides(ctx_factory):
@@ -176,3 +176,12 @@ def test_a_disc_filled_in_the_slides_own_paper_is_given_an_edge(ctx_factory):
 
 def test_the_disc_is_registered():
     assert "ellipse" in registered_components()
+
+
+def test_an_ellipse_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_factory, theme):
+    unmeasured = dataclasses.replace(theme, face="Segoe UI", heading_face="Segoe UI")
+    ctx = ctx_factory(
+        {"ellipse": {"label": "a step in the process", "size": 0.05}}, theme_override=unmeasured
+    )
+    with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
+        get_component("ellipse")(ctx)

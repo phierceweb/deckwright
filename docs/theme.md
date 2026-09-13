@@ -127,7 +127,15 @@ will then warn about.
 **The background is whatever the component actually painted.** A stat tile is filled
 with `line`, so its text measures against `line`, not against the slide. Getting this
 wrong is what produced accent text at 2.2:1 inside a light tile on a white page,
-where the slide-level measurement said the accent was fine. A component painting a
+where the slide-level measurement said the accent was fine. Text a component sets straight
+onto the slide is measured the same way, against what is painted under its own box: prose
+laid over a `panel`, a table on an inverse band, a caption over a scrimmed picture, a chart's
+labels, axis text and legend over a panel. Every component that paints a fill — a panel, a
+card, a disc, a `versus` or `fanout` plate, a `diverge` bar, a `grid` bar — counts as what is
+under a later placement laid over it with `bleed: true`. A disc covers only its inscribed
+square; text in the corners of its frame is also measured against what the disc was laid on.
+`text_ink(box, size_pt=…, muted=…)` and `accent_at(box, size_pt=…)` return the ink and the
+colour it really sits on, and that pair is what the manifest records. A component painting a
 fill nothing readable sits on gets a `ThemeError` naming the fill, not a warning.
 
 A pair names **roles**, not hex: `DEFAULT_PAIRS` holds `("ink", "page")`, and
@@ -165,13 +173,19 @@ bind:
   page: '10212A'
   ink: F2F5F7
   muted: A8B2BD
+  inverse: F2F5F7
+  inverse-ink: '10212A'
   accent-1: E4572E
   accent-2: '17BEBB'
 ```
 
-Note `muted` moved with `page`. The defaults are tuned for a light page, so inverting
-one without the other leaves `page-muted` below AA — which the load logs as
-`theme_pair_below_aa` rather than refusing, since `qa` judges what was really painted.
+Note that `muted` and `inverse` moved with `page`. The defaults are tuned for a light
+page. Inverting the page alone leaves `page-muted` below AA, which the load logs as
+`theme_pair_below_aa`. It also leaves the default `inverse` (`12161B`) so close to a dark
+page that every inverse plate disappears into it, which the load logs as
+`theme_inverse_matches_page` once the two are within 3:1. Neither refuses, since `qa`
+judges what was really painted. On a dark page, `inverse` is the light surface, so its
+ink has to be dark.
 
 A slot name in that theme is refused, since there is no `clrScheme` to name a slot in.
 An accent bound to a *slot* still holding Microsoft's shipped value is ignored — that
@@ -197,12 +211,14 @@ The page is not painted *only* when the template has already laid down that exac
 colour. Assuming a master carries the page colour is what put a deck of dark titles
 on a dark blue photograph with the contrast check reporting nothing wrong.
 
-**A line crossing an edge is measured against the worse side.** Something painted over
-the whole of a line's rectangle replaces what is beneath it; something covering only
-part of it is one more surface that line crosses, and the reported paper is whichever
-of them reads worst against the ink being tried. Either single answer is wrong in one
-direction — report the page and white ink passes while half the line is lost on a dark
-panel; report the panel and dark ink passes while half is lost on the page.
+**A line crossing an edge is measured against the worse side.** Whatever was painted
+last over the whole of a line's rectangle replaces what is beneath it, in paint order
+whichever kind each is, so a picture laid over a panel is what the line sits on.
+Something covering only part of it is one more surface that line crosses, and the
+reported paper is whichever of them reads worst against the ink being tried. Either
+single answer is wrong in one direction — report the page and white ink passes while
+half the line is lost on a dark panel; report the panel and dark ink passes while half
+is lost on the page.
 
 Where no ink reads across the whole of it, the line is given a plate of the slide's own
 paper. An ink the
@@ -308,20 +324,33 @@ the wheel, and the next install replaces it. Derive one instead:
 
 Every wrap decision in a build — how deep a callout row is, whether a table row needs a
 second line, whether a title costs the body some height — is computed from the face's own
-per-character advances. deckwright ships those advances for two families:
+per-character advances. deckwright ships those advances for these families:
 
 | Family | Covers |
 |---|---|
 | Calibri / Carlito | Calibri, and the metric clone LibreOffice substitutes for it |
 | Arial / Helvetica / Liberation | Arial, Helvetica, and the clone that stands in for both |
+| Poppins, Open Sans, Montserrat | the families of those names |
+| Amatic | Amatic and Amatic SC |
+| Sniglet, Bebas Neue | the families of those names |
+| Barlow Semi Condensed | that cut only — plain Barlow is wider and is not covered |
 
-A face outside those is laid out against `CEILING` — the widest advance measured across
-every family, per character. That is deliberately safe: a box is never sized *short* of
-its text. It is also loose, and loose in a way nothing downstream reveals, so the theme
-loader says so:
+A face outside those is laid out against `CEILING`, the widest advance measured across
+Carlito, Liberation Sans, Verdana and DejaVu Sans, per character. For a face no wider than
+those it is safe: a box is never sized *short* of its text. A wide display face can outrun
+it (Sniglet's ExtraBold does, which is why it has a table), and for every face it is loose
+in a way nothing downstream reveals, so the theme loader says so:
 
 ```
 warning  theme_face_unmeasured  theme=brand role=heading_face face='Aptos Display'
+```
+
+A fit refusal built on that estimate — `prose`, `card`, `versus`, an `ellipse` label, a
+chrome box too short for its text — ends by saying so, so a refusal of copy that would have
+fitted names its reason:
+
+```
+... split the slide or shorten the copy ('Segoe UI' has no width table, so this estimate errs wide)
 ```
 
 **A heavy or black weight is unmeasured on purpose.** Its advances are wider than the
@@ -481,16 +510,21 @@ motion:
     text: {kind: fade}
 ```
 
-| Role | Reported by | Default |
+| Role | Reported for | Default |
 |---|---|---|
-| `text` | bullets, callouts, copy | `fade` |
-| `surface` | cards, panels, plates | `fade` |
-| `line` | `rule`, `connector` | `wiperight` |
-| `datum` | chart elements | `wipeup` |
-| `figure` | images, document cards, icons | `fade` |
+| `text` | a shape that carries words, on its own fill or not: `prose`, `bullets`, callout and card copy, a stat tile, a table, a `code` listing, a caption, words over a picture | `fade` |
+| `surface` | a filled shape that carries no words: a card's plate, a `panel`, an `ellipse`, a callout's dot, a bar, a swatch chip, a scrim | `fade` |
+| `line` | a stroke: `rule`, `connector`, the join between `flow` steps, a `fanout`'s trunk, spine and branches | `wiperight` |
+| `datum` | a chart, and each part of a chart's own build | `wipeup` |
+| `figure` | a picture, a glyph (`icon`, or a mark on a card, callout, stat or fanout), a document card | `fade` |
 
 Three entrance kinds exist: `fade`, `wipeup`, `wiperight`. A role bound to anything else
 is refused when the theme loads, and so is a role name outside the five above.
+
+A wipe runs along one axis, so a shape more than eight times as long across that axis as
+along it — a vertical join between `flow` steps, a `fanout`'s spine — takes the other wipe:
+`wiperight` becomes `wipeup` on a vertical stroke, and `wipeup` becomes `wiperight` on a
+horizontal one.
 
 **`animate: together` ignores roles.** It gives every shape on the slide the same fade
 through a different build, so there is nothing for a per-shape role to say. A deck that

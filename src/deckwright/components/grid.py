@@ -12,6 +12,7 @@ from pptx.util import Inches
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rect as fill_rect, textbox
 
 from deckwright.components._shape import choice, flag, known_fields
@@ -45,6 +46,7 @@ def grid(ctx: SlideCtx) -> BodyResult:
 
     groups: list[list[RevealItem]] = []
     bars: list[RevealItem] = []
+    line = ctx.theme.palette.role("line")
     drawn = 0
     if show in ("columns", "both"):
         for index in range(theme_grid.columns):
@@ -54,22 +56,20 @@ def grid(ctx: SlideCtx) -> BodyResult:
                 break
             bar = fill_rect(ctx.slide, left, rect.top, theme_grid.col_w, bars_h, ctx.color("line"))
             ctx.manifest.record(bar)
-            bars.append(bar.shape_id)
+            ctx.painted.append((Rect(left, rect.top, theme_grid.col_w, bars_h), line))
+            bars.append((bar.shape_id, "surface"))
             drawn += 1
     if show in ("rows", "both"):
         rows = ctx.theme.grid.rows
         row_h = bars_h / rows
         for index in range(rows):
+            band = Rect(rect.left, rect.top + index * row_h, rect.width, max(row_h - 0.02, 0.01))
             bar = fill_rect(
-                ctx.slide,
-                rect.left,
-                rect.top + index * row_h,
-                rect.width,
-                max(row_h - 0.02, 0.01),
-                ctx.color("line"),
+                ctx.slide, band.left, band.top, band.width, band.height, ctx.color("line")
             )
             ctx.manifest.record(bar)
-            bars.append(bar.shape_id)
+            ctx.painted.append((band, line))
+            bars.append((bar.shape_id, "surface"))
     groups.append(bars)
 
     reserved = ctx.theme.reserve if overlay else ()
@@ -77,23 +77,29 @@ def grid(ctx: SlideCtx) -> BodyResult:
         patch = _polygon(ctx, region)
         # A picture of the region, drawn inside it on purpose.
         ctx.manifest.record(patch, text=region.name, annotation=True)
-        groups.append([patch.shape_id])
+        groups.append([(patch.shape_id, "surface")])
 
     text = str(ctx.body.get("caption", "")) or _measurements(ctx, theme_grid, reserved, drawn=drawn)
     frame = textbox(
         ctx.slide, rect.left, rect.top + bars_h + _CAPTION_GAP, ctx.grid.span_w(9), caption_h
     )
+    size = ctx.style("caption").size
+    ink, paper = ctx.text_ink(
+        Rect(rect.left, rect.top + bars_h + _CAPTION_GAP, ctx.grid.span_w(9), caption_h),
+        size_pt=size,
+        muted=True,
+    )
     para(
         frame,
         text,
-        ctx.style("caption").size,
-        ctx.dim(),
+        size,
+        ctx.rgb(ink),
         first=True,
         space_after=0,
         font=ctx.theme.mono,
     )
-    ctx.manifest.record(frame._parent, text=text)
-    groups.append([frame._parent.shape_id])
+    ctx.manifest.record(frame._parent, text=text, font_pt=size, fg=ink, bg=paper)
+    groups.append([(frame._parent.shape_id, "text")])
     return BodyResult(groups=groups, height=bars_h + _CAPTION_GAP + caption_h)
 
 

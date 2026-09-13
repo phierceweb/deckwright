@@ -44,3 +44,32 @@ def contrast_ratio(foreground: str, background: str) -> float:
 def required_ratio(size_pt: float) -> float:
     """The WCAG AA ratio text of this size must clear."""
     return AA_LARGE if size_pt >= LARGE_PT else AA_NORMAL
+
+
+def _lab(hex_colour: str) -> tuple[float, float, float]:
+    """CIE L*a*b* under D65, from sRGB."""
+    r, g, b = (_linear(int(hex_colour[i : i + 2], 16) / 255) for i in (0, 2, 4))
+    x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+    y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
+    fx, fy, fz = f(x), f(y), f(z)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def _linear(channel: float) -> float:
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def delta_e(a: str, b: str) -> float:
+    """CIE76 colour difference: 0 for one colour, 100 from black to white."""
+    return (
+        sum(
+            (p - q) ** 2
+            for p, q in zip(_lab(normalize_hex(a)), _lab(normalize_hex(b)), strict=True)
+        )
+        ** 0.5
+    )

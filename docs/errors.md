@@ -74,13 +74,14 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `bad.deck.yaml: slide 1 placement 2 (card): [11.20, 3.00, 3.00, 1.00]in falls outside the canvas [0.00, 0.00, 13.33, 7.50]in` | A `box:` may leave the content band but not the slide. To run off an edge deliberately, add `bleed: true`. |
 | `bad.deck.yaml: slide 1: section 'Three' is not in the deck's sections (One, Two)` | Use a name from the deck's `sections:` list, or add it to that list. |
 | `bad.deck.yaml: slide 3 resumes section 'Alpha', which ended at slide 1 when 'Beta' began — a chapter runs once, so 'sections:' cannot describe this order` | A reorder left one chapter's slides scattered. Move the slide back into its run, or give it the section it now sits in. A slide with no `section:` does not break a run. |
+| `bad.deck.yaml: slide 2 begins section 'Problem' after 'Evidence', but 'sections:' lists Problem, Evidence, Next — reorder the slides or the list, so a nav drawn from it names the chapters in order` | The chapters run in a different order from the list. Move the slides, or reorder `sections:`. A listed section with no slides can be skipped. |
 | `bad.deck.yaml: slide 1: expected a mapping, got list` | A slide document must be a mapping. You probably left a `-` at the start of a line. |
 | `slide 1: unknown animate 'per-item'; expected one of none, together, one_at_a_time, by_category, by_series` | Use one of the five listed values. |
 | `slide 1: animate 'by_category' only applies to a native chart` | `by_category`/`by_series` need a `chart:`. Use `one_at_a_time` or `together` otherwise. |
 | `slide 1 (component 'chart'): a 'radar-filled' chart cannot build by category — its categories are vertices of one outline, not separate marks…` | A radar, scatter or bubble has no per-category mark to reveal. Use `animate: together`, or one of the kinds the message lists. |
 | `this slide already carries an animation timeline, and a slide can hold only one…` | Two charts on one slide both asked to build. PowerPoint allows one timeline per slide; a second is an invalid file that LibreOffice converts without complaint. Give one chart a slide of its own, or drop the slide to `animate: together`. |
 | `theme t.yaml: unknown motion key 'staggerms'; known keys: stagger_ms, advance, beat_ms, roles, transition` | A typo in the theme's `motion:` block. |
-| `theme t.yaml 'scale': unknown key 'gutterr'; known keys: body_top, columns, gutter, margin, rows` | A typo in `scale:`. The value was previously dropped and the default stood, so the theme read as if it had been honoured. |
+| `theme t.yaml 'scale': unknown key 'gutterr'; known keys: body_top, columns, gutter, margin, rows` | A typo in `scale:`. Fix the key; the message lists the ones `scale:` reads. |
 | `theme t.yaml 'scale.margin': unknown key 'topp'; known keys: bottom, left, right, top` | A typo in the `margin:` sub-block. The four sides are the whole vocabulary. |
 | `theme t.yaml 'type': unknown key 'wibble'; known keys: face, heading_face, line_weight_pt, min_pt, mono, ramp, reference_height` | A typo in `type:`. A rung goes inside `ramp:`, not beside it. |
 | `theme t.yaml: motion advance must be one of on_click, after_previous, got 'whenever'` | `advance:` takes those two. `after_previous` chains a build onto one click. |
@@ -198,6 +199,9 @@ Shape errors above come from the parser, before any inch exists. These come from
 
 | Message | Fix |
 |---|---|
+| `slide 1 (component 'card'): the word 'Counterrevolutionaries' needs 3.36in at 22.0pt but the card leaves 2.38in, so it would break mid-word — widen the placement, or use a shorter word` | A run with nowhere to break cannot wrap, so the renderer breaks it inside the word. A line may break at a space, after a hyphen or dash, and between CJK characters — not after a slash, so a long URL is refused, so only the piece between two of those is measured. Widen the placement, shorten the word, or hyphenate it yourself. A `flow` step names its plate: `component 'flow' (step plate)`. |
+| `slide 1 (component 'stats'): '1,284,097,556' needs 3.02in at 34.0pt but a tile leaves 2.42in, so it would break mid-word — use fewer tiles per row, widen the placement, or shorten it` | A stat value or label too wide for its tile. `columns:` fewer, a wider placement, or `1.28B` for `1,284,097,556`. |
+| `slide 1 (component 'nav'): no 'items' and the deck declares no 'sections:' to take them from — list the sections in the deck document, or give 'items'` | A `nav` with no `items:` takes the deck's `sections:`. Declare them in the deck document, or list `items:` yourself. |
 | `slide 1 (component 'bullets'): unknown field 'colums'; known fields: items, columns, heading` | Every component refuses a key it does not read, naming the ones it does. A misspelled field is never accepted in silence. |
 | `slide 1 (component 'bullets'): 'items' must be a non-empty list` | Add `items:` with at least one entry. Also what you get for a misspelled `items`. |
 | `slide 1 (component 'bullets'): must be a mapping, got list` | Components take a block. `bullets:` then `items:`, not `bullets: [a, b]`. |
@@ -260,7 +264,7 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'image'): a circle mask needs 'fit: cover'. 'contain' letterboxes the picture down to the source's own aspect, and the mask drawn on that oblong is an oval, not a circle — crop it with 'crop: 1:1' instead` | Drop the `fit: contain`, or use `mask: rounded`. |
 | `slide 1 (component 'image'): mask must be one of none, circle, rounded, got 'hexagon'` | Use one of the three. |
 | `slide 1 (component 'image'): 'radius' is a fraction of the picture's short side, 0..0.5 (0.5 is a circle); got 0.75` | Radius is a fraction, not inches. |
-| `slide 1 (component 'image'): 'widescreen' is not an aspect — write it as '16:9' or 1.78` | `crop:` takes an aspect. Quote it: `crop: "16:9"`. |
+| `slide 1 (component 'image'): 'widescreen' is not an aspect — write it as '16:9' or 1.78` | `crop:` takes an aspect: `crop: 16:9`, `crop: 16/9` or `crop: 1.78`. |
 | `slide 1 (component 'image'): every 'over' line needs a 'text', got {'rung': 'title'}` | Each `over:` entry is a string or a mapping containing `text:`. |
 | `slide 1 (component 'image'): an inset of 0.9 leaves the text no width inside a picture 11.87in wide` | `inset:` is a fraction of canvas width, and it is applied to both edges. |
 | `slide 1 (component 'image'): scrim has no key 'colour'; known keys: pair, opacity, gradient` | A scrim's colour comes from its `pair:`, never a literal. |
@@ -272,6 +276,15 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'connector'): 'from' and 'to' resolve to the same point on the canvas, so the line has no direction` | The two ends are the same placement, or two identical `[x, y]` pairs. A line needs somewhere to go. |
 | `slide 1 (component 'icon'): needs a 'name:' saying which glyph to draw — one of 4,001 names, catalogued in docs/glyphs.md` | Add `name:`. Also what you get for a misspelled `name`. The catalogue is [`docs/glyphs.md`](glyphs.md). |
 | `slide 1 (component 'rule'): align 'center' has nothing to act on — a horizontal rule spans its placement's whole width; use anchor to move it across, or narrow the placement` | A rule already fills one axis, so the key that would move it *along* that axis does nothing. Use the other key — `anchor:` for a horizontal rule, `align:` for a vertical one — or narrow the placement. |
+
+A component's own code can also fail with a Python exception, which is a bug rather than a refusal. The traceback is kept, and its last line names where the deck hit it:
+
+```
+KeyError: 'missing'
+slide 2 (component 't-broken'): raised by the component's own code, not refused by it
+```
+
+Nothing in the spec fixes that. The frames above the last line name the file and line in the component. Change the slide only to confirm which slide it is, then fix the component.
 
 ## Themes written before the cutover
 
@@ -306,6 +319,11 @@ whether your path or your theme is at fault.
 | `image '../shared/cover.jpg' climbs out of every directory it would be looked for in — name it relative to the deck spec or the theme's template, or give the full path` | A `..` leaves every search directory, so no search order can apply to it. Move the file beside the spec, or write the absolute path. |
 | `unknown theme 'acme': no theme file at templates/acme.theme.yaml (set DECKWRIGHT_THEME_DIR to search elsewhere) and no packaged theme of that name (packaged: base). Onboard a brand template with 'deckwright conform <brand>.pptx --adopt acme', or pass a path to a theme file` | The deck's `theme:` (or `--theme`) is a name, and neither the theme directory nor the package holds it. Onboard the brand template with `deckwright conform templates/Brand.pptx --adopt acme`, point `DECKWRIGHT_THEME_DIR` at wherever your themes live, or use `theme: base`. |
 | `theme file not found: templates/acme.theme.yaml — that is read as a path, and nothing is searched. To load a theme by name, pass the bare name (e.g. 'base'), which is looked up in templates and then in the packaged themes` | Anything with a suffix or a directory in it is a path, taken exactly as written. Fix the path, or drop to the bare name so the theme directory and the packaged themes are searched. |
+| ``Brand.pptx is a template, not a theme — onboard it once with `deckwright conform templates/Brand.pptx --adopt brand`, then build with 'theme: brand'`` | The deck's `theme:` (or `--theme`) names the brand `.pptx` itself. A theme is the YAML derived from it: run the backticked command once — its paths are quoted, so it pastes as printed — then name the theme it adopts. A template outside the theme directory gets `mkdir -p` and `mv` ahead of the `conform`. |
+| `Brand.pptx is a template, not a theme, and it is already adopted — build with 'theme: brand'` | A theme in the theme directory already binds this template, or an identical copy of it. Name that theme; adopting again would make a second, untuned one. |
+| `Brand.pptx is a template, not a theme, and templates/ already holds a different Brand.pptx, adopted as 'brand', which moving this one in would overwrite — rename this one before onboarding it from templates/` | The `.pptx` lives outside the theme directory, and a different file already has its name there. Rename the new one (say `Brand 2026.pptx`), move it in, and onboard it under its own theme name; or keep building with the theme already adopted. |
+| ``Brand.pptx names a template, not a theme, and there is no file at Brand.pptx or in templates/ — put it in templates/, onboard it once with `deckwright conform templates/Brand.pptx --adopt brand`, then build with 'theme: brand'`` | The `.pptx` is neither at that path nor in the theme directory. Drag it into `templates/` and run the command. |
+| `acme.theme.yaml is not a text theme file: templates/acme.theme.yaml` | The file is binary, or saved in an encoding other than UTF-8. A theme is UTF-8 YAML; re-save it, or point `theme:` at the right file. |
 | `theme 'tidewater' binds 'accent-1' to 'accent1', which reads as a template slot name, but the theme names no 'template:' — give a literal RRGGBB, or name a template to bind its slots` | A slot name needs a template's `clrScheme` to resolve against. Write the colour itself (`accent-1: E4572E`), or give the theme a `template:`. |
 | `theme 'scale': rows is a whole number of rows, got 'twelve'` | The `scale:` block's `rows:` and `columns:` are counts — write the number. `columns:` gives the same message under its own name, and `.inf` (`got inf`) is refused with everything else that is not a count. |
 | `type ramp entry 'title': pt is a point size, got 'huge'` | A ramp entry's `pt:` is a number of points at the theme's `type.reference_height`. |

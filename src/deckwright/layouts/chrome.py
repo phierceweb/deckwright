@@ -16,7 +16,7 @@ from deckwright.theme.model import Rect
 from deckwright.theme.scale import Grid
 from deckwright.utils.shapes import ALIGNS, ANCHORS
 from deckwright.utils.spans import parse_box, parse_span
-from deckwright.utils.text import LINE_HEIGHT, wrapped_lines
+from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, wrapped_lines
 
 CHROME_ORDER = ("kicker", "title", "subtitle")
 """The chrome field vocabulary, and the order fields stack in when they name no ``at:``."""
@@ -236,6 +236,7 @@ def chrome_bands(
                 f"{at}chrome field {name!r} wraps to {needed:.2f}in but its box is only "
                 f"{rect.height:.2f}in tall — it would be drawn through the line below; "
                 f"deepen the box, shorten the text, or drop to a smaller rung"
+                f"{estimate_caveat(face)}"
             )
         out.append(ChromeBand(name, text, size_pt, rect, field, False))
     return tuple(out)

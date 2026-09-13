@@ -10,9 +10,9 @@ from pptx.util import Inches
 
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, component
-from deckwright.layouts.registry import SlideCtx
+from deckwright.layouts.registry import Disc, SlideCtx
 from deckwright.utils.shapes import ALIGN, ANCHOR, para
-from deckwright.utils.text import LINE_HEIGHT, wrapped_lines
+from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, wrapped_lines
 
 from deckwright.components._shape import (
     anchored,
@@ -55,8 +55,11 @@ def ellipse(ctx: SlideCtx) -> BodyResult:
         font_pt=style.size if label else None,
         fg=pair.fg if label else None,
         bg=pair.bg,
+        fill=pair.bg if str(ctx.body.get("pair", _PAIR_DEFAULT)) != "surface" else None,
+        ground=ctx.behind(disc, ink=pair.bg),
     )
-    return BodyResult(groups=[[shape.shape_id]], height=diameter)
+    ctx.painted.append((disc, Disc(pair.bg)))
+    return BodyResult(groups=[[(shape.shape_id, "surface")]], height=diameter)
 
 
 def _label(ctx: SlideCtx, shape, text: str, *, diameter: float, ink: str) -> None:
@@ -73,7 +76,7 @@ def _label(ctx: SlideCtx, shape, text: str, *, diameter: float, ink: str) -> Non
             f"slide {ctx.spec.index} (component 'ellipse'): the label {text!r} needs "
             f"more than the {measure:.2f}in across the middle of a {diameter:.2f}in disc "
             f"at {style.size:.1f}pt — grow the placement, raise 'size', or name a "
-            f"smaller 'rung'"
+            f"smaller 'rung'{estimate_caveat(ctx.theme.font_for(style))}"
         )
     tf = shape.text_frame
     tf.word_wrap = False

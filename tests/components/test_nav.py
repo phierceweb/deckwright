@@ -90,7 +90,44 @@ def test_no_active_section_is_allowed(ctx_factory):
     assert {str(r.font.color.rgb) for r in _runs(ctx).values()} == {"573C65"}
 
 
-@pytest.mark.parametrize("items", [[], "Problem", None])
+@pytest.mark.parametrize("items", [[], "Problem"])
 def test_items_must_be_a_non_empty_list(ctx_factory, items):
     with pytest.raises(LayoutError, match=r"'items' must be a non-empty list"):
         get_component("nav")(ctx_factory({"nav": {"items": items}}))
+
+
+def test_a_nav_with_no_items_takes_the_decks_sections_and_marks_the_slides_own(ctx_factory):
+    """Repeated by hand on every slide, `items:` goes stale at the first rename."""
+    ctx = ctx_factory({"nav": {}}, section="Two", sections=("One", "Two", "Three"))
+    get_component("nav")(ctx)
+    runs = _runs(ctx)
+    assert list(runs) == ["One", "Two", "Three"]
+    assert runs["Two"].font.bold is True
+    assert runs["One"].font.bold is not True
+
+
+def test_a_defaulted_nav_on_a_slide_with_no_section_marks_nothing(ctx_factory):
+    ctx = ctx_factory({"nav": {}}, section=None, sections=("One", "Two"))
+    get_component("nav")(ctx)
+    assert not any(run.font.bold for run in _runs(ctx).values())
+
+
+def test_labels_that_do_not_name_the_slides_section_mark_nothing(ctx_factory):
+    """Short labels for long section names are not a misspelled `active:`."""
+    ctx = ctx_factory(
+        {"nav": {"items": ["Why", "How"]}}, section="Why it matters", sections=("Why it matters",)
+    )
+    get_component("nav")(ctx)
+    assert not any(run.font.bold for run in _runs(ctx).values())
+
+
+def test_explicit_items_naming_the_slides_section_mark_it(ctx_factory):
+    ctx = ctx_factory({"nav": {"items": ["One", "Two"]}}, section="Two")
+    get_component("nav")(ctx)
+    assert [label for label, run in _runs(ctx).items() if run.font.bold] == ["Two"]
+
+
+def test_a_nav_with_no_items_in_a_deck_with_no_sections_is_refused(ctx_factory):
+    ctx = ctx_factory({"nav": {}}, sections=())
+    with pytest.raises(LayoutError, match=r"no 'items' and the deck declares no 'sections:'"):
+        get_component("nav")(ctx)

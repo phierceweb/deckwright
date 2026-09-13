@@ -16,7 +16,7 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rrect, textbox
-from deckwright.utils.text import text_em
+from deckwright.utils.text import estimate_caveat, text_em
 
 from deckwright.components._shape import known_fields, known_item_fields
 
@@ -54,9 +54,7 @@ def _magnitude(value: object) -> float | None:
 def _unit(value: object) -> str:
     """Whatever is written around the number, folded so `Days` and `days` agree.
 
-    Matched whole. No string rule separates a plural from another unit — `hrs`/`hr` and
-    `ms`/`m` are the same shape — and sizing two different units against each other
-    argues the opposite of the data, so only an exact match compares.
+    Matched whole: no string rule tells a plural from another unit (`hrs`/`hr`, `ms`/`m`).
     """
     if isinstance(value, (bool, int, float)):
         return ""
@@ -74,9 +72,7 @@ def _side_floor(
 ) -> float:
     """The narrowest plate this side's text can be set in without breaking mid-word.
 
-    Width only. Whether the stack then fits the band is `qa`'s `text-fit` check, which
-    measures the shape as drawn; solving it here needs a width the placement may not
-    have, and a component cannot refuse its way out of a band that is simply too short.
+    Width only: whether the stack then fits the band is `qa`'s `text-fit` check.
     """
     rows = [(str(side["value"]), value_pt), (str(side["label"]), label_pt)]
     if side.get("note"):
@@ -97,10 +93,8 @@ def _plate_widths(
 ) -> tuple[float, float]:
     """Each plate's width, in proportion to its value.
 
-    Two plates of identical width state that the magnitudes are equal, which is the one
-    thing a versus is never used to say. Values that are not numbers keep the even split,
-    and so do two written in different units: `2 days` against `4 hours` compares 2 with
-    4 and would draw the longer span smaller.
+    Values that are not numbers keep the even split, and so do two in different units:
+    `2 days` against `4 hours` would draw the longer span smaller.
     """
     left, right = (_magnitude(s["value"]) for s in sides)
     if (
@@ -168,6 +162,7 @@ def versus(ctx: SlideCtx) -> BodyResult:
             f"{floors[0]:.2f}in and {floors[1]:.2f}in to set their own type but the "
             f"placement leaves {total:.2f}in for both — widen the placement, or "
             f"shorten the longest value or label"
+            f"{estimate_caveat(ctx.theme.font_for(stat), ctx.theme.face)}"
         )
     widths = _plate_widths(sides, total, floors)
 
@@ -178,7 +173,10 @@ def versus(ctx: SlideCtx) -> BodyResult:
         role = "accent-1" if side.get("highlight") else "muted"
         fill_hex = ctx.theme.palette.role(role)
         plate = rrect(ctx.slide, x, r.top, half, r.height, ctx.color(role), radius=_RADIUS)
-        ctx.manifest.record(plate)
+        ctx.manifest.record(
+            plate, fill=fill_hex, ground=ctx.behind(Rect(x, r.top, half, r.height), ink=fill_hex)
+        )
+        ctx.painted.append((Rect(x, r.top, half, r.height), fill_hex))
         # The plate is its own surface: the type has to read on it, not on the slide.
         ink = ctx.rgb(ctx.ink_on(fill_hex))
         tf = textbox(
@@ -227,7 +225,7 @@ def versus(ctx: SlideCtx) -> BodyResult:
             fg=ctx.ink_on(fill_hex),
             bg=fill_hex,
         )
-        groups.append([plate.shape_id, tf._parent.shape_id])
+        groups.append([(plate.shape_id, "surface"), (tf._parent.shape_id, "text")])
 
     mark = place_icon(
         ctx.slide,
@@ -246,5 +244,5 @@ def versus(ctx: SlideCtx) -> BodyResult:
     ctx.manifest.record(mark)
     # The glyph joins the first side's group: left outside every group it would be on
     # screen from the first beat, hanging between two plates that have not arrived.
-    groups[0].append(mark.shape_id)
+    groups[0].append((mark.shape_id, "figure"))
     return BodyResult(groups=groups, height=r.height)

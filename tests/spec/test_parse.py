@@ -236,9 +236,8 @@ def test_unknown_deck_config_field_suggests_a_near_miss(tmp_path):
 
 
 def test_a_section_that_resumes_after_another_began_is_rejected(tmp_path):
-    """`sections:` is the source of truth for chapter order, and membership was checked
-    while ordering was not — so a reorder that scattered one chapter built clean, and a
-    theme drawing no section rail showed nothing."""
+    """A reorder that scatters one chapter must not build, since a theme drawing no section
+    rail would show nothing wrong."""
     text = (
         "theme: t\nsections: [Alpha, Beta]\n"
         "---\nsection: Alpha\n---\nsection: Beta\n---\nsection: Alpha\n"
@@ -267,3 +266,88 @@ def test_an_unsectioned_slide_does_not_break_the_run_around_it(tmp_path):
 def test_a_section_may_be_declared_and_never_used(tmp_path):
     text = "theme: t\nsections: [Alpha, Beta]\n---\nsection: Alpha\n"
     assert _parse(text, tmp_path).sections == ("Alpha", "Beta")
+
+
+_NUMBERS = """
+    theme: base
+    out: out/N.pptx
+    ---
+    title: T
+    place:
+      - at: {cols: full}
+        table: {rows: [[Alpha, 1.10, 2.50, 007]]}
+      - at: {cols: full}
+        image: {src: p.png, crop: 16:9}
+"""
+
+
+def test_a_number_prints_as_it_was_written(tmp_path):
+    """YAML reads `1.10` as 1.1; a version column has to print the version written."""
+    slide = _parse(_NUMBERS, tmp_path).slides[0]
+    cells = slide.place[0].body["rows"][0]
+    assert [str(c) for c in cells] == ["Alpha", "1.10", "2.50", "007"]
+
+
+def test_a_number_written_with_a_source_still_behaves_as_a_number(tmp_path):
+    slide = _parse(_NUMBERS, tmp_path).slides[0]
+    version = slide.place[0].body["rows"][0][1]
+    assert version == 1.1
+    assert float(version) + 1 == 2.1
+
+
+def test_an_unquoted_aspect_is_the_aspect_it_was_written_as(tmp_path):
+    """YAML 1.1 reads `16:9` as a base-60 number, which as an aspect draws nothing."""
+    from deckwright.imagery.fit import parse_aspect
+
+    crop = _parse(_NUMBERS, tmp_path).slides[0].place[1].body["crop"]
+    assert parse_aspect(crop, where="x") == pytest.approx(16 / 9)
+
+
+def test_a_copied_number_keeps_how_it_was_written(tmp_path):
+    import copy
+
+    cells = _parse(_NUMBERS, tmp_path).slides[0].place[0].body["rows"][0]
+    assert str(copy.deepcopy(cells)[1]) == "1.10"
+
+
+@pytest.mark.parametrize("written", ["007", "0x1F", "0b101", "1:30", "-010", "1:30.5"])
+def test_a_number_yaml_reads_in_another_base_is_the_text_written(tmp_path, written):
+    """YAML 1.1 reads `010` as 8: kept a number, a cell would print 010 and a chart plot 8."""
+    text = f"theme: base\n---\ntitle: T\nplace:\n  - at: {{cols: full}}\n    table: {{rows: [[{written}]]}}\n"
+    cell = _parse(text, tmp_path).slides[0].place[0].body["rows"][0][0]
+    assert type(cell) is str and cell == written
+
+
+def test_a_parsed_number_dumps_back_as_it_was_written(tmp_path):
+    """`safe_dump` refuses an int or float subclass it has no representer for."""
+    import yaml
+
+    from deckwright.spec._scalars import SpecLoader
+
+    cells = _parse(_NUMBERS, tmp_path).slides[0].place[0].body["rows"][0]
+    dumped = yaml.safe_dump(cells)
+    assert dumped == "- Alpha\n- 1.10\n- 2.50\n- '007'\n"
+    assert [str(c) for c in yaml.load(dumped, Loader=SpecLoader)] == [
+        "Alpha",
+        "1.10",
+        "2.50",
+        "007",
+    ]
+
+
+def test_chapters_run_out_of_their_declared_order_are_rejected_naming_both(tmp_path):
+    """Contiguous runs can still contradict `sections:`, and a `nav` drawn from it would lie."""
+    text = (
+        "theme: t\nsections: [Alpha, Beta, Gamma]\n"
+        "---\nsection: Beta\n---\nsection: Alpha\n---\nsection: Gamma\n"
+    )
+    with pytest.raises(
+        SpecError,
+        match=r"slide 2 begins section 'Alpha' after 'Beta', but 'sections:' lists Alpha, Beta, Gamma",
+    ):
+        _parse(text, tmp_path)
+
+
+def test_a_declared_section_with_no_slides_can_be_skipped(tmp_path):
+    text = "theme: t\nsections: [Alpha, Beta, Gamma]\n---\nsection: Alpha\n---\nsection: Gamma\n"
+    assert [s.section for s in _parse(text, tmp_path).slides] == ["Alpha", "Gamma"]

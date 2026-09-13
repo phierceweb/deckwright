@@ -10,7 +10,7 @@ from functools import partial
 from pf_core.log import get_logger
 
 from deckwright.errors import ThemeError
-from deckwright.utils.color import AA_NORMAL, contrast_ratio, normalize_hex
+from deckwright.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio, normalize_hex
 
 logger = get_logger(__name__)
 
@@ -95,6 +95,27 @@ class Palette:
                     ratio=round(ratio, 2),
                     minimum=AA_NORMAL,
                 )
+        self._check_inverse_stands_off_page()
+
+    def _check_inverse_stands_off_page(self) -> None:
+        """Warn when an inverse plate would vanish into the page it is laid on.
+
+        ``surface`` is left alone: it is a deliberate recess, near the page by design.
+        """
+        page, inverse = self.roles.get("page"), self.roles.get("inverse")
+        if page is None or inverse is None:
+            return
+        ratio = contrast_ratio(page, inverse)
+        if ratio < AA_LARGE:
+            logger.warning(
+                "theme_inverse_matches_page",
+                page=page,
+                inverse=inverse,
+                ratio=round(ratio, 2),
+                minimum=AA_LARGE,
+                fix="bind inverse and inverse-ink to colours that stand off the page, "
+                "or re-adopt the template to rebind them",
+            )
 
     def role(self, name: str) -> str:
         """The hex a semantic role resolves to."""

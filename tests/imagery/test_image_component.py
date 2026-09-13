@@ -96,3 +96,15 @@ def test_text_over_a_white_photograph_gets_a_scrim_nobody_asked_for(ctx_factory,
     assert len(shapes) == 3, "expected picture, scrim, textbox"
     scrim = shapes[1]
     assert scrim.width == Inches(ctx.body_rect.width)
+
+
+def test_what_is_behind_a_scrimmed_picture_is_the_picture_under_its_scrim(ctx_factory, white_wide):
+    """Text laid over the picture reads against the scrim covering it, not its bare pixels."""
+    from deckwright.utils.color import relative_luminance
+
+    ctx = ctx_factory(
+        {"image": {"src": str(white_wide), "scrim": {"pair": "inverse", "opacity": 0.9}}}
+    )
+    _draw(ctx)
+    ground = ctx.behind(ctx.body_rect, ink="FFFFFF")
+    assert relative_luminance(ground) < 0.2

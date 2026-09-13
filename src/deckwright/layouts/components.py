@@ -1,8 +1,8 @@
 """Body-component registration.
 
 A component returns a :class:`BodyResult`: one reveal group per revealable unit — shape
-ids, or ``(shape_id, kind)`` tuples for a specific entrance — plus the vertical extent it
-consumed. A component that does not report height may return a bare group list.
+ids, or tuples adding a motion role and a paragraph (see ``RevealItem``) — plus the
+vertical extent it consumed. A component that does not report height may return a bare group list.
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ from deckwright.errors import LayoutError
 
 logger = get_logger(__name__)
 
-RevealItem = int | tuple[int, str]
+# An id, an id with its motion role, or that and the paragraph of the shape it reveals.
+RevealItem = int | tuple[int, str] | tuple[int, str, int]
 
 
 def shape_id(item: RevealItem) -> int:

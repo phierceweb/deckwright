@@ -109,6 +109,183 @@ def test_re_adopting_the_same_template_keeps_the_hand_edits(themes, template, tm
     assert yaml.safe_load(hand_edited.read_text())["type"]["face"] == "Georgia"
 
 
+_STALE = (
+    "name: brand\ntemplate: Brand.pptx\ntype:\n  face: Georgia\n"
+    "bind:\n  page: lt1\n  inverse: lt2\n  inverse-ink: dk1\n"
+)
+
+
+def test_re_adopting_rebinds_an_inverse_lost_in_the_page_and_keeps_the_other_edits(
+    themes, template, tmp_path
+):
+    kept = themes / "brand.theme.yaml"
+    kept.write_text(_STALE)
+
+    result = conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    theme = yaml.safe_load(kept.read_text())
+    assert theme["bind"] == {"page": "lt1", "inverse": "dk2"}
+    assert theme["type"]["face"] == "Georgia"
+    assert "rebound inverse lt2 -> dk2: 1.2:1 off the page, now 9.1:1" in result.notes
+
+
+_COMMENTED = (
+    "name: brand\ntemplate: Brand.pptx\n# Georgia because the client asked for it\n"
+    "type:\n  face: Georgia\nbind:\n  page: lt1  # the master paints white\n"
+    "  inverse: lt2\n  inverse-ink: dk1\n# end\n"
+)
+
+
+def test_re_adopting_an_unchanged_theme_leaves_its_file_byte_for_byte(themes, template, tmp_path):
+    kept = themes / "brand.theme.yaml"
+    text = _COMMENTED.replace("inverse: lt2\n  inverse-ink: dk1\n", "inverse: dk2\n")
+    kept.write_text(text)
+
+    conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert kept.read_text() == text
+
+
+def test_a_rebind_rewrites_only_its_own_lines_and_keeps_the_comments(themes, template, tmp_path):
+    kept = themes / "brand.theme.yaml"
+    kept.write_text(_COMMENTED)
+
+    conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert kept.read_text() == (
+        "name: brand\ntemplate: Brand.pptx\n# Georgia because the client asked for it\n"
+        "type:\n  face: Georgia\nbind:\n  page: lt1  # the master paints white\n"
+        "  inverse: dk2\n# end\n"
+    )
+
+
+def test_a_rebind_of_a_default_inverse_adds_the_binding_beneath_the_others(
+    themes, template, tmp_path
+):
+    """A page bound dark leaves the default 12161B inverse invisible on it."""
+    kept = themes / "brand.theme.yaml"
+    kept.write_text("name: brand\ntemplate: Brand.pptx\nbind:\n  page: 1E2A3A  # dark\n")
+
+    conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert kept.read_text() == (
+        "name: brand\ntemplate: Brand.pptx\nbind:\n  page: 1E2A3A  # dark\n"
+        "  inverse: lt1\n  inverse-ink: dk1\n"
+    )
+
+
+def test_a_flow_style_bind_is_rewritten_whole_and_still_rebound(themes, template, tmp_path):
+    kept = themes / "brand.theme.yaml"
+    kept.write_text("name: brand\ntemplate: Brand.pptx\n# kept?\nbind: {page: lt1, inverse: lt2}\n")
+
+    conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert yaml.safe_load(kept.read_text())["bind"] == {"page": "lt1", "inverse": "dk2"}
+    assert "#" not in kept.read_text()
+
+
+def _install_over(themes, template, tmp_path, kept: bytes) -> bytes:
+    """Install a theme binding `inverse: dk2` over ``kept``; return the file's bytes after."""
+    (themes / "brand.theme.yaml").write_bytes(kept)
+    derived = tmp_path / "derived.theme.yaml"
+    derived.write_text(
+        yaml.safe_dump(
+            {"name": "brand", "template": "Brand.pptx", "bind": {"inverse": "dk2"}},
+            sort_keys=False,
+        )
+    )
+    install(plan("brand", template), derived)
+    return (themes / "brand.theme.yaml").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("kept", "written"),
+    [
+        (
+            b"name: brand  # house brand\ntemplate: Brand.pptx\nbind: {}\n",
+            b"name: brand  # house brand\ntemplate: Brand.pptx\nbind:\n  inverse: dk2\n",
+        ),
+        (
+            b"name: brand  # house brand\ntemplate: Brand.pptx\nbind: ~\n",
+            b"name: brand  # house brand\ntemplate: Brand.pptx\nbind:\n  inverse: dk2\n",
+        ),
+        (
+            b"name: brand\ntemplate: Brand.pptx\nbind:\n    # from the brand book\n  inverse: lt2\n",
+            b"name: brand\ntemplate: Brand.pptx\nbind:\n    # from the brand book\n  inverse: dk2\n",
+        ),
+        (
+            b"name: brand\r\ntemplate: Brand.pptx\r\nbind:\r\n  inverse: lt2  # tuned\r\n",
+            b"name: brand\r\ntemplate: Brand.pptx\r\nbind:\r\n  inverse: dk2  # tuned\r\n",
+        ),
+        (
+            b"name: brand\ntemplate: Brand.pptx\nbind:\n  inverse: dk2",
+            b"name: brand\ntemplate: Brand.pptx\nbind:\n  inverse: dk2",
+        ),
+        (
+            b"name: brand\nname: brand\ntemplate: Brand.pptx\nbind:\n  inverse: lt2\n",
+            b"name: brand\ntemplate: Brand.pptx\nbind:\n  inverse: dk2\n",
+        ),
+    ],
+    ids=[
+        "inline-empty-bind",
+        "null-bind",
+        "indented-comment",
+        "crlf",
+        "no-final-newline",
+        "repeated-key",
+    ],
+)
+def test_install_edits_a_kept_theme_in_place_whatever_its_shape(
+    themes, template, tmp_path, kept, written
+):
+    """PyYAML keeps the last of a repeated key, so a second `bind:` would read back as right."""
+    assert _install_over(themes, template, tmp_path, kept) == written
+
+
+def test_a_theme_that_cannot_be_edited_in_place_says_its_comments_went(
+    themes, template, tmp_path, caplog
+):
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        after = _install_over(
+            themes,
+            template,
+            tmp_path,
+            b"name: brand\ntemplate: Brand.pptx\n# kept?\nbind: {inverse: lt2}\n",
+        )
+
+    assert yaml.safe_load(after)["bind"] == {"inverse": "dk2"}
+    assert "theme_comments_dropped" in caplog.text
+
+
+def test_a_malformed_bind_fails_the_exercises_by_name_rather_than_crashing(
+    themes, template, tmp_path
+):
+    """The loader names the problem; the rebind must not reach it first and raise AttributeError."""
+    (themes / "brand.theme.yaml").write_text("name: brand\ntemplate: Brand.pptx\nbind: [lt1]\n")
+
+    result = conform(template, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+
+    assert result.passed == []
+    assert "bind" in result.failed[0][1]
+    assert result.adopted is None
+
+
+def test_exercising_a_kept_theme_without_adopting_it_only_reports_the_lost_inverse(
+    themes, template, tmp_path
+):
+    kept = themes / "brand.theme.yaml"
+    kept.write_text(_STALE)
+
+    result = conform(template, tmp_path / "out", exercises={"fine": FINE}, theme=kept)
+
+    assert yaml.safe_load(result.theme.read_text())["bind"]["inverse"] == "lt2"
+    assert (
+        "inverse lt2 -> dk2: 1.2:1 off the page, now 9.1:1 — re-adopting rebinds it" in result.notes
+    )
+
+
 def test_force_re_derives_and_discards_the_hand_edits(themes, template, tmp_path):
     """`--force` is the only way to throw tuning away: it ignores the sidecar that would
     otherwise restore it."""
@@ -133,6 +310,52 @@ def test_a_template_outside_the_theme_directory_is_refused(themes, tmp_path):
         conform(stray, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
 
     assert not (themes / "brand.theme.yaml").exists()
+
+
+def test_the_move_the_refusal_prints_survives_a_name_a_shell_would_split(themes, tmp_path):
+    import shlex
+
+    stray = _template(tmp_path / "Brand [Dark] v2.pptx")
+    with pytest.raises(ThemeError) as e:
+        conform(stray, tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+    words = shlex.split(str(e.value).split("`")[1])
+    assert words == ["mkdir", "-p", str(themes), "&&", "mv", str(stray), f"{themes}/"]
+
+
+def test_a_stray_template_whose_name_is_taken_prints_no_move_over_it(themes, template, tmp_path):
+    stray = _template(tmp_path / "Brand.pptx", slides=2)
+
+    with pytest.raises(ThemeError) as e:
+        plan("brand", stray)
+
+    assert "mv " not in str(e.value)
+    assert f"{themes}/ already holds a different Brand.pptx" in str(e.value)
+
+
+def test_a_stray_copy_of_a_resident_template_is_sent_to_adopt_that_copy(themes, template, tmp_path):
+    import shlex
+    import shutil
+
+    stray = tmp_path / "Brand.pptx"
+    shutil.copy(template, stray)
+
+    with pytest.raises(ThemeError) as e:
+        plan("brand", stray)
+
+    words = shlex.split(str(e.value).split("`")[1])
+    assert words == ["deckwright", "conform", str(template), "--adopt", "brand"]
+
+
+def test_a_template_symlinked_into_the_theme_directory_adopts_and_builds(themes, tmp_path):
+    """The theme binds the link by its bare name, so the link is where the template lives."""
+    (themes / "Brand.pptx").symlink_to(_template(tmp_path / "Brand.pptx"))
+
+    conform(themes / "Brand.pptx", tmp_path / "out", exercises={"fine": FINE}, adopt="brand")
+    spec = tmp_path / "d.deck.yaml"
+    spec.write_text("theme: brand\nout: d.pptx\n---\ntitle: T\n")
+
+    assert build_deck(spec, out=tmp_path / "d.pptx").deck.is_file()
+    assert yaml.safe_load((themes / "brand.theme.yaml").read_text())["template"] == "Brand.pptx"
 
 
 def test_a_name_already_bound_to_a_different_template_is_refused(themes, template, tmp_path):
@@ -418,8 +641,7 @@ def test_a_script_reference_is_skipped_rather_than_read_as_the_latin_face(tmp_pa
 
 
 def test_the_pitchdeck_template_derives_a_real_face():
-    """The corpus template that exhibited this: 201 characters of `+mj-lt` against 8 of
-    Open Sans, so the reference won the count and `+mj-lt` was written into the theme."""
+    """A corpus template whose slides reference `+mj-lt` far more often than they name a face."""
     template = (
         pathlib.Path(__file__).resolve().parents[1]
         / "templates"

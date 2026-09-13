@@ -44,7 +44,7 @@ def code(ctx: SlideCtx) -> BodyResult:
     groups: list[list[RevealItem]] = []
     if heading is not None:
         frame = _heading(ctx, heading, top)
-        groups.append([frame.shape_id])
+        groups.append([(frame.shape_id, "text")])
         top += _HEADING_H
 
     advance = Inches(size * _LINE_ADVANCE / 72).inches
@@ -79,9 +79,11 @@ def code(ctx: SlideCtx) -> BodyResult:
             font=ctx.theme.mono,
         )
         drawn.append(line or " ")
-    ctx.manifest.record(plate, lines=drawn, font_pt=size, bg=pair.bg, plate=True)
-    groups.append([plate.shape_id])
-    ctx.panels.append((_plate_rect(rect, top, plate_h), pair.bg))
+    ctx.manifest.record(
+        plate, lines=drawn, font_pt=size, fg=ctx.ink_on(pair.bg), bg=pair.bg, plate=True
+    )
+    groups.append([(plate.shape_id, "text")])
+    ctx.painted.append((_plate_rect(rect, top, plate_h), pair.bg))
     return BodyResult(groups=groups, height=(top - rect.top) + plate_h)
 
 
@@ -125,8 +127,8 @@ def _heading(ctx: SlideCtx, text: str, top: float):
     from deckwright.utils.shapes import textbox
 
     frame = textbox(ctx.slide, ctx.body_rect.left, top, ctx.body_rect.width, _HEADING_H)
-    head_line(ctx, frame, text, first=True)
-    ctx.manifest.record(frame._parent, text=text)
+    ink, paper = head_line(ctx, frame, text, first=True)
+    ctx.manifest.record(frame._parent, text=text, font_pt=ctx.style("head").size, fg=ink, bg=paper)
     return frame._parent
 
 

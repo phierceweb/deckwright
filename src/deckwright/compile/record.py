@@ -130,6 +130,8 @@ class ShapeRecord:
     bleed: bool = False  # the author declared this one off-canvas
     plate: bool = False  # a surface painted so something else reads on it
     annotation: bool = False  # depicts geometry rather than occupying it
+    fill: str | None = None  # a fill meant to stand off its ground; a recess records none
+    ground: str | None = None  # what was painted under that fill
 
 
 @dataclass

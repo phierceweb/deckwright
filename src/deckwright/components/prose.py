@@ -6,7 +6,7 @@ from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.utils.shapes import ANCHOR, para, textbox
-from deckwright.utils.text import LINE_HEIGHT, wrapped_lines
+from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, wrapped_lines
 
 from deckwright.components._shape import anchored, known_fields
 
@@ -53,17 +53,18 @@ def prose(ctx: SlideCtx) -> BodyResult:
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'prose'): {len(paragraphs)} paragraph(s) "
             f"need {needed:.2f}in at this measure but the body rect is only "
-            f"{rect.height:.2f}in — split the slide or shorten the copy"
+            f"{rect.height:.2f}in — split the slide or shorten the copy{estimate_caveat(face)}"
         )
 
     box = anchored(rect, width, needed, align=ctx.align, anchor="top")
     tf = textbox(ctx.slide, box.left, box.top, box.width, box.height, anchor=ANCHOR["top"])
+    ink, paper = ctx.text_ink(box, size_pt=style.size)
     for index, text in enumerate(paragraphs):
         para(
             tf,
             text,
             style.size,
-            ctx.fg(),
+            ctx.rgb(ink),
             italic=cite is not None,
             first=index == 0,
             space_after=_PARA_SPACE_PT,
@@ -74,7 +75,7 @@ def prose(ctx: SlideCtx) -> BodyResult:
             tf,
             f"— {cite}",
             caption.size,
-            ctx.dim(),
+            ctx.rgb(ctx.text_ink(box, size_pt=caption.size, muted=True)[0]),
             space_after=0,
             font=ctx.theme.font_for(caption),
         )
@@ -83,7 +84,7 @@ def prose(ctx: SlideCtx) -> BodyResult:
         lines=paragraphs + ([f"— {cite}"] if cite else []),
         font_pt=style.size,
         line_pt=[style.size] * len(paragraphs) + ([caption.size] if cite else []),
-        fg=ctx.pair.fg,
-        bg=ctx.pair.bg,
+        fg=ink,
+        bg=paper,
     )
-    return BodyResult(groups=[[tf._parent.shape_id]], height=needed)
+    return BodyResult(groups=[[(tf._parent.shape_id, "text")]], height=needed)

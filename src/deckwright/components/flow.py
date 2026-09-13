@@ -13,7 +13,6 @@ from deckwright.layouts.components import (
     RevealItem,
     as_body_result,
     component,
-    shape_id,
 )
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
@@ -206,25 +205,22 @@ def _split(
     return badge, plate
 
 
-def _badge(ctx: SlideCtx, rect: Rect, index: int, *, current: bool) -> int:
+def _badge(ctx: SlideCtx, rect: Rect, index: int, *, current: bool) -> RevealItem:
     fields = {"label": str(index), "pair": _CURRENT_BADGE_PAIR if current else _BADGE_PAIR}
     sub = subcontext(ctx, "step disc", fields, rect, align="center", anchor="middle")
-    return shape_id(as_body_result(ellipse(sub)).groups[0][0])
+    return as_body_result(ellipse(sub)).groups[0][0]
 
 
-def _plate(ctx: SlideCtx, rect: Rect, item: dict, *, pair: str) -> list[int]:
+def _plate(ctx: SlideCtx, rect: Rect, item: dict, *, pair: str) -> list[RevealItem]:
     fields: dict = {"heading": str(item["head"]), "pair": pair}
     if item.get("body"):
         fields["body"] = str(item["body"])
     if item.get("icon"):
         fields["icon"] = str(item["icon"])
-    return [
-        shape_id(i)
-        for i in as_body_result(card(subcontext(ctx, "step plate", fields, rect))).groups[0]
-    ]
+    return as_body_result(card(subcontext(ctx, "step plate", fields, rect))).groups[0]
 
 
-def _join(ctx: SlideCtx, tail: Rect, head: Rect, arrow: str) -> int:
+def _join(ctx: SlideCtx, tail: Rect, head: Rect, arrow: str) -> RevealItem:
     """The line from one step's mark to the next, drawn by ``connector`` itself.
 
     The two ends are handed over as a placement table private to this call, so the slide
@@ -240,4 +236,4 @@ def _join(ctx: SlideCtx, tail: Rect, head: Rect, arrow: str) -> int:
         anchor="top",
         placements={_TAIL: tail, _HEAD: head},
     )
-    return shape_id(as_body_result(connector(sub)).groups[0][0])
+    return as_body_result(connector(sub)).groups[0][0]

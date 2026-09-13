@@ -7,7 +7,7 @@ import pytest
 
 import deckwright.components  # noqa: F401 — registers the built-ins
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 
 ITEMS = [
     {"icon": "mail", "text": "Subscriber digest"},
@@ -24,7 +24,7 @@ def test_every_icon_is_inside_a_reveal_group(ctx_factory):
     """The bug this exists for: an ungrouped shape shows before the first click."""
     ctx = _ctx(ctx_factory)
     groups = get_component("fanout")(ctx).groups
-    grouped = {spid for group in groups for spid in group}
+    grouped = {shape_id(spid) for group in groups for spid in group}
     icons = [s.shape_id for s in ctx.slide.shapes if s.name.startswith("Icon ")]
     assert icons, "no icons were drawn, so this proves nothing"
     assert set(icons) <= grouped, "an icon is outside every group and shows from beat 0"
@@ -78,7 +78,7 @@ def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("fanout")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_fanout_is_registered():

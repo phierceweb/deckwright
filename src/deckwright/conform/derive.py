@@ -20,7 +20,7 @@ from deckwright.imagery.sample import cells, load, weakest
 from deckwright.layouts.chrome import CHROME_ORDER
 from deckwright.layouts.resolve import pick_compose_layout
 from deckwright.theme.clrscheme import parse_color_scheme, parse_font_scheme, read_theme_xml
-from deckwright.theme.defaults import DEFAULT_RAMP, default_grid
+from deckwright.theme.defaults import DEFAULT_RAMP, DEFAULT_ROLES, default_grid
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
 from deckwright.theme.palette import lum
@@ -201,6 +201,30 @@ def _over(painted: str, scheme: dict[str, str]) -> dict[str, str]:
     }
 
 
+def _inverse(scheme: dict[str, str], *, page: str) -> str:
+    """The slot to reverse out of ``page`` with: the farthest from it that still reads.
+
+    Slot names are no guide: a scheme may keep its dark page colour in ``lt2``.
+    """
+    slots = [s for s in (*_DARK_SLOTS, *_LIGHT_SLOTS) if s in scheme]
+    reads = [s for s in slots if contrast_ratio(scheme[s], page) >= AA_NORMAL]
+    # A slot carrying hue is this brand's; pure black or white is every brand's.
+    hued = [s for s in reads if _chroma(scheme[s]) >= _MIN_CHROMA]
+    page_lum = relative_luminance(page)
+    return max(hued or reads or slots, key=lambda s: abs(relative_luminance(scheme[s]) - page_lum))
+
+
+def _inverse_ink(scheme: dict[str, str], *, inverse: str) -> str | None:
+    """The slot to ink an ``inverse`` plate with, or None when the default already reads.
+
+    The default presumes a dark plate, so only a light one needs its own.
+    """
+    if contrast_ratio(DEFAULT_ROLES["inverse-ink"], inverse) >= AA_NORMAL:
+        return None
+    slots = [s for s in (*_DARK_SLOTS, *_LIGHT_SLOTS) if s in scheme]
+    return max(slots, key=lambda s: contrast_ratio(scheme[s], inverse))
+
+
 def _clear_run(path: Path, band: tuple[float, float]) -> tuple[float, float] | None:
     """The widest horizontal run of ``band`` a background picture leaves uniform.
 
@@ -277,6 +301,11 @@ def _mix(colour: str, other: str, amount: float) -> str:
     )
 
 
+def master_scheme(prs, *, prefer: str | None = None) -> dict[str, str]:
+    """The colour scheme of the master generated slides compose on."""
+    return parse_color_scheme(read_theme_xml(pick_compose_layout(prs, prefer=prefer).slide_master))
+
+
 def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]:
     """The theme YAML for ``template``, as a mapping ready to dump.
 
@@ -288,9 +317,7 @@ def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]
     prs = open_presentation(template)
     slide_h = Emu(prs.slide_height).inches
     canvas = Rect(0.0, 0.0, Emu(prs.slide_width).inches, slide_h)
-    scheme = parse_color_scheme(
-        read_theme_xml(pick_compose_layout(prs, prefer=prefer).slide_master)
-    )
+    scheme = master_scheme(prs, prefer=prefer)
 
     surface = inherited_surface(pick_compose_layout(prs, prefer=prefer))
     art = (
@@ -313,18 +340,11 @@ def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]
     ]
     for i, slot in enumerate(real, start=1):
         bind[f"accent-{i}"] = slot
-    slots = [s for s in (*_DARK_SLOTS, *_LIGHT_SLOTS) if s in scheme]
-    dark = [s for s in _DARK_SLOTS if s in scheme]
-    if dark:
-        # A dark carrying hue is this brand's dark; pure black is every brand's black.
-        hued = [s for s in dark if _chroma(scheme[s]) >= _MIN_CHROMA]
-        chosen = min(hued or dark, key=lambda s: relative_luminance(scheme[s]))
-        lightest = max(slots, key=lambda s: relative_luminance(scheme[s]))
-        # Some schemes set every dark slot light — there is then nothing to reverse out
-        # of, and binding one gives a pair whose ink and ground are the same colour.
-        if contrast_ratio(scheme[lightest], scheme[chosen]) < AA_NORMAL:
-            chosen = max(slots, key=lambda s: contrast_ratio(scheme[lightest], scheme[s]))
-        bind["inverse"] = chosen
+    if any(s in scheme for s in _DARK_SLOTS):
+        bind["inverse"] = _inverse(scheme, page=scheme.get(bind["page"], bind["page"]))
+        ink = _inverse_ink(scheme, inverse=scheme[bind["inverse"]])
+        if ink is not None:
+            bind["inverse-ink"] = ink
 
     face, ramp = _typography(prs, slide_h)
     theme: dict[str, Any] = {
@@ -358,25 +378,40 @@ def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]
     return theme
 
 
-def notes(template: str | Path, *, prefer: str | None = None) -> list[str]:
-    """What a reader of the derived theme should know about this template."""
+def notes(template: str | Path, *, bind: dict[str, str], prefer: str | None = None) -> list[str]:
+    """What a reader of the theme should know about this template.
+
+    ``bind`` is the theme as written, so the colours reported are the ones a deck gets.
+    """
     prs = open_presentation(template)
-    scheme = parse_color_scheme(
-        read_theme_xml(pick_compose_layout(prs, prefer=prefer).slide_master)
+    scheme = master_scheme(prs, prefer=prefer)
+
+    def named(role: str) -> str:
+        if role not in bind:
+            return f"{DEFAULT_ROLES[role]} (default)"
+        value = bind[role]
+        return f"{value}={scheme[value]}" if value in scheme else value
+
+    def hex_of(role: str) -> str:
+        return scheme.get(bind[role], bind[role]) if role in bind else DEFAULT_ROLES[role]
+
+    grounds = (
+        f"page {named('page')}, ink {named('ink')} "
+        f"({contrast_ratio(hex_of('ink'), hex_of('page')):.1f}:1), inverse {named('inverse')} "
+        f"({contrast_ratio(hex_of('inverse'), hex_of('page')):.1f}:1 on the page)"
     )
-    page_slot, ink_slot = _surfaces(scheme)
     out = [
         f"canvas {Emu(prs.slide_width).inches:.2f} x {Emu(prs.slide_height).inches:.2f}in",
         f"composes on {pick_compose_layout(prs, prefer=prefer).name!r} "
         f"across {len(prs.slide_masters)} master(s)",
-        f"page {page_slot}={scheme[page_slot]}, ink {ink_slot}={scheme[ink_slot]} "
-        f"({contrast_ratio(scheme[ink_slot], scheme[page_slot]):.1f}:1)",
+        grounds,
     ]
     stock = [
         s for s in (f"accent{i}" for i in range(1, 7)) if s in scheme and is_stock_accent(scheme[s])
     ]
     if stock:
         out.append(f"ignored {len(stock)} unedited stock accent(s): {', '.join(stock)}")
-    if ink_slot != "dk1":
-        out.append(f"ink came from {ink_slot}, not dk1 — dk1 is not this template's darkest")
+    ink = bind.get("ink")
+    if ink in _DARK_SLOTS and ink != "dk1":
+        out.append(f"ink came from {ink}, not dk1 — dk1 is not this template's darkest")
     return out

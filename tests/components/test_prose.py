@@ -42,3 +42,15 @@ def test_without_a_cite_the_copy_is_upright(ctx_factory):
     get_component("prose")(ctx)
     run = ctx.slide.shapes[0].text_frame.paragraphs[0].runs[0]
     assert not run.font.italic
+
+
+def test_a_prose_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_factory, theme):
+    import dataclasses
+
+    unmeasured = dataclasses.replace(theme, face="Segoe UI", heading_face="Segoe UI")
+    ctx = ctx_factory(
+        {"title": "T", "prose": {"paragraphs": ["Words to wrap at the capped measure. " * 40] * 6}},
+        theme_override=unmeasured,
+    )
+    with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
+        get_component("prose")(ctx)

@@ -90,11 +90,13 @@ def test_every_click_sequence_effect_kind_validates(schema, kind):
     assert _validate(schema, prs) == []
 
 
+@pytest.mark.parametrize("kind", ["fade", "wipeup", "wiperight"])
 @pytest.mark.parametrize("by", ["category", "series", "element", "all"])
-def test_every_chart_build_validates(schema, by):
-    """`bldStep` is required on `<a:chart>`; omitting it is the defect this caught."""
+def test_every_chart_build_validates(schema, by, kind):
+    """`bldStep` is required on `<a:chart>`. Every
+    entrance a theme's `datum` role may bind is built the same way."""
     prs, slide, text, blank, chart = _deck()
-    add_chart_build(slide, chart, by, parts=3)
+    add_chart_build(slide, chart, by, parts=3, kind=kind)
     assert _validate(schema, prs) == []
 
 
@@ -189,3 +191,15 @@ def test_the_gate_catches_a_missing_required_attribute(schema):
 
     assert not schema.validate(etree.fromstring(sabotaged))
     assert "bldStep" in schema.error_log[0].message
+
+
+def test_a_click_sequence_revealing_paragraphs_of_one_shape_validates(schema):
+    """`one_at_a_time` on a single bullets column reveals one paragraph per click."""
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(3), Inches(2))
+    box.text_frame.text = "one"
+    for line in ("two", "three"):
+        box.text_frame.add_paragraph().text = line
+    add_click_sequence(slide, [[(box.shape_id, "fade", i)] for i in range(3)])
+    assert _validate(schema, prs) == []

@@ -13,6 +13,7 @@ import yaml
 from pf_core.log import get_logger
 
 from deckwright.errors import LayoutError, SpecError
+from deckwright.spec._scalars import SpecLoader
 from deckwright.spec._place import place
 from deckwright.utils.keys import unknown_field
 from deckwright.spec.model import Background, DeckSpec, SlideSpec
@@ -59,7 +60,7 @@ def parse_deck(path: str | Path) -> DeckSpec:
 def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
     """Parse deck-spec YAML. ``source`` anchors relative paths and error messages."""
     try:
-        docs = list(yaml.safe_load_all(text))
+        docs = list(yaml.load_all(text, Loader=SpecLoader))
     except yaml.YAMLError as e:
         raise SpecError(f"{source.name}: invalid YAML — {e}") from e
 
@@ -100,7 +101,7 @@ def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
         _slide(doc, index=i, sections=sections, source=source)
         for i, doc in enumerate(slide_docs, start=1)
     )
-    _check_section_runs(slides, source=source)
+    _check_section_runs(slides, sections=sections, source=source)
     deck = DeckSpec(
         theme=str(config["theme"]),
         slides=slides,
@@ -128,16 +129,17 @@ def _text(value: Any) -> str | None:
     return None if value is None else str(value)
 
 
-def _check_section_runs(slides: tuple[SlideSpec, ...], *, source: Path) -> None:
-    """Refuse a chapter that resumes after another has begun.
+def _check_section_runs(
+    slides: tuple[SlideSpec, ...], *, sections: tuple[str, ...], source: Path
+) -> None:
+    """Refuse a chapter that resumes, or that runs out of the order ``sections:`` lists.
 
-    ``sections:`` declares chapter order and each slide's membership is checked, but
-    nothing compared the two: a reorder that moved one slide out of its run built
-    clean, and a theme drawing no section rail renders that invisibly. A slide with no
-    section of its own sits inside the run it falls in and does not break it.
+    A slide with no section of its own sits inside the run it falls in and does not
+    break it.
 
     Raises:
-        SpecError: a section's slides are not contiguous.
+        SpecError: a section's slides are not contiguous, or its run begins before one
+            ``sections:`` lists ahead of it.
     """
     ended: dict[str, int] = {}
     current: str | None = None
@@ -156,6 +158,16 @@ def _check_section_runs(slides: tuple[SlideSpec, ...], *, source: Path) -> None:
                 f"ended at slide {ended[name]} when {current!r} began — a chapter runs "
                 f"once, so 'sections:' cannot describe this order. Move the slide back "
                 f"into its run, or give it the section it now sits in"
+            )
+        if (
+            current in sections
+            and name in sections
+            and sections.index(name) < sections.index(current)
+        ):
+            raise SpecError(
+                f"{source.name}: slide {slide.index} begins section {name!r} after "
+                f"{current!r}, but 'sections:' lists {', '.join(sections)} — reorder the "
+                f"slides or the list, so a nav drawn from it names the chapters in order"
             )
         current = name
         last = slide.index

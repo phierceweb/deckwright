@@ -276,8 +276,7 @@ def test_a_column_chrome_line_still_pushes_the_content_band_down():
 
 
 def test_a_chrome_box_too_short_for_its_text_names_the_slide(theme):
-    """The most-met error in the project, and the only one of five in run 3 that did
-    not say which slide it was about."""
+    """The most-met build error names its slide like every other."""
     lines = {"title": ("A title long enough that it certainly wraps to two lines", 40.0)}
     fields = {
         "title": chrome_field(
@@ -293,8 +292,8 @@ def _title_field(h):
 
 
 def test_an_auto_height_box_takes_the_depth_its_text_wraps_to(theme):
-    """A hand-measured `h:` is tuned against one title at one rung, and every run of the
-    drift test has had a build fail because re-shuffling changed the title."""
+    """A hand-measured `h:` is tuned against one title at one rung; re-shuffling content
+    changes the title."""
     short = chrome_bands(
         {"title": ("Short", 40.0)}, fields={"title": _title_field("auto")}, grid=theme.grid
     )
@@ -334,3 +333,10 @@ def test_an_auto_height_box_keeps_the_top_it_was_given(theme):
         {"title": ("Short", 40.0)}, fields={"title": _title_field("auto")}, grid=theme.grid
     )
     assert bands[0].rect.top == pytest.approx(0.20 * theme.grid.slide_h)
+
+
+def test_a_chrome_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(theme):
+    lines = {"title": ("A title long enough that it certainly wraps to two lines", 40.0)}
+    fields = {"title": _title_field("8%")}
+    with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
+        chrome_bands(lines, fields=fields, grid=theme.grid, slide=7, faces={"title": "Segoe UI"})

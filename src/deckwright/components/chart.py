@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from deckwright.errors import LayoutError
+from deckwright.charts.record import record_chart_text
 from deckwright.charts._kinds import _BUILDABLE_BY_CATEGORY
 from deckwright.charts.model import ChartSpec
 from deckwright.charts.native import add_native_chart
@@ -33,6 +34,7 @@ def chart(ctx: SlideCtx) -> BodyResult:
 
     frame = add_native_chart(ctx, spec, rect)
     ctx.manifest.record(frame, rendered="native")
+    record_chart_text(ctx, frame, spec)
     height = frame.height / _EMU_PER_INCH
     if animate in _CHART_ANIMATIONS:
         by = _CHART_ANIMATIONS[animate]
@@ -45,9 +47,11 @@ def chart(ctx: SlideCtx) -> BodyResult:
                 f"that builds: {', '.join(sorted(_BUILDABLE_BY_CATEGORY))}"
             )
         parts = len(spec.series) if by == "series" else len(spec.categories)
-        add_chart_build(ctx.slide, frame.shape_id, by=by, parts=parts)
+        add_chart_build(
+            ctx.slide, frame.shape_id, by=by, parts=parts, kind=ctx.theme.motion.roles["datum"]
+        )
         ctx.manifest.record_animation(
             "chart_build", [[frame.shape_id]], clicks=parts + 1 if parts >= 1 else 1
         )
         return BodyResult(groups=[], height=height)
-    return BodyResult(groups=[[frame.shape_id]], height=height)
+    return BodyResult(groups=[[(frame.shape_id, "datum")]], height=height)

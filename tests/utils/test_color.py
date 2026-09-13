@@ -48,3 +48,10 @@ def test_the_channel_weights_are_the_wcag_ones():
     assert relative_luminance("FF0000") == pytest.approx(0.2126, abs=1e-4)
     assert relative_luminance("00FF00") == pytest.approx(0.7152, abs=1e-4)
     assert relative_luminance("0000FF") == pytest.approx(0.0722, abs=1e-4)
+
+
+def test_colour_difference_is_zero_for_one_colour_and_a_hundred_from_black_to_white():
+    from deckwright.utils.color import delta_e
+
+    assert delta_e("3282BE", "3282BE") == 0.0
+    assert delta_e("000000", "FFFFFF") == pytest.approx(100.0, abs=0.01)

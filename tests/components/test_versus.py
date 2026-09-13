@@ -9,7 +9,7 @@ import pytest
 import deckwright.components  # noqa: F401 — registers the built-ins
 from deckwright.components.versus import _MIDDLE, _side_floor
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 
 LEFT = {"value": "2 days", "label": "by post"}
 RIGHT = {"value": "4 hours", "label": "collected in person", "highlight": True}
@@ -23,7 +23,7 @@ def test_the_glyph_is_inside_a_reveal_group(ctx_factory):
     """Outside every group it hangs between two plates that have not arrived yet."""
     ctx = _ctx(ctx_factory)
     groups = get_component("versus")(ctx).groups
-    grouped = {spid for group in groups for spid in group}
+    grouped = {shape_id(spid) for group in groups for spid in group}
     glyphs = [s.shape_id for s in ctx.slide.shapes if s.name.startswith("Icon ")]
     assert glyphs, "no glyph was drawn, so this proves nothing"
     assert set(glyphs) <= grouped
@@ -72,7 +72,7 @@ def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("versus")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_versus_is_registered():
@@ -93,9 +93,7 @@ def _plates(ctx):
 
 
 def test_the_plates_are_sized_in_proportion_to_their_values(ctx_factory):
-    """Two blind judges said the same thing: 'the whole point is that one is 60% larger,
-    and the shapes say they are the same'. Length is the encoding, not the printed
-    number."""
+    """Length is the encoding, not the printed number."""
     ctx = ctx_factory(
         {
             "versus": {
@@ -213,8 +211,7 @@ def test_two_sides_that_cannot_both_be_set_are_refused(ctx_factory):
 
 
 def test_the_glyph_sits_between_the_plates_however_they_are_sized(ctx_factory):
-    """It was positioned off the second plate's width, so an uneven pair stranded it
-    inside the first one."""
+    """Positioned off one plate's width, an uneven pair would strand it inside the other."""
     from pptx.util import Emu
 
     ctx = ctx_factory(
@@ -258,8 +255,7 @@ def test_an_even_split_still_respects_a_side_that_needs_more(ctx_factory):
 
 
 def test_a_singular_against_its_own_plural_keeps_the_even_split(ctx_factory):
-    """No string rule separates `hrs`/`hr` from `ms`/`m`, and sizing two different units
-    against each other argues the opposite of the data — so only an exact match sizes."""
+    """No string rule separates `hrs`/`hr` from `ms`/`m`, so only an exact match sizes."""
     ctx = ctx_factory(
         {
             "versus": {
@@ -285,3 +281,19 @@ def test_an_abbreviation_is_never_folded_into_another_unit(ctx_factory):
     get_component("versus")(ctx)
     one, two = (w for _, w in _plates(ctx))
     assert one == pytest.approx(two)
+
+
+def test_a_versus_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_factory, theme):
+    unmeasured = dataclasses.replace(theme, face="Segoe UI", heading_face="Segoe UI")
+    ctx = ctx_factory(
+        {
+            "versus": {
+                "left": {"value": "1", "label": "Reconciliation"},
+                "right": {"value": "2", "label": "Reconciliation"},
+            }
+        },
+        theme_override=unmeasured,
+    )
+    ctx = dataclasses.replace(ctx, rect=dataclasses.replace(ctx.body_rect, width=2.0))
+    with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
+        get_component("versus")(ctx)

@@ -35,6 +35,14 @@ def label_number_format(unit: str | None, *, thousands_sep: bool, decimals: int 
     return f'{digits}"{unit}"'
 
 
+def label_text(value: float, *, unit: str | None, thousands_sep: bool, decimals: int) -> str:
+    """A value as its data label prints it, for measuring the label rather than setting it."""
+    digits = f"{value:,.{decimals}f}" if thousands_sep else f"{value:.{decimals}f}"
+    if not unit:
+        return digits
+    return f"{unit}{digits}" if unit in _PREFIX_UNITS else f"{digits}{unit}"
+
+
 def value_decimals(values: Iterable[float], *, cap: int = _DECIMALS_CAP) -> int:
     """Decimal places the labels need: the most any value carries, capped.
 

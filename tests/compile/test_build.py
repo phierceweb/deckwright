@@ -9,7 +9,7 @@ from pptx import Presentation
 
 from deckwright.compile import build_deck
 from deckwright.compile.build import _drop_template_slides
-from deckwright.errors import SpecError, ThemeError
+from deckwright.errors import LayoutError, SpecError, ThemeError
 from deckwright.theme.chartstyle import ChartStyle
 from deckwright.theme import Grid, Scale
 from deckwright.theme.defaults import DEFAULT_PAIRS
@@ -526,8 +526,8 @@ def test_a_deck_naming_base_builds_with_no_theme_dir_at_all(tmp_path, monkeypatc
 
 
 def test_an_unknown_spec_theme_name_is_reported_as_a_name(tmp_path, monkeypatch):
-    """Resolving to a path before loading turned a bad `theme:` into 'file not found:
-    /abs/candidate.theme.yaml', which names neither the name nor the way to fix it."""
+    """Not 'file not found: /abs/candidate.theme.yaml', which names neither the name nor
+    the way to fix it."""
     monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     spec = tmp_path / "d.deck.yaml"
     spec.write_text("theme: acme\nout: Demo.pptx\n---\ntitle: Hello\n")
@@ -536,3 +536,119 @@ def test_an_unknown_spec_theme_name_is_reported_as_a_name(tmp_path, monkeypatch)
         build_deck(spec)
     assert "unknown theme 'acme'" in str(excinfo.value)
     assert "--adopt acme" in str(excinfo.value)
+
+
+def _broken(project, body: str):
+    (project / "ext.py").write_text(textwrap.dedent(body))
+    (project / "b.deck.yaml").write_text(
+        textwrap.dedent("""
+        theme: testtheme
+        extends: ext.py
+        ---
+        place:
+          - at: {cols: full}
+            t-broken: {}
+    """)
+    )
+    return lambda: build_deck(
+        project / "b.deck.yaml", theme_path=project / "testtheme.yaml", out=project / "b.pptx"
+    )
+
+
+def test_a_bug_inside_a_component_names_the_slide_and_component(project):
+    """The traceback stays, since it is a bug, but its last line says where the deck hit it."""
+    build = _broken(
+        project,
+        """
+        from deckwright.layouts.components import component
+
+        @component("t-broken")
+        def broken(ctx):
+            return {}["missing"]
+    """,
+    )
+    with pytest.raises(KeyError) as caught:
+        build()
+    assert "slide 1 (component 't-broken')" in "\n".join(getattr(caught.value, "__notes__", []))
+
+
+def test_a_components_own_refusal_is_not_rewrapped(project):
+    """Only the unexpected is wrapped: a refusal already names the slide in its own words."""
+    build = _broken(
+        project,
+        """
+        from deckwright.errors import LayoutError
+        from deckwright.layouts.components import component
+
+        @component("t-broken")
+        def broken(ctx):
+            raise LayoutError("slide 1 (component 't-broken'): a refusal in its own words")
+    """,
+    )
+    with pytest.raises(LayoutError, match="a refusal in its own words") as caught:
+        build()
+    assert not hasattr(caught.value, "__notes__")
+
+
+def test_a_bare_nav_marks_each_slides_own_section_in_a_built_deck(project):
+    (project / "nav.deck.yaml").write_text(
+        textwrap.dedent("""
+        theme: testtheme
+        sections: [Problem, Evidence]
+        ---
+        section: Problem
+        place:
+          - at: {cols: full, rows: {from: 0, to: 1}}
+            nav: {}
+        ---
+        section: Evidence
+        place:
+          - at: {cols: full, rows: {from: 0, to: 1}}
+            nav: {}
+    """)
+    )
+    result = build_deck(
+        project / "nav.deck.yaml", theme_path=project / "testtheme.yaml", out=project / "nav.pptx"
+    )
+    marked = []
+    for slide in Presentation(str(result.deck)).slides:
+        runs = [sh.text_frame.paragraphs[0].runs[0] for sh in slide.shapes if sh.has_text_frame]
+        assert [r.text for r in runs] == ["Problem", "Evidence"]
+        marked.append([r.text for r in runs if r.font.bold])
+    assert marked == [["Problem"], ["Evidence"]]
+
+
+def _animated(project, animate):
+    (project / "b.deck.yaml").write_text(
+        textwrap.dedent(f"""
+        theme: testtheme
+        ---
+        title: A staged list
+        animate: {animate}
+        place:
+          - at: {{cols: full}}
+            bullets: {{items: [First, Second, Third]}}
+    """)
+    )
+    result = build_deck(
+        project / "b.deck.yaml", theme_path=project / "testtheme.yaml", out=project / "b.pptx"
+    )
+    return json.loads(result.manifest.read_text())["slides"][0]["animations"][0], result
+
+
+def test_a_staged_list_spends_one_click_per_bullet(project):
+    animation, _ = _animated(project, "one_at_a_time")
+    assert animation["clicks"] == 3
+    assert animation["steps"] == [
+        ["s1.p1.bullets#1 ¶1"],
+        ["s1.p1.bullets#1 ¶2"],
+        ["s1.p1.bullets#1 ¶3"],
+    ]
+
+
+def test_a_list_built_together_fades_its_box_once(project):
+    animation, result = _animated(project, "together")
+    assert animation["clicks"] == 1
+    assert animation["steps"] == [["s1.p1.bullets#1"]]
+    xml = Presentation(str(result.deck)).slides[0]._element.xml
+    assert xml.count('presetClass="entr"') == 1

@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import shlex
 from pathlib import Path
 
 import pytest
@@ -61,9 +62,9 @@ def test_the_version_flag_prints_the_installed_version():
 def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
     """`sample` prints a `conform ... --adopt` line as the next step, and adopt refuses
     a template outside the theme directory (test_conform_adopt.py) — so writing beside
-    the caller printed a command that always exited 1."""
+    the caller would print a command that always exits 1."""
     monkeypatch.chdir(tmp_path)
-    theme_root = tmp_path / "brand"
+    theme_root = tmp_path / "brand kit"
     monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(theme_root))
 
     result = CliRunner().invoke(app, ["sample"])
@@ -74,8 +75,9 @@ def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
 
     hint = [ln for ln in result.stdout.splitlines() if "--adopt" in ln]
     assert hint, result.stdout
-    quoted = hint[0].split("conform", 1)[1].split("--adopt")[0].strip()
-    assert Path(quoted).resolve().parent == theme_root.resolve()
+    words = shlex.split(hint[0].split(":", 1)[1])
+    assert words[:2] == ["deckwright", "conform"]
+    assert Path(words[2]).resolve().parent == theme_root.resolve()
 
 
 def test_glyphs_find_prints_matching_names():

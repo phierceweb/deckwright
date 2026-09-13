@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
-from deckwright.layouts.registry import SlideCtx
+from deckwright.layouts.registry import Disc, SlideCtx
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import ANCHOR, rrect, textbox
 
@@ -96,14 +96,17 @@ def callouts(ctx: SlideCtx) -> BodyResult:
     )
     groups: list[list[RevealItem]] = []
     if heading is not None:
-        groups.append([_heading(ctx, heading, rect.top - _HEADING_H)])
+        groups.append([(_heading(ctx, heading, rect.top - _HEADING_H), "text")])
     top = rect.top
 
     for index, item in enumerate(items):
         indent, frame_h = indents[index], heights[index]
         if item.get("icon"):
             side = mark_side(ctx)
-            marker = place_mark(ctx, str(item["icon"]), Rect(rect.left, top, side, side))
+            marker: RevealItem = (
+                place_mark(ctx, str(item["icon"]), Rect(rect.left, top, side, side)),
+                "figure",
+            )
             indent = side + ctx.grid.gutter
         else:
             dot = rrect(
@@ -115,8 +118,14 @@ def callouts(ctx: SlideCtx) -> BodyResult:
                 ctx.color("accent-1"),
                 radius=0.5,
             )
-            ctx.manifest.record(dot)
-            marker = dot.shape_id
+            accent = ctx.theme.palette.role("accent-1")
+            ctx.manifest.record(
+                dot,
+                fill=accent,
+                ground=ctx.behind(Rect(rect.left, top + 0.06, _DOT, _DOT), ink=accent),
+            )
+            ctx.painted.append((Rect(rect.left, top + 0.06, _DOT, _DOT), Disc(accent)))
+            marker = (dot.shape_id, "surface")
             indent = _TEXT_INDENT
 
         tf = textbox(
@@ -127,7 +136,7 @@ def callouts(ctx: SlideCtx) -> BodyResult:
             frame_h,
             anchor=ANCHOR["top"],
         )
-        head(ctx, tf, str(item["head"]), first=True)
+        ink, paper = head(ctx, tf, str(item["head"]), first=True)
         if item.get("body"):
             body(ctx, tf, str(item["body"]))
         ctx.manifest.record(
@@ -138,10 +147,10 @@ def callouts(ctx: SlideCtx) -> BodyResult:
             + ([ctx.style("body").size] if item.get("body") else []),
             # Two paragraph colours (head ink, body muted); record the head's —
             # it's the dominant, larger-and-bolder run, matching the font_pt above.
-            fg=ctx.pair.fg,
-            bg=ctx.pair.bg,
+            fg=ink,
+            bg=paper,
         )
-        groups.append([marker, tf._parent.shape_id])
+        groups.append([marker, (tf._parent.shape_id, "text")])
         top += frame_h + lead
 
     return BodyResult(groups=groups, height=needed + lead * (len(items) - 1))

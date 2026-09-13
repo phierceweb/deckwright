@@ -4,7 +4,7 @@ import pytest
 
 import deckwright.components  # noqa: F401
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 from deckwright.theme import Scale
 
 ITEMS = [
@@ -56,7 +56,7 @@ def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("callouts")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_items_is_required(ctx_factory):
@@ -130,15 +130,13 @@ def test_more_copy_than_the_rect_holds_raises(ctx_factory):
         get_component("callouts")(ctx)
 
 
-def test_eight_short_items_now_fit(ctx_factory):
-    """Eight one-line items are 8 x a heading line, well inside the rect — measured rows are
-    what lets them fit."""
+def test_eight_short_items_fit(ctx_factory):
+    """Eight one-line items are 8 x a heading line, well inside the rect."""
     items = [{"head": f"P{i}", "body": "line"} for i in range(8)]
     assert len(get_component("callouts")(_ctx(ctx_factory, items=items)).groups) == 8
 
 
 def test_a_row_is_as_deep_as_its_own_copy(ctx_factory):
-    """The invariant the equal-lane layout could not hold, and the reason it overflowed."""
     ctx = _ctx(
         ctx_factory,
         items=[
@@ -149,8 +147,7 @@ def test_a_row_is_as_deep_as_its_own_copy(ctx_factory):
     get_component("callouts")(ctx)
     short_h, long_h = _frame_heights(ctx.slide)
     body_line = ctx.style("body").size * 1.2 / 72
-    # Equal lanes gave both rows the same frame, so any gap at all reddens the old
-    # arithmetic; a whole body line proves the wrap was actually counted.
+    # A whole body line, not any gap, proves the wrap was counted.
     assert long_h - short_h >= body_line, (short_h, long_h, body_line)
 
 

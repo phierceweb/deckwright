@@ -89,6 +89,8 @@ def load_theme(
     path = theme_file(name_or_path)
     try:
         raw: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except UnicodeDecodeError as e:
+        raise ThemeError(f"{path.name} is not a text theme file: {path}") from e
     except yaml.YAMLError as e:
         raise ThemeError(f"invalid YAML in theme file {path}: {e}") from e
     if not isinstance(raw, dict):
@@ -144,8 +146,7 @@ def load_theme(
     face = _declared_face(type_cfg, "face", minor, theme=name)
     heading_face = _declared_face(type_cfg, "heading_face", major, theme=name)
     mono = _declared_face(type_cfg, "mono", MONO_DEFAULT, theme=name)
-    # Wrap estimates come from the face's own advances; an unmeasured face falls back
-    # to the widest glyph across families — safe, loose, and invisible downstream.
+    # An unmeasured face is estimated with CEILING, which errs wide.
     for role, candidate in (("face", face), ("heading_face", heading_face)):
         if not measured(candidate):
             logger.warning(

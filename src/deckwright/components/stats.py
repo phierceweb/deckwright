@@ -7,8 +7,9 @@ from pptx.util import Inches
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
-from deckwright.theme.model import Rect
+from deckwright.theme.model import Rect, TypeStyle
 from deckwright.utils.shapes import ANCHOR, para, rrect, textbox
+from deckwright.utils.text import estimate_caveat, overlong_word
 
 from deckwright.components._shape import known_fields, known_item_fields
 from deckwright.components._shared import (
@@ -77,13 +78,17 @@ def stats(ctx: SlideCtx) -> BodyResult:
         x = rect.left + col * (tile_w + gutter)
         y = rect.top + row * (tile_h + gutter)
         tile = rrect(ctx.slide, x, y, tile_w, tile_h, ctx.rgb(fill), radius=0.06)
-        shapes = [tile.shape_id]
+        shapes: list[RevealItem] = [(tile.shape_id, "text")]
         # Painted after the tile, so the mark sits on it rather than under it.
         if item.get("icon"):
-            ctx.panels.append((Rect(x, y, tile_w, tile_h), fill))
-            shapes.append(
-                place_mark(ctx, str(item["icon"]), Rect(x + _MARGIN_X, y + _MARGIN_TOP, mark, mark))
-            )
+            ctx.painted.append((Rect(x, y, tile_w, tile_h), fill))
+            box = Rect(x + _MARGIN_X, y + _MARGIN_TOP, mark, mark)
+            shapes.append((place_mark(ctx, str(item["icon"]), box), "figure"))
+        for text, style in (
+            (str(item["value"]), value_style),
+            (str(item.get("label") or ""), label_style),
+        ):
+            _refuse_overlong(ctx, text, width=tile_w - 2 * _MARGIN_X, style=style)
         tf = tile.text_frame
         tf.word_wrap = True
         tf.margin_left = tf.margin_right = Inches(_MARGIN_X)
@@ -127,18 +132,36 @@ def stats(ctx: SlideCtx) -> BodyResult:
         y = rect.top + rows * (tile_h + gutter) + caption_gap
         tf = textbox(ctx.slide, rect.left, y, rect.width, caption_h)
         caption_style = ctx.style("body")
+        ink, paper = ctx.text_ink(
+            Rect(rect.left, y, rect.width, caption_h), size_pt=caption_style.size, muted=True
+        )
         para(
             tf,
             str(caption),
             caption_style.size,
-            ctx.dim(),
+            ctx.rgb(ink),
             italic=True,
             align=ctx.text_align(),
             first=True,
             space_after=0,
             font=ctx.theme.font_for(caption_style),
         )
-        ctx.manifest.record(tf._parent, text=str(caption), fg=str(ctx.dim()), bg=ctx.pair.bg)
-        groups[-1].append(tf._parent.shape_id)
+        ctx.manifest.record(
+            tf._parent, text=str(caption), font_pt=caption_style.size, fg=ink, bg=paper
+        )
+        groups[-1].append((tf._parent.shape_id, "text"))
 
     return BodyResult(groups=groups, height=extent)
+
+
+def _refuse_overlong(ctx: SlideCtx, text: str, *, width: float, style: TypeStyle) -> None:
+    face = ctx.theme.font_for(style)
+    found = overlong_word(text, width_in=width, size_pt=style.size, face=face)
+    if found is None:
+        return
+    word, need = found
+    raise LayoutError(
+        f"slide {ctx.spec.index} (component 'stats'): {word!r} needs {need:.2f}in at "
+        f"{style.size:.1f}pt but a tile leaves {width:.2f}in, so it would break mid-word — "
+        f"use fewer tiles per row, widen the placement, or shorten it{estimate_caveat(face)}"
+    )

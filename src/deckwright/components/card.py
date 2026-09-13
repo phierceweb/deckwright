@@ -12,12 +12,12 @@ from pptx.util import Inches
 
 from deckwright.errors import LayoutError
 from deckwright.icons.draw import place_icon
-from deckwright.layouts.components import BodyResult, component
+from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import ANCHOR, para, rrect, textbox
-from deckwright.utils.text import LINE_HEIGHT, wrapped_lines
+from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, overlong_word, wrapped_lines
 
 from deckwright.components._shape import (
     _where,
@@ -63,10 +63,16 @@ def card(ctx: SlideCtx) -> BodyResult:
         radius=radius,
     )
     shadow(ctx, plate)
-    ctx.manifest.record(plate, bg=pair.bg)
+    stands_off = str(ctx.body.get("pair", _PAIR_DEFAULT)) != "surface"
+    ctx.manifest.record(
+        plate,
+        bg=pair.bg,
+        fill=pair.bg if stands_off else None,
+        ground=ctx.behind(rect, ink=pair.bg) if stands_off else None,
+    )
     # Chrome drawn over this plate reads its fill, not the slide's surface.
-    ctx.panels.append((rect, pair.bg))
-    shapes = [plate.shape_id]
+    ctx.painted.append((rect, pair.bg))
+    shapes: list[RevealItem] = [(plate.shape_id, "surface")]
 
     inset = ctx.grid.gutter
     side = inset + _corner_reach(rect, radius, depth=inset)
@@ -79,7 +85,9 @@ def card(ctx: SlideCtx) -> BodyResult:
     if icon:
         area = _icon(ctx, area, str(icon), shapes)
     if heading or copy:
-        shapes.append(_copy(ctx, area, heading=heading, copy=copy, ink=pair.fg, bg=pair.bg))
+        shapes.append(
+            (_copy(ctx, area, heading=heading, copy=copy, ink=pair.fg, bg=pair.bg), "text")
+        )
     return BodyResult(groups=[shapes], height=rect.height)
 
 
@@ -109,6 +117,18 @@ def copy_height(ctx: SlideCtx, *, width: float, heading: str, copy: str) -> floa
             / 72
         )
     return needed
+
+
+def _refuse_overlong(ctx: SlideCtx, text: str, *, width: float, size_pt: float, face: str) -> None:
+    found = overlong_word(text, width_in=width, size_pt=size_pt, face=face)
+    if found is None:
+        return
+    word, need = found
+    raise LayoutError(
+        f"{_where(ctx)}: the word {word!r} needs {need:.2f}in at {size_pt:.1f}pt but the card "
+        f"leaves {width:.2f}in, so it would break mid-word — widen the placement, or use a "
+        f"shorter word{estimate_caveat(face)}"
+    )
 
 
 def icon_side(ctx: SlideCtx) -> float:
@@ -173,7 +193,7 @@ def _corner_reach(rect: Rect, radius: float, *, depth: float) -> float:
     return r - math.sqrt(r * r - (r - depth) * (r - depth))
 
 
-def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[int]) -> Rect:
+def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[RevealItem]) -> Rect:
     """Place the icon at the top of the card's inner area; return what is left below it.
 
     A bare name is a glyph, drawn as vector and painted from the palette; anything
@@ -197,7 +217,7 @@ def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[int]) -> Rect:
         fill = mark_colour(ctx, box)
         shape = place_icon(ctx.slide, name, box, fill=fill, theme=ctx.theme)
         ctx.manifest.record(shape, fg=fill, bg=ctx.behind(box, ink=fill))
-    shapes.append(shape.shape_id)
+    shapes.append((shape.shape_id, "figure"))
     gap = ctx.grid.gutter
     return Rect(area.left, area.top + side + gap, area.width, area.height - side - gap)
 
@@ -209,12 +229,17 @@ def _is_file(name: str) -> bool:
 def _copy(ctx: SlideCtx, area: Rect, *, heading: str, copy: str, ink: str, bg: str) -> int:
     """Set the card's type in one frame, refusing copy that will not fit the plate."""
     head_style, body_style = ctx.style("head"), ctx.style("body")
+    for text, style in ((heading, head_style), (copy, body_style)):
+        _refuse_overlong(
+            ctx, text, width=area.width, size_pt=style.size, face=ctx.theme.font_for(style)
+        )
     needed = copy_height(ctx, width=area.width, heading=heading, copy=copy)
     if needed > area.height:
         raise LayoutError(
             f"{_where(ctx)}: the card's type wants "
             f"{needed:.2f}in but only {area.height:.2f}in is left inside the plate — "
             f"shorten the copy or grow the placement"
+            f"{estimate_caveat(ctx.theme.font_for(head_style), ctx.theme.font_for(body_style))}"
         )
     tf = textbox(ctx.slide, area.left, area.top, area.width, area.height, anchor=ANCHOR["top"])
     lines: list[str] = []

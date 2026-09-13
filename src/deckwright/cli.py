@@ -7,6 +7,7 @@ exception-to-exit-code mapping work out of the box.
 from __future__ import annotations
 
 import io
+import shlex
 import sys
 from pathlib import Path
 
@@ -342,8 +343,7 @@ def sample(
     from deckwright.conform.sample import write_sample
 
     root = theme_dir()
-    # Default into the theme dir: --adopt refuses a template anywhere else, so writing
-    # beside the caller printed a next step that always exited 1.
+    # Default into the theme dir: --adopt refuses a template anywhere else.
     if path is None:
         path = root / "sample.pptx"
     if path.exists() and not force:
@@ -351,11 +351,12 @@ def sample(
     written = write_sample(path)
     typer.echo(f"sample  -> {written}")
     if written.resolve().parent == root.resolve():
-        typer.echo(f"try it: deckwright conform {written} --adopt sample")
+        typer.echo(f"try it: deckwright conform {shlex.quote(str(written))} --adopt sample")
     else:
         typer.echo(
-            f"to adopt it: mkdir -p {root} && mv {written} {root}/ && "
-            f"deckwright conform {root / written.name} --adopt sample"
+            f"to adopt it: mkdir -p {shlex.quote(str(root))} && mv {shlex.quote(str(written))} "
+            f"{shlex.quote(str(root))}/ && "
+            f"deckwright conform {shlex.quote(str(root / written.name))} --adopt sample"
         )
 
 

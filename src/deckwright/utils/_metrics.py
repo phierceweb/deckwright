@@ -1,13 +1,24 @@
 """Per-character advance tables, in ems, baked from real font files (``docs/utils.md``).
 
 Each table is a per-character ``max`` over its family's Regular and Bold cuts, so no
-caller passes a bold flag; ``CEILING`` is the max across every measured face.
+caller passes a bold flag; ``CEILING`` is the max across Carlito, Liberation Sans,
+Verdana and DejaVu Sans, not across the brand faces in ``_metrics_faces``.
 Regenerate the literals with ``.venv/bin/python tests/utils/test_metrics.py``.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
+
+from deckwright.utils._metrics_faces import (
+    AMATIC,
+    BARLOW_SEMI_CONDENSED,
+    BEBAS_NEUE,
+    MONTSERRAT,
+    OPEN_SANS,
+    POPPINS,
+    SNIGLET,
+)
 
 CALIBRI = {
     " ": 0.2261,
@@ -351,6 +362,16 @@ _FALLBACK_ANY = max(CEILING.values())
 
 _CALIBRI_FACES = ("calibri", "carlito")
 _ARIAL_FACES = ("arial", "helvetica", "liberation")
+# Plain "Barlow" is wider than its semi-condensed cut, so only the cut itself matches.
+_FACE_TABLES = (
+    (("poppins",), POPPINS),
+    (("open sans", "opensans"), OPEN_SANS),
+    (("montserrat",), MONTSERRAT),
+    (("amatic",), AMATIC),
+    (("sniglet",), SNIGLET),
+    (("bebas",), BEBAS_NEUE),
+    (("barlow semi condensed", "barlowsemicondensed"), BARLOW_SEMI_CONDENSED),
+)
 # Wider than the Bold the family tables fold in, so they get the ceiling instead.
 _HEAVY = ("black", "heavy")
 
@@ -369,7 +390,17 @@ def advance_em(ch: str, table: dict[str, float]) -> float:
     return _FALLBACK_ANY
 
 
-MEASURED_FAMILIES = ("Calibri / Carlito", "Arial / Helvetica / Liberation")
+MEASURED_FAMILIES = (
+    "Calibri / Carlito",
+    "Arial / Helvetica / Liberation",
+    "Poppins",
+    "Open Sans",
+    "Montserrat",
+    "Amatic",
+    "Sniglet",
+    "Bebas Neue",
+    "Barlow Semi Condensed",
+)
 """The families with their own advance tables. Anything else gets ``CEILING``."""
 
 
@@ -388,4 +419,7 @@ def table_for(face: str | None) -> dict[str, float]:
         return CALIBRI
     if any(family in lowered for family in _ARIAL_FACES):
         return ARIAL
+    for names, table in _FACE_TABLES:
+        if any(name in lowered for name in names):
+            return table
     return CEILING

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 
+from pf_core.exceptions import AppError, FlowException
+
 from deckwright.errors import LayoutError
 from deckwright.imagery.paint import paint_backdrop
 from deckwright.layouts.components import RevealItem, as_body_result, get_component
@@ -251,13 +253,19 @@ def _draw(
     ctx.manifest.bleeding = placement.bleed
     ctx.manifest.origin = origin
     ctx.manifest.record_placement(origin, placement.component, rect)
-    # Shape ids, not object ids: lxml builds an element proxy on demand and frees it
-    # again, so a later shape can be handed the address a dropped one had. The identity
-    # test then reads pre-existing shapes as new, and _settle measures an extent that
-    # spans the whole slide.
+    # Shape ids, not object ids: lxml frees element proxies and hands their addresses
+    # to later shapes, so an identity test reads old shapes as new.
     before = {s.shape_id for s in ctx.slide.shapes}
     try:
         result = as_body_result(get_component(placement.component)(ctx))
+    except (FlowException, AppError):
+        raise
+    except Exception as e:
+        # A bug, not a refusal: keep the traceback, and say where the deck hit it.
+        e.add_note(
+            f"slide {ctx.spec.index} (component {placement.component!r}): raised by the component's own code, not refused by it"
+        )
+        raise
     finally:
         ctx.manifest.bleeding = False
         ctx.manifest.origin = None

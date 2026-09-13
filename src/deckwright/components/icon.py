@@ -32,7 +32,7 @@ def icon(ctx: SlideCtx) -> BodyResult:
     fill = ink_for(ctx, box)
     shape = place_icon(ctx.slide, name, box, fill=fill, theme=ctx.theme)
     ctx.manifest.record(shape, fg=fill, bg=ctx.behind(box, ink=fill))
-    return BodyResult(groups=[[shape.shape_id]], height=side)
+    return BodyResult(groups=[[(shape.shape_id, "figure")]], height=side)
 
 
 def ink_for(ctx: SlideCtx, box: Rect) -> str:

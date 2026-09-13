@@ -14,7 +14,7 @@ from deckwright.imagery.draw import paint_scrim, place_picture
 from deckwright.imagery.fit import FITS, MASKS, fit_image, parse_aspect, square
 from deckwright.imagery.sample import aspect, cells, weakest
 from deckwright.imagery.scrim import Scrim, gradient_fraction, resolve, scrim_spec
-from deckwright.layouts.components import BodyResult, component
+from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
@@ -59,20 +59,21 @@ def image(ctx: SlideCtx) -> BodyResult:
         align=ctx.align,
         anchor=ctx.anchor,
     )
-    shapes = [place_picture(ctx.slide, str(path), fit, mask=mask, radius=_radius(ctx))]
-    ctx.manifest.record(shapes[0], rendered="picture")
-    ctx.art.append((fit.dest, Backdrop(path, fit, ctx.pair.bg)))
-
+    picture = place_picture(ctx.slide, str(path), fit, mask=mask, radius=_radius(ctx))
+    ctx.manifest.record(picture, rendered="picture")
+    shapes: list[RevealItem] = [(picture.shape_id, "figure")]
     lines = _over(ctx)
     scrim = _scrim(ctx, path=path, fit=fit, lines=lines)
+    # With its scrim, so chrome laid over the picture measures what it really shows.
+    ctx.painted.append((fit.dest, Backdrop(path, fit, ctx.pair.bg, scrim)))
     if scrim is not None:
         painted = paint_scrim(ctx.slide, fit.dest, scrim)
         if painted is not None:
-            shapes.append(painted)
+            shapes.append((painted.shape_id, "surface"))
             ctx.manifest.record(painted)
     if lines:
-        shapes.append(_write(ctx, path=path, fit=fit, lines=lines, scrim=scrim))
-    return BodyResult(groups=[[s.shape_id for s in shapes]], height=fit.dest.height)
+        shapes.append((_write(ctx, path=path, fit=fit, lines=lines, scrim=scrim).shape_id, "text"))
+    return BodyResult(groups=[shapes], height=fit.dest.height)
 
 
 def _where(ctx: SlideCtx) -> str:

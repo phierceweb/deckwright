@@ -3,7 +3,7 @@ from pptx.util import Inches
 
 import deckwright.components  # noqa: F401
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 
 ITEMS = [
     {"value": "20", "label": "integrations"},
@@ -104,12 +104,12 @@ def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("stats")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_the_reported_height_is_the_extent_of_the_tiles_it_drew(ctx_factory):
-    """``0 < h <= body_rect.height`` was true by construction: the tile height derives
-    from the body rect, so returning ``rect.height`` outright passed it."""
+    """``0 < h <= body_rect.height`` is true by construction: the tile height derives
+    from the body rect, so returning ``rect.height`` outright would pass it."""
     ctx = _ctx(ctx_factory)
     result = get_component("stats")(ctx)
     bottom = max((s.top + s.height) / 914400 for s in ctx.slide.shapes)
@@ -154,8 +154,8 @@ def test_stats_is_registered():
 
 
 def test_a_tile_records_the_fill_its_text_actually_sits_on(ctx_factory):
-    """The manifest is what the contrast check reads. Recording the page colour where
-    the text sits on a tile is the intent-versus-reality bug that hid white-on-white."""
+    """The manifest is what the contrast check reads; recording the page colour where the
+    text sits on a tile would hide white-on-white."""
     ctx = ctx_factory({"stats": {"items": [{"value": "42", "label": "things"}]}})
     get_component("stats")(ctx)
     tile = next(s for s in ctx.slide.shapes if s.has_text_frame)
@@ -242,3 +242,22 @@ def test_a_mark_is_measured_against_the_tile_not_the_slide(ctx_factory):
     fill = ctx.theme.palette.role("line")
     marks = [s for s in recorded if s.get("fg") and s.get("bg") == fill and not s.get("lines")]
     assert marks, [s.get("bg") for s in recorded]
+
+
+def test_a_stat_value_wider_than_its_tile_is_refused_naming_the_value(ctx_factory):
+    """A long number cannot wrap, so the renderer breaks it between its digits."""
+    items = [{"value": "1,284,097,556", "label": "tokens"}] + [{"value": "1", "label": "x"}] * 3
+    ctx = ctx_factory({"stats": {"items": items}})
+    with pytest.raises(LayoutError, match=r"'1,284,097,556' .*would break mid-word"):
+        get_component("stats")(ctx)
+
+
+def test_a_stat_label_word_wider_than_its_tile_is_refused(ctx_factory):
+    items = [{"value": "1", "label": "Pneumonoultramicroscopicsilicovolcanoconiosis"}] + [
+        {"value": "2"}
+    ] * 3
+    ctx = ctx_factory({"stats": {"items": items}})
+    with pytest.raises(
+        LayoutError, match=r"'Pneumonoultramicroscopicsilicovolcanoconiosis' .*would break mid-word"
+    ):
+        get_component("stats")(ctx)

@@ -192,3 +192,23 @@ def test_bring_to_front_moves_shape_last():
     slide.shapes.add_textbox(0, 0, 100, 100)  # second shape, currently drawn on top
     bring_to_front(first)
     assert first._element.getparent()[-1] is first._element
+
+
+def test_a_paragraph_item_targets_that_paragraph_and_builds_the_shape_by_paragraph():
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    listed = _texty(slide, "one")
+    listed.text_frame.add_paragraph().text = "two"
+    add_click_sequence(slide, [[(listed.shape_id, "fade", 0)], [(listed.shape_id, "fade", 1)]])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:pRg st="(\d+)" end="(\d+)"/>', xml) == [
+        ("0", "0"),
+        ("0", "0"),
+        ("1", "1"),
+        ("1", "1"),
+    ]
+    assert re.findall(r"<p:bldP [^>]*/>", xml) == [
+        f'<p:bldP spid="{listed.shape_id}" grpId="0" build="p"/>'
+    ]
+    assert xml.count('nodeType="clickEffect"') == 2

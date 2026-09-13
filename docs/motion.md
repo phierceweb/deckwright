@@ -59,9 +59,11 @@ Neither the component nor the spec ever names an OOXML preset — the same indir
 `accent-1` uses onto a palette slot, and for the same reason: otherwise a deck drifts
 off-brand one hardcoded effect at a time.
 
-A component returns reveal groups whose items are either a bare shape id (the `text`
-role) or a `(shape_id, role)` tuple. `layouts/motion.py` resolves each role through
-`theme.motion.roles` to a wire kind before any XML is written.
+A component returns reveal groups whose items are `(shape_id, role)` tuples, and every
+built-in component tags every shape it reveals. `layouts/motion.py` resolves each role
+through `theme.motion.roles` to a wire kind before any XML is written; a chart's own build
+takes the `datum` binding. A bare shape id, which only an `extends:` component can return,
+enters with `fade`.
 
 ```python
 # components/rule.py — "I am a line being drawn"
@@ -122,6 +124,12 @@ contents are constrained in a way that is easy to get wrong:
   §19.5.33(h) says a `cTn`'s `grpId` must match one in the `bldLst`; it does not say
   *of the same shape*, so the per-shape reading is the natural inference rather than the
   literal text. The schema makes both optional.
+
+- **A shape revealed paragraph by paragraph gets `build="p"` and one `bldP`.** A single-column
+  `bullets` list is one text box whose paragraphs reveal on separate clicks: each effect's
+  `spTgt` carries `<p:txEl><p:pRg st="i" end="i"/></p:txEl>`, and the box's one `bldP` is
+  `build="p"` in place of the whole-shape `animBg="1"`. `together` and `reveals:` still
+  address the box once.
 
 A chart is different again: it is a `graphicFrame`, so its build is a
 `<p:bldGraphic>`/`<a:bldChart>` declaration rather than a `<p:bldP>` visibility toggle.

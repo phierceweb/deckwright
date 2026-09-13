@@ -9,6 +9,7 @@ from pptx.util import Inches
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, textbox
 from deckwright.utils.text import text_em
 
@@ -31,7 +32,7 @@ _FIELDS = ("items", "columns", "heading")
 
 @component("bullets")
 def bullets(ctx: SlideCtx) -> BodyResult:
-    """Render ``items`` as bullets, split across ``columns``; one reveal group per column.
+    """Render ``items`` as bullets, split across ``columns``; one reveal group per bullet in one column, per column in several.
 
     The overflow guard assumes single-line bullets; a long wrapping bullet can still
     overflow past the body rect, which only a later render-based check can measure.
@@ -70,7 +71,7 @@ def bullets(ctx: SlideCtx) -> BodyResult:
         if heading and index == 0:
             tf = textbox(ctx.slide, x, rect.top, col_w, heading_h)
             style = ctx.style("head")
-            ink = ctx.accent(size_pt=style.size)
+            ink, paper = ctx.accent_at(Rect(x, rect.top, col_w, heading_h), size_pt=style.size)
             para(
                 tf,
                 str(heading),
@@ -82,15 +83,16 @@ def bullets(ctx: SlideCtx) -> BodyResult:
                 space_after=0,
                 font=ctx.theme.font_for(style),
             )
-            ctx.manifest.record(
-                tf._parent, text=str(heading), font_pt=style.size, fg=ink, bg=ctx.pair.bg
-            )
-            ids.append(tf._parent.shape_id)
+            ctx.manifest.record(tf._parent, text=str(heading), font_pt=style.size, fg=ink, bg=paper)
+            ids.append((tf._parent.shape_id, "text"))
         tf = textbox(
             ctx.slide, x, bullets_top, col_w, rect.bottom - bullets_top, anchor=ctx.text_anchor()
         )
         style = ctx.style("body")
         face = ctx.theme.font_for(style)
+        ink, paper = ctx.text_ink(
+            Rect(x, bullets_top, col_w, rect.bottom - bullets_top), size_pt=style.size
+        )
         # A hanging indent, or a wrapped line starts left of its own first line — under
         # the dot instead of under the text.
         hang = Inches(text_em("•  ", face) * style.size / 72)
@@ -99,7 +101,7 @@ def bullets(ctx: SlideCtx) -> BodyResult:
                 tf,
                 f"•  {item}",
                 style.size,
-                ctx.fg(),
+                ctx.rgb(ink),
                 align=ctx.text_align(),
                 first=(i == 0),
                 space_after=BULLET_SPACE_AFTER_PT,
@@ -112,10 +114,16 @@ def bullets(ctx: SlideCtx) -> BodyResult:
             tf._parent,
             lines=[f"•  {item}" for item in chunk],
             font_pt=style.size,
-            fg=ctx.pair.fg,
-            bg=ctx.pair.bg,
+            fg=ink,
+            bg=paper,
         )
-        ids.append(tf._parent.shape_id)
+        if columns == 1:
+            # One text box would be one click; its paragraphs are the beats a list stages.
+            spid = tf._parent.shape_id
+            groups.append([*ids, (spid, "text", 0)])
+            groups.extend([[(spid, "text", i)] for i in range(1, len(chunk))])
+            continue
+        ids.append((tf._parent.shape_id, "text"))
         groups.append(ids)
 
     return BodyResult(groups=groups, height=needed + (bullets_top - rect.top))

@@ -4,20 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deckwright"
-version = "0.2.0"
+version = "0.3.0"
 description = "Compile declarative deck specs into branded PowerPoint files — themes, native charts, icons, imagery, animation and QA on python-pptx"
 readme = "README.md"
 requires-python = ">=3.12"
-# The wheel bundles the Material icon set, so the artifact is not MIT-only and its
-# metadata must not claim to be. See src/deckwright/icons/glyphs/material/SOURCE.md.
-license = "MIT AND Apache-2.0"
-license-files = ["LICENSE", "src/deckwright/icons/glyphs/material/LICENSE"]
+# The wheel bundles the Material icon set, which is Apache-2.0 as well, so one
+# expression covers both. See src/deckwright/icons/glyphs/material/SOURCE.md, and
+# NOTICE for the attributions Apache-2.0 section 4(d) makes travel with a copy.
+license = "Apache-2.0"
+license-files = [
+    "LICENSE",
+    "NOTICE",
+    "src/deckwright/icons/glyphs/material/LICENSE",
+]
 authors = [{ name = "Mike Farr" }]
 dependencies = [
     # pf-core foundation + the extras this project uses, pinned to a compatible
     # release (picks up patch releases of 0.22, never 0.23).
     "pf-core[cli]~=0.22.0",
-    "python-pptx>=1.0",  # deck/slide generation + native charts (pulls lxml)
+    # deck/slide generation + native charts (pulls lxml); compatible-release pinned
+    # because chart styling reaches into its oxml element classes.
+    "python-pptx~=1.0.2",
     "markdown>=3.0",     # HTML rendering of doc/figure snippets
     "pillow>=12.0",      # card autocrop, contact sheet, Image.get_flattened_data
     "pyyaml>=6.0",       # deck specs and theme files

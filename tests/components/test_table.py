@@ -198,21 +198,22 @@ def test_a_recorded_cell_box_matches_the_column_it_was_drawn_in(ctx_factory):
 
 
 def test_a_cell_records_the_colour_really_behind_it_not_the_page(ctx_factory):
-    """Recording the page where a cell sits on a panel is the intent-versus-reality
-    bug that hid white-on-white."""
+    """Recording the page where a cell sits on a panel would hide white-on-white."""
     ctx = _ctx(ctx_factory)
-    ctx.panels.append((Rect(0.0, 0.0, 13.333, 7.5), "2D0937"))
+    ctx.painted.append((Rect(0.0, 0.0, 13.333, 7.5), "2D0937"))
     get_component("table")(ctx)
     body = [c for c in _cells(ctx) if c.lines[0] in ("12", "34")]
     assert [c.bg for c in body] == ["2D0937", "2D0937"]
 
 
-def test_qa_sees_a_body_cell_lost_on_what_is_painted_behind_it(ctx_factory, theme):
+def test_a_body_cell_on_what_is_painted_behind_it_is_inked_for_that_ground(ctx_factory, theme):
+    """A cell measures the ground under it and is inked for that ground, so QA has nothing to report."""
     ctx = _ctx(ctx_factory)
-    ctx.panels.append((Rect(0.0, 0.0, 13.333, 7.5), "2D0937"))
+    ctx.painted.append((Rect(0.0, 0.0, 13.333, 7.5), "2D0937"))
     get_component("table")(ctx)
-    findings = check_contrast(ctx.manifest.to_dict(), theme)
-    assert [f.shape for f in findings] == [f"Table 1 r{r}c{c}" for r in (2, 3) for c in (1, 2, 3)]
+    body = [s for s in ctx.manifest.slides[0].shapes if s.name.startswith("Table 1 r2")]
+    assert body and {(s.fg, s.bg) for s in body if s.fg} == {("FFFFFF", "2D0937")}
+    assert check_contrast(ctx.manifest.to_dict(), theme) == []
 
 
 def test_an_empty_cell_records_its_box_but_claims_no_ink(ctx_factory):
@@ -246,7 +247,7 @@ def test_the_whole_table_is_one_reveal_group(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("table")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert groups == [[next(iter(ids))]]
+    assert groups == [[(next(iter(ids)), "text")]]
 
 
 def test_table_is_registered():
@@ -443,7 +444,7 @@ def test_merging_reclaims_the_padding_between_the_columns_it_swallowed():
     two = measure(widths, 0, 2, pad)
     assert one == pytest.approx(1.6)  # 2.0 less a margin either side
     assert two == pytest.approx(3.6)  # 4.0 less *one* pair, not two
-    # The 0.4 that was padding between the two columns is measure now.
+    # The 0.4 of padding between the two columns becomes measure.
     assert two == pytest.approx(2 * one + 2 * pad)
 
 
@@ -772,8 +773,8 @@ def test_two_spans_sharing_a_row_do_not_refuse_a_table_that_fits(ctx_factory):
         }
     )
     result = get_component("table")(ctx)
-    # `<= rect.height` was true by construction: the even split *raises* rather than
-    # overrunning, so reaching this line at all satisfied it.
+    # `<= rect.height` is true by construction: the even split *raises* rather than
+    # overrunning, so reaching this line at all satisfies it.
     frame = next(s for s in ctx.slide.shapes if s.has_table)
     assert result.height == pytest.approx(frame.height / 914400, abs=0.001)
     assert result.height < ctx.body_rect.height

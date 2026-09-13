@@ -18,6 +18,9 @@ from deckwright.motion import (
 from deckwright.spec.model import Placement
 
 _CHART_ANIMATIONS = ("by_category", "by_series")
+# A wipe runs along one axis; across a stroke that has no extent on it, nothing is seen to move.
+_ACROSS = {"wiperight": "wipeup", "wipeup": "wiperight"}
+_STROKE_RATIO = 8
 _ANIMATIONS = ("none", "together", "one_at_a_time", *_CHART_ANIMATIONS)
 
 
@@ -40,7 +43,7 @@ def apply_click_reveals(
             f"these are different kinds. Drop one."
         )
     shapes = {
-        p.id: [shape_id(g) for group in made for g in group]
+        p.id: list(dict.fromkeys(shape_id(g) for group in made for g in group))
         for p, made in drawn
         if p.id is not None
     }
@@ -59,7 +62,7 @@ def apply_click_reveals(
                 f"slide; ids here: {known}"
             )
         trigger = shapes[placement.reveals]
-        targets = [shape_id(g) for group in made for g in group]
+        targets = list(dict.fromkeys(shape_id(g) for group in made for g in group))
         if not trigger or not targets:
             raise LayoutError(
                 f"{where}: 'reveals:' needs both placements to draw something that can "
@@ -123,7 +126,7 @@ def apply_reveal(ctx: SlideCtx, groups: list[list[RevealItem]]) -> None:
     motion = ctx.theme.motion
     if animate == "together":
         # add_click_build fades every shape onto one click, so the groups are not beats.
-        flat = [shape_id(g) for group in groups for g in group]
+        flat = list(dict.fromkeys(shape_id(g) for group in groups for g in group))
         add_click_build(ctx.slide, flat, motion.stagger_ms)
         ctx.manifest.record_animation("click_build", [flat], clicks=1)
         return
@@ -144,6 +147,7 @@ def _resolve_roles(ctx: SlideCtx, groups: list[list[RevealItem]]) -> list[list[R
         LayoutError: a component reported a role the theme does not bind.
     """
     roles = ctx.theme.motion.roles
+    shapes = {shape.shape_id: shape for shape in ctx.slide.shapes}
     resolved: list[list[RevealItem]] = []
     for group in groups:
         out: list[RevealItem] = []
@@ -151,17 +155,27 @@ def _resolve_roles(ctx: SlideCtx, groups: list[list[RevealItem]]) -> list[list[R
             if not isinstance(item, tuple):
                 out.append(item)
                 continue
-            spid, role = item
             try:
-                out.append((spid, roles[role]))
+                kind = roles[item[1]]
             except KeyError:
                 raise LayoutError(
                     f"slide {ctx.spec.index}: component {ctx.component!r} reports "
-                    f"motion role {role!r}, which the theme does not bind; known "
+                    f"motion role {item[1]!r}, which the theme does not bind; known "
                     f"roles: {', '.join(sorted(roles))}"
                 ) from None
+            kind = _along(shapes.get(item[0]), kind)
+            out.append((item[0], kind, item[2]) if len(item) == 3 else (item[0], kind))
         resolved.append(out)
     return resolved
+
+
+def _along(shape, kind: str) -> str:
+    """``kind``, turned to the axis a stroke actually runs along."""
+    if kind not in _ACROSS or shape is None:
+        return kind
+    width, height = shape.width or 0, shape.height or 0
+    run, cross = (width, height) if kind == "wiperight" else (height, width)
+    return _ACROSS[kind] if run * _STROKE_RATIO < cross else kind
 
 
 def apply_transition(ctx: SlideCtx) -> None:

@@ -7,7 +7,7 @@ import pytest
 
 import deckwright.components  # noqa: F401 — registers the built-ins
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 
 ITEMS = [
     {"label": "Up", "value": 271, "note": "7 to 26"},
@@ -109,7 +109,7 @@ def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("diverge")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_diverge_is_registered():

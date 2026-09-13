@@ -15,6 +15,8 @@ import pytest
 
 from deckwright.utils import _metrics
 from deckwright.utils._metrics import ARIAL, CALIBRI, CEILING, advance_em, table_for
+from deckwright.utils import _metrics_faces
+from deckwright.utils._metrics_faces import GLYPHS
 from deckwright.utils.text import text_em
 
 _LO = pathlib.Path("/Applications/LibreOffice.app/Contents/Resources/fonts/truetype")
@@ -32,15 +34,54 @@ fonts_present = pytest.mark.skipif(
     reason="the measuring fonts (LibreOffice bundle + Verdana) are not present",
 )
 
-_GLYPHS = [chr(c) for c in range(32, 127)] + list("’‘“”–—…€£°×•")
+# Google Fonts' OFL files, fetched by hand into a cache outside the repo; see docs/utils.md.
+_FACES_DIR = pathlib.Path.home() / ".cache" / "deckwright" / "metric-fonts"
+# ``(file, instance)``: a variable font names the instance to measure, a static one None.
+_FACE_SOURCES = {
+    "POPPINS": (("poppins/Poppins-Regular.ttf", None), ("poppins/Poppins-Bold.ttf", None)),
+    "OPEN_SANS": (
+        ("opensans/OpenSans[wdth,wght].ttf", "Regular"),
+        ("opensans/OpenSans[wdth,wght].ttf", "Bold"),
+    ),
+    "MONTSERRAT": (
+        ("montserrat/Montserrat[wght].ttf", "Regular"),
+        ("montserrat/Montserrat[wght].ttf", "Bold"),
+    ),
+    "AMATIC": (("amaticsc/AmaticSC-Regular.ttf", None), ("amaticsc/AmaticSC-Bold.ttf", None)),
+    "SNIGLET": (("sniglet/Sniglet-Regular.ttf", None), ("sniglet/Sniglet-ExtraBold.ttf", None)),
+    "BEBAS_NEUE": (("bebasneue/BebasNeue-Regular.ttf", None),),
+    "BARLOW_SEMI_CONDENSED": (
+        ("barlowsemicondensed/BarlowSemiCondensed-Regular.ttf", None),
+        ("barlowsemicondensed/BarlowSemiCondensed-Bold.ttf", None),
+    ),
+}
+
+faces_present = pytest.mark.skipif(
+    not all((_FACES_DIR / f).is_file() for cuts in _FACE_SOURCES.values() for f, _ in cuts),
+    reason=f"the brand-face measuring fonts are not in {_FACES_DIR}",
+)
 
 
-def _measured(paths: tuple[pathlib.Path, ...]) -> dict[str, float]:
-    """A table exactly as ``_metrics.py`` bakes one: per-glyph max across ``paths``."""
+def _font(path, instance=None):
     from PIL import ImageFont
 
-    fonts = [ImageFont.truetype(str(p), 1000) for p in paths]
-    return {ch: round(max(f.getlength(ch) / 1000 for f in fonts), 4) for ch in _GLYPHS}
+    font = ImageFont.truetype(str(path), 1000)
+    if instance is not None:
+        font.set_variation_by_name(instance)
+    return font
+
+
+def _measured(paths) -> dict[str, float]:
+    """A table exactly as ``_metrics.py`` bakes one: per-glyph max across ``paths``.
+
+    Each entry is a path, or a ``(path, instance)`` pair for a variable font.
+    """
+    fonts = [_font(*p) if isinstance(p, tuple) else _font(p) for p in paths]
+    return {ch: round(max(f.getlength(ch) / 1000 for f in fonts), 4) for ch in GLYPHS}
+
+
+def _face_paths(name: str):
+    return tuple((_FACES_DIR / f, instance) for f, instance in _FACE_SOURCES[name])
 
 
 # --- the drift gate ---------------------------------------------------------
@@ -52,6 +93,16 @@ def test_the_baked_table_matches_the_fonts_it_was_measured_from(name):
     baked = getattr(_metrics, name)
     fresh = _measured(_ALL if name == "CEILING" else _SOURCES[name])
     assert set(baked) == set(fresh)
+    off = {ch: (baked[ch], fresh[ch]) for ch in fresh if abs(baked[ch] - fresh[ch]) > 1e-3}
+    assert off == {}
+
+
+@faces_present
+@pytest.mark.parametrize("name", list(_FACE_SOURCES))
+def test_a_baked_brand_face_matches_the_fonts_it_was_measured_from(name):
+    baked = getattr(_metrics_faces, name)
+    fresh = _measured(_face_paths(name))
+    assert list(baked) == list(fresh)
     off = {ch: (baked[ch], fresh[ch]) for ch in fresh if abs(baked[ch] - fresh[ch]) > 1e-3}
     assert off == {}
 
@@ -103,6 +154,25 @@ def test_text_em_never_under_predicts_the_real_rendered_width(face, heaviest, st
     assert text_em(string, face) >= real
 
 
+_HEAVIEST_FACES = [
+    ("Poppins", "poppins/Poppins-Bold.ttf", None),
+    ("Open Sans", "opensans/OpenSans[wdth,wght].ttf", "Bold"),
+    ("Montserrat", "montserrat/Montserrat[wght].ttf", "Bold"),
+    ("Amatic", "amaticsc/AmaticSC-Bold.ttf", None),
+    ("Sniglet", "sniglet/Sniglet-ExtraBold.ttf", None),
+    ("Bebas Neue", "bebasneue/BebasNeue-Regular.ttf", None),
+    ("Barlow Semi Condensed", "barlowsemicondensed/BarlowSemiCondensed-Bold.ttf", None),
+]
+
+
+@faces_present
+@pytest.mark.parametrize("face,heaviest,instance", _HEAVIEST_FACES, ids=lambda v: str(v))
+@pytest.mark.parametrize("string", _STRINGS)
+def test_a_brand_face_never_under_predicts_its_heaviest_cut(face, heaviest, instance, string):
+    real = _font(_FACES_DIR / heaviest, instance).getlength(string) / 1000
+    assert text_em(string, face) >= real
+
+
 # --- face routing -----------------------------------------------------------
 
 
@@ -116,6 +186,28 @@ def test_the_arial_family_routes_to_its_own_table():
     assert table_for("Arial") is ARIAL
     assert table_for("Helvetica Neue") is ARIAL
     assert table_for("Liberation Sans") is ARIAL
+
+
+@pytest.mark.parametrize(
+    "face,name",
+    [
+        ("Poppins", "POPPINS"),
+        ("Open Sans", "OPEN_SANS"),
+        ("Montserrat-Bold", "MONTSERRAT"),
+        ("Amatic", "AMATIC"),
+        ("Amatic SC", "AMATIC"),
+        ("Sniglet", "SNIGLET"),
+        ("Bebas Neue", "BEBAS_NEUE"),
+        ("Barlow Semi Condensed Light", "BARLOW_SEMI_CONDENSED"),
+    ],
+)
+def test_a_face_a_bundled_theme_names_routes_to_its_own_table(face, name):
+    """The names are the ones the brand themes actually carry."""
+    assert table_for(face) is getattr(_metrics_faces, name)
+
+
+def test_plain_barlow_is_not_its_semi_condensed_cut():
+    assert table_for("Barlow") is CEILING
 
 
 def test_an_unmeasured_face_and_none_route_to_the_ceiling():
@@ -143,3 +235,6 @@ def test_a_character_never_measured_is_charged_its_class_ceiling():
 if __name__ == "__main__":
     for name in ("CALIBRI", "ARIAL", "CEILING"):
         print(f"{name} = {_measured(_ALL if name == 'CEILING' else _SOURCES[name])}\n")
+    for name in _FACE_SOURCES:
+        packed = " ".join(f"{v:g}" for v in _measured(_face_paths(name)).values())
+        print(f'{name} = _packed("{packed}")\n')

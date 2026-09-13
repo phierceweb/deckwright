@@ -13,13 +13,13 @@ checklist for promoting a component into the library.
 
 ## Table of Contents
 
-- [The five that bite](#the-five-that-bite)
+- [The seven that bite](#the-seven-that-bite)
 - [Promoting a deck-local component to a built-in](#promoting-a-deck-local-component-to-a-built-in)
 - [What the gates check](#what-the-gates-check)
 
 ---
 
-## The five that bite
+## The seven that bite
 
 Every one of these is a real failure from writing five components in an afternoon, not a
 list of things that could theoretically go wrong.
@@ -80,9 +80,16 @@ unguarded read hard-coded into the component takes that choice away from every d
 ### 4. Painting your own ground means inking against it, in the manifest too
 
 A component that fills its rect must ink its type with `ctx.ink_on(fill)` **and record
-that colour**. `ctx.pair.fg` is the *slide's* ink; recording it on a band you painted
+that colour**. Type set on the slide itself takes `ink, paper = ctx.text_ink(box, size_pt=…)`
+for the box it sits in, because a `panel` or a picture placed under it is its real ground,
+and records `fg=ink, bg=paper`. `ctx.pair.fg` is the *slide's* ink; recording it on a band you painted
 reports clean while the type is unreadable, because `qa`'s `contrast` check reads the
 manifest and believes it.
+
+A fill another placement's text may be laid over goes on `ctx.painted` once it is drawn:
+`ctx.painted.append((rect, fill))`, or `(rect, Disc(fill))` for a round one
+(`from deckwright.layouts.registry import Disc`). Without it, `text_ink` over your fill
+measures the page.
 
 ### 5. Reserved regions apply to what you draw, not to your rect
 
@@ -93,6 +100,19 @@ logo wedge will still run into it, and `qa`'s `reserved` check will say so.
 The fix is usually not to clamp: it is that decoration wider than the placement belongs
 to a separate placement with `bleed: true`, and the component should take a `pair:` and
 paint its own rect instead.
+
+### 6. Tag each revealed shape with its motion role
+
+A reveal group's items are `(shape_id, role)`: `text` for a shape carrying words,
+`surface` for a filled shape carrying none, `line` for a stroke, `figure` for a picture or
+glyph, `datum` for a chart. The theme's `motion.roles` turns the role into an entrance, so
+a component never names an effect. A bare `shape_id` still works and enters with `fade`
+whatever the theme binds, which is the look nothing else on the slide has once a theme
+changes a role. [`theme.md`](theme.md#motion-roles) has the table.
+
+### 7. Refuse with `LayoutError`; anything else is reported as a bug
+
+Raise `LayoutError` from `deckwright.errors` for content you cannot place, with a message that starts `slide N (component 'name'):`. It reaches the author as that one line. Any other exception from your code keeps its traceback and gets a final line naming the slide and component. That is right for a bug and wrong for a refusal, so do not let a `KeyError` stand in for "this field is required".
 
 ---
 

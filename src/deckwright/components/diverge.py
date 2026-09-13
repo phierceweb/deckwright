@@ -11,6 +11,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rect, textbox
 
 from deckwright.components._shape import known_fields, known_item_fields
@@ -110,16 +111,16 @@ def diverge(ctx: SlideCtx) -> BodyResult:
     peak = _peak(ctx, items)
     r = ctx.body_rect
 
-    # A component that paints its own ground has to ink against that ground, not the
-    # slide's — recording the slide's pair here would report clean on unreadable type.
+    # Inked, and recorded, against the ground this component paints rather than the slide's.
     pair_name = ctx.body.get("pair")
     if pair_name:
         ground = ctx.theme.palette.pair(str(pair_name))
         plate = rect(ctx.slide, r.left, r.top, r.width, r.height, ctx.rgb(ground.bg))
         ctx.manifest.record(plate)
+        ctx.painted.append((r, ground.bg))
         ink_hex, bg_hex = ctx.ink_on(ground.bg), ground.bg
     else:
-        ink_hex, bg_hex = ctx.pair.fg, ctx.pair.bg
+        ink_hex, bg_hex = ctx.text_ink(r, size_pt=ctx.style("body").size)
     ink = ctx.rgb(ink_hex)
 
     axis_x = r.left + r.width * label_w
@@ -160,12 +161,16 @@ def diverge(ctx: SlideCtx) -> BodyResult:
         ctx.manifest.record(
             label._parent, lines=[str(item["label"])], font_pt=body.size, fg=ink_hex, bg=bg_hex
         )
-        ids.append(label._parent.shape_id)
+        ids.append((label._parent.shape_id, "text"))
 
         left = centre if value > 0 else centre - width
         bar = rect(ctx.slide, left, mid - bar_h / 2, width, bar_h, toward if value > 0 else away)
-        ctx.manifest.record(bar)
-        ids.append(bar.shape_id)
+        fill = str(toward if value > 0 else away)
+        ctx.manifest.record(
+            bar, fill=fill, ground=ctx.behind(Rect(left, mid - bar_h / 2, width, bar_h), ink=fill)
+        )
+        ctx.painted.append((Rect(left, mid - bar_h / 2, width, bar_h), fill))
+        ids.append((bar.shape_id, "surface"))
 
         reading = f"{'+' if value > 0 else '−'}{abs(value):g}{unit}"
         value_x = left + width + 0.06 if value > 0 else left - _VALUE_W - 0.06
@@ -186,7 +191,7 @@ def diverge(ctx: SlideCtx) -> BodyResult:
         ctx.manifest.record(
             shown._parent, lines=[reading], font_pt=body.size, fg=ink_hex, bg=bg_hex
         )
-        ids.append(shown._parent.shape_id)
+        ids.append((shown._parent.shape_id, "text"))
 
         # The note sits in the half its own bar does not use, so it cannot collide with
         # the bar, the value or the label column however long the bar runs.
@@ -216,7 +221,7 @@ def diverge(ctx: SlideCtx) -> BodyResult:
             ctx.manifest.record(
                 noted._parent, lines=[note], font_pt=caption.size, fg=ink_hex, bg=bg_hex
             )
-            ids.append(noted._parent.shape_id)
+            ids.append((noted._parent.shape_id, "text"))
 
         groups.append(ids)
 

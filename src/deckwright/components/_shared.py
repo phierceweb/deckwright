@@ -50,35 +50,44 @@ def subcontext(
     )
 
 
-def head(ctx: SlideCtx, tf, text: str, *, first: bool) -> None:
-    """Write a body heading paragraph in the theme's ``head`` style."""
+def box_of(shape) -> Rect:
+    """A shape's frame in inches."""
+    return Rect(*(v / 914400 for v in (shape.left, shape.top, shape.width, shape.height)))
+
+
+def head(ctx: SlideCtx, tf, text: str, *, first: bool) -> tuple[str, str]:
+    """Write a body heading paragraph in the theme's ``head`` style; return its ink and ground."""
     style = ctx.style("head")
+    ink, paper = ctx.text_ink(box_of(tf._parent), size_pt=style.size)
     para(
         tf,
         text,
         style.size,
-        ctx.fg(),
+        ctx.rgb(ink),
         bold=style.bold,
         align=ctx.text_align(),
         first=first,
         space_after=HEAD_SPACE_AFTER_PT,
         font=ctx.theme.font_for(style),
     )
+    return ink, paper
 
 
-def body(ctx: SlideCtx, tf, text: str, *, first: bool = False) -> None:
-    """Write a body paragraph in the theme's ``body`` style."""
+def body(ctx: SlideCtx, tf, text: str, *, first: bool = False) -> tuple[str, str]:
+    """Write a body paragraph in the theme's ``body`` style; return its ink and ground."""
     style = ctx.style("body")
+    ink, paper = ctx.text_ink(box_of(tf._parent), size_pt=style.size, muted=True)
     para(
         tf,
         text,
         style.size,
-        ctx.dim(),
+        ctx.rgb(ink),
         align=ctx.text_align(),
         first=first,
         space_after=0,
         font=ctx.theme.font_for(style),
     )
+    return ink, paper
 
 
 def require_default_align(ctx: SlideCtx) -> None:

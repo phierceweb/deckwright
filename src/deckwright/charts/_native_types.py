@@ -70,8 +70,6 @@ _AXIS_CHART_TYPES = frozenset(
         "bubble-3d",
     }
 )
-# LinePlot/AreaPlot/PiePlot/DoughnutPlot/RadarPlot expose no gap_width in python-pptx —
-# only the bar/column family does.
 _GAP_WIDTH_CHART_TYPES = frozenset(
     {
         "bar",
@@ -82,7 +80,6 @@ _GAP_WIDTH_CHART_TYPES = frozenset(
         "bar-stacked-100",
     }
 )
-# One series, coloured per point, named by label rather than legend/axis.
 _PIE_FAMILY_CHART_TYPES = frozenset({"pie", "doughnut", "pie-exploded", "doughnut-exploded"})
 # Radar's major gridlines are the rings and spokes the data is plotted against, so they
 # stay at their default instead of following theme.chart.grid.
@@ -176,8 +173,8 @@ _STROKE_CHART_TYPES = frozenset(
 # PowerPoint offers no data-label position on a radar plot, and a `c:dLblPos` written
 # into one is what makes it ask to repair the file.
 _RADAR_CHART_TYPES = frozenset({"radar", "radar-filled", "radar-markers"})
+_SMOOTH_CHART_TYPES = frozenset({"xy-scatter-smooth", "xy-scatter-smooth-no-markers"})
 _POINT_LABEL_CHART_TYPES = _STROKE_CHART_TYPES - _RADAR_CHART_TYPES
-# `inEnd` is a position only the bar family and a pie offer. Written into any other
-# chart group it is the `c:dLblPos` PowerPoint asks to repair the file over — which a
-# doughnut, an area, a line and a radar all are.
+# `inEnd` is a position only the bar family and a pie offer; written into any other chart
+# group it is a `c:dLblPos` PowerPoint asks to repair the file over.
 _INSIDE_END_CHART_TYPES = _GAP_WIDTH_CHART_TYPES | frozenset({"pie", "pie-exploded"})

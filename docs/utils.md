@@ -56,7 +56,9 @@ Two consequences, both easy to break by habit:
 
 ## `color.py` — the WCAG maths
 
-`relative_luminance`, `contrast_ratio`, `required_ratio` and `normalize_hex`, plus the
+`relative_luminance`, `contrast_ratio`, `required_ratio`, `delta_e` (CIE76 colour difference, which
+`qa`'s `fill-ground` pairs with luminance so a saturated accent on a pale page is not called
+invisible) and `normalize_hex`, plus the
 `AA_NORMAL` / `AA_LARGE` / `LARGE_PT` constants. `theme/palette.py`, every component that
 picks ink against a fill, `imagery/scrim.py`'s auto-opacity solve and `qa/geometry.py`'s
 contrast check all decide against this one implementation, so a slide that passes at
@@ -89,13 +91,18 @@ moves the whole build at once.
 
 `_metrics.py` holds per-character advance tables baked as literals from real font files:
 `CALIBRI` (Carlito), `ARIAL` (LiberationSans), and `CEILING`, the per-character max
-across every measured face. **No font file ships and none is read at runtime** — that is
+across Carlito, Liberation Sans, Verdana and DejaVu Sans. `_metrics_faces.py` holds the
+brand families the bundled themes name (Poppins, Open Sans, Montserrat, Amatic, Sniglet,
+Bebas Neue, Barlow Semi Condensed), each packed as one string of advances in `GLYPHS`
+order so seven tables stay a few dozen lines; `CEILING` does not fold them in, so adding a
+family never moves the estimate for a face that has none. **No font file ships and none is
+read at runtime** — that is
 the point of baking them. Each family table is itself a max over its Regular and Bold
 cuts, so no caller passes a bold flag, and `table_for` routes a heavy or black cut to
 `CEILING` rather than its family, those being wider than the Bold folded in.
 `theme/load.py` warns `theme_face_unmeasured` when a theme's face has no table of its
-own: the ceiling fallback is safe but loose, and nothing downstream can see the
-looseness.
+own, and every fit refusal built on the estimate appends `estimate_caveat(face)` — the
+fallback is loose, a wide display face can outrun it, and nothing downstream can see either.
 
 Three traps for anyone editing this pair:
 
@@ -107,6 +114,10 @@ Three traps for anyone editing this pair:
   Lowering it is not tuning: a band sized one line short of its text draws straight
   through what sits below it, and neither QA's `bounds` check nor its `overflow` check
   can see a doubled-up chrome stack.
+- **A lone word is measured without `_MARGIN`.** `overlong_word` refuses a build rather
+  than sizing a box, and `wrapped_lines` breaks a word too long for its line where the
+  real width does; an allowance in either refuses, or reserves a second line for, a word
+  that fits its widest cut.
 - **`advance_em` over-counts every character no table carries**, charging it the widest
   measured glyph of its class, so a CJK or accented run is never under-counted.
 
@@ -116,6 +127,13 @@ to paste in; run as a test it re-measures every baked value against the fonts it
 from, and separately holds `text_em` to never under-predict the real rendered width of
 the heaviest cut of each routed family. Both halves skip when the measuring fonts are
 absent, like the corpus.
+
+The brand families are measured from Google Fonts' OFL files, which the repo does not carry.
+Fetch each family's Regular and Bold cut (Sniglet's ExtraBold, Bebas Neue's single
+Regular; Open Sans and Montserrat as their variable fonts, measured at the `Regular` and
+`Bold` instances) and its `OFL.txt` from `github.com/google/fonts/tree/main/ofl/<family>`
+into `~/.cache/deckwright/metric-fonts/<family>/`, under the file names
+`_FACE_SOURCES` in the test module lists. Without them the brand-face gates skip.
 
 `closest_match(name, options)` shares the module but nothing else: it is the "did you
 mean…" behind spec validation errors, a thin wrapper over `difflib.get_close_matches`

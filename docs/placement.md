@@ -169,13 +169,14 @@ moving it to the end of the z-order changes no reveal.
 
 `wrapped_lines()` is an estimate, but a measured one. Each call routes the face the
 text will be set in to a per-character advance table baked in `utils/_metrics.py`
-from real font metrics — Calibri/Carlito and Arial/Helvetica have tables of their
-own (bold folded into a per-character max), and any face without one gets the
-conservative ceiling across every measured sans. The summed width carries a single
+from real font metrics — Calibri/Carlito, Arial/Helvetica and the brand faces
+`MEASURED_FAMILIES` lists have tables of their own (bold folded into a per-character
+max), and any face without one gets the conservative `CEILING` table. The summed width carries a single
 small safety margin (`_MARGIN` in `utils/text.py`) for what per-character summation
 cannot see: kerning, hinting, renderer spacing. It errs long by design — a band
 sized one line short of its text draws over what sits below it — but only by that
-margin, so a reserved line the render does not use is the rare case, not the rule.
+margin, so a reserved line the render does not use is the rare case, not the rule. A
+single word too long for its line is the exception: it breaks where its real width does.
 
 `compose._write_chrome()` then writes the **stacked** chrome lines into a text
 frame per run of consecutive bands sharing a measure, one paragraph each, rather

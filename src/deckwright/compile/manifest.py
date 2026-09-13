@@ -101,6 +101,8 @@ class ManifestRecorder:
         rendered: Rendered = "native",
         plate: bool = False,
         annotation: bool = False,
+        fill: str | None = None,
+        ground: str | None = None,
     ) -> ShapeRecord:
         """Record a placed shape against the current slide, naming it for its origin.
 
@@ -137,6 +139,8 @@ class ManifestRecorder:
             bleed=self.bleeding,
             plate=plate,
             annotation=annotation,
+            fill=fill,
+            ground=ground,
         )
         self.slides[-1].shapes.append(rec)
         return rec
@@ -210,7 +214,10 @@ class ManifestRecorder:
         """One reveal target as the name its shape carries in the deck."""
         shape_id = item[0] if isinstance(item, (list, tuple)) else item
         # A shape animated but never recorded keeps its id, which at least says which.
-        return self._named.get(int(shape_id), f"shape {int(shape_id)}")
+        name = self._named.get(int(shape_id), f"shape {int(shape_id)}")
+        if isinstance(item, (list, tuple)) and len(item) == 3:
+            return f"{name} ¶{int(item[2]) + 1}"
+        return name
 
     def to_dict(self) -> dict[str, Any]:
         # Provenance first: what produced the file, before the thousands of records it

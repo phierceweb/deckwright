@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import re
 
@@ -15,8 +16,8 @@ from deckwright.errors import ThemeError
 from deckwright.theme.chartstyle import ChartStyle
 from deckwright.theme.palette import build_palette
 
-# A non-default style exercising every knob this task wires up, so a chart
-# built from it differs from today's flat look in every dimension at once.
+# A non-default style exercising every knob, so a chart built from it differs from the
+# default look in every dimension at once.
 STYLED = ChartStyle(
     gap_width=80,
     gradient=True,
@@ -180,10 +181,10 @@ def test_y_min_and_y_max_set_the_value_axis_scale(ctx_factory):
     assert chart.value_axis.maximum_scale == 100.0
 
 
-def test_without_y_min_max_the_value_axis_stays_automatic(ctx_factory, chart_spec):
+def test_without_y_min_max_a_bar_pins_only_its_floor(ctx_factory, chart_spec):
     ctx = ctx_factory({"title": "T"})
     chart = add_native_chart(ctx, chart_spec, ctx.body_rect).chart
-    assert chart.value_axis.minimum_scale is None
+    assert chart.value_axis.minimum_scale == 0.0
     assert chart.value_axis.maximum_scale is None
 
 
@@ -937,7 +938,7 @@ def test_bubble_points_still_get_the_gradient_when_enabled(ctx_factory, theme):
 
 def test_a_scatter_has_no_connecting_line(ctx_factory):
     """python-pptx gives XY_SCATTER a noFill line because a scatter is points only.
-    Theming the stroke anyway made it identical to xy-scatter-lines."""
+    Theming the stroke anyway would make it identical to xy-scatter-lines."""
     ctx = ctx_factory({"title": "T"})
     spec = ChartSpec(
         type="xy-scatter",
@@ -967,7 +968,7 @@ def test_xy_scatter_and_xy_scatter_lines_differ(ctx_factory):
 @pytest.mark.parametrize("chart_type", ["area", "area-stacked", "area-stacked-100", "radar-filled"])
 def test_a_series_shaped_fill_gradients_on_the_series(ctx_factory, theme, chart_type):
     """An area band and a filled radar are one shape across every category — a per-point
-    gradient lands on shapes the renderer never draws, so these looked flat."""
+    gradient lands on shapes the renderer never draws, and the band reads flat."""
     styled = dataclasses.replace(theme, chart=dataclasses.replace(theme.chart, gradient=True))
     ctx = ctx_factory({"title": "T"}, theme_override=styled)
     spec = ChartSpec(
@@ -1010,7 +1011,7 @@ def test_a_hundred_percent_type_ignores_a_redundant_unit(ctx_factory, theme, cha
         ),
     )
     labels = add_native_chart(ctx, spec, ctx.body_rect).chart.plots[0].data_labels
-    # Paired with something `_style_data_labels` writes unconditionally: the absence
+    # Paired with something `style_data_labels` writes unconditionally: the absence
     # assertion alone stays green when that function returns immediately.
     assert labels.font.bold is True
     assert labels.number_format == "General"
@@ -1113,8 +1114,8 @@ def test_a_currency_unit_prefixes_the_data_labels(ctx_factory, theme):
 
 
 def test_a_decimal_series_keeps_its_places_in_the_data_labels(ctx_factory, theme):
-    """The bug this fixes: 11.2 and 9.6 both printed as whole numbers, and a refund
-    rate of 5.1 against 4.8 collapsed into two identical labels."""
+    """Printed as whole numbers, 11.2 and 9.6 lose their places and 5.1 against 4.8 reads
+    as two identical labels."""
     ctx = _plain_ctx(ctx_factory, theme)
     spec = ChartSpec(
         type="column",
@@ -1183,8 +1184,7 @@ def test_a_series_that_asked_for_no_labels_writes_its_own_show_val_off(ctx_facto
 
 
 def test_a_unit_reaches_the_value_axis_as_well_as_the_labels(ctx_factory, theme):
-    """The axis read 0-12 while every label on the line read 11.2% — the scale and the
-    values it framed disagreed about what the numbers were."""
+    """Without it the axis reads 0-12 while every label on the line reads 11.2%."""
     ctx = _plain_ctx(ctx_factory, theme)
     spec = ChartSpec(
         type="line",
@@ -1246,8 +1246,7 @@ def _plot_box(chart):
 
 
 def test_a_bar_chart_with_a_legend_leaves_the_legend_a_column(ctx_factory, theme):
-    """The plot ran to 98% of the frame whatever the legend needed, so the legend was
-    drawn over the bars and its longest name clipped."""
+    """A plot at 98% of the frame whatever the legend needs draws the legend over the bars."""
     ctx = _plain_ctx(ctx_factory, theme)
     spec = ChartSpec(
         type="bar-stacked-100",
@@ -1293,9 +1292,8 @@ def test_a_long_category_and_a_long_series_name_still_leave_the_bars_room(ctx_fa
 
 
 def test_a_stacked_100_chart_keeps_its_decimal_places(ctx_factory, theme):
-    """The axis shows the computed share; each label still prints its own series value.
-    Excluding these kinds from inference reproduced the exact collapse — 11.2 and 88.8
-    labelled 11 and 89."""
+    """The axis shows the computed share; each label still prints its own series value,
+    so 11.2 and 88.8 must not label 11 and 89."""
     ctx = _plain_ctx(ctx_factory, theme)
     spec = ChartSpec(
         type="bar-stacked-100",
@@ -1358,8 +1356,8 @@ def test_a_bar_legend_keeps_its_own_column(ctx_factory, theme):
 def test_a_theme_position_is_written_only_where_the_chart_group_offers_it(
     ctx_factory, theme, chart_type, expected
 ):
-    """`label_position: inside_end` is authorable on any theme, and it was written into
-    every kind — including the groups PowerPoint offers no position for at all."""
+    """`label_position: inside_end` is authorable on any theme, but most chart groups offer
+    PowerPoint no position at all."""
     styled = dataclasses.replace(
         theme, chart=ChartStyle(thousands_sep=False, label_position="inside_end")
     )
@@ -1372,7 +1370,7 @@ def test_a_theme_position_is_written_only_where_the_chart_group_offers_it(
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
     xml = etree.tostring(chart._chartSpace, encoding="unicode")
     found = re.findall(r'<c:dLblPos val="(\w+)"', xml)
-    assert found == ([expected] if expected else [])
+    assert set(found) == ({expected} if expected else set())
 
 
 @pytest.mark.parametrize("chart_type", ("radar", "radar-filled", "radar-markers"))
@@ -1403,7 +1401,7 @@ def test_a_line_series_keeps_its_smooth(ctx_factory, theme):
 
 def test_a_line_chart_sets_its_labels_above_the_marker(ctx_factory, theme):
     """`outside_end` has no meaning on a line: it lands the label on the point it names,
-    which is how 11.2%, 5.1% and 4.8% all ended up drawn through the line."""
+    drawn through the line."""
     ctx = _plain_ctx(ctx_factory, theme)
     spec = ChartSpec(
         type="line-markers",
@@ -1412,3 +1410,250 @@ def test_a_line_chart_sets_its_labels_above_the_marker(ctx_factory, theme):
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
     assert chart.plots[0].data_labels.position == XL_DATA_LABEL_POSITION.ABOVE
+
+
+_LABELLED_TYPES = tuple(
+    t
+    for t in _ALL_CHART_TYPES
+    if t
+    not in (
+        "xy-scatter",
+        "xy-scatter-lines",
+        "xy-scatter-lines-no-markers",
+        "xy-scatter-smooth",
+        "xy-scatter-smooth-no-markers",
+    )
+)
+
+
+@pytest.mark.parametrize("chart_type", _LABELLED_TYPES)
+def test_every_labelled_kind_writes_its_values_on(ctx_factory, theme, chart_type):
+    """python-pptx pre-writes `showVal val=0` for area, doughnut and bubble, and setting
+    `has_data_labels` leaves an existing `c:dLbls` alone."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for(chart_type), ctx.body_rect).chart
+    labels = chart._chartSpace.find(".//" + qn("c:plotArea")).find(".//" + qn("c:dLbls"))
+    assert labels is not None
+    assert labels.find(qn("c:showVal")).get("val") == "1"
+
+
+@pytest.mark.parametrize("chart_type", ("xy-scatter-smooth", "xy-scatter-smooth-no-markers"))
+def test_a_smooth_scatter_kind_draws_smooth_series(ctx_factory, theme, chart_type):
+    """The series flag outranks `scatterStyle`, and python-pptx writes it 0."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for(chart_type), ctx.body_rect).chart
+    flags = [s.get("val") for s in chart._chartSpace.iter(qn("c:smooth"))]
+    assert flags == ["1"]
+
+
+@pytest.mark.parametrize("chart_type", ("xy-scatter-lines", "xy-scatter-lines-no-markers"))
+def test_a_straight_scatter_kind_keeps_straight_series(ctx_factory, theme, chart_type):
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for(chart_type), ctx.body_rect).chart
+    flags = [s.get("val") for s in chart._chartSpace.iter(qn("c:smooth"))]
+    assert flags == ["0"]
+
+
+@pytest.mark.parametrize(
+    "chart_type", ("column", "pie", "doughnut", "line", "xy-scatter", "bubble")
+)
+def test_a_single_named_series_grows_no_chart_title(ctx_factory, theme, chart_type):
+    """Left at `autoTitleDeleted=0`, PowerPoint and LibreOffice title the chart with the
+    series name under the slide's own title."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for(chart_type), ctx.body_rect).chart
+    deleted = chart._chartSpace.find(".//" + qn("c:autoTitleDeleted"))
+    assert deleted is not None
+    assert deleted.get("val") == "1"
+
+
+_CHART_SCHEMA = None
+
+
+def _assert_chart_valid(chart_space):
+    """Validate against dml-chart.xsd, with python-pptx's signed axis ids made unsigned in a copy."""
+    global _CHART_SCHEMA
+    if _CHART_SCHEMA is None:
+        import pathlib
+
+        xsd = pathlib.Path(__file__).parents[1] / "schemas" / "ooxml" / "dml-chart.xsd"
+        _CHART_SCHEMA = etree.XMLSchema(etree.parse(str(xsd)))
+    checked = copy.deepcopy(chart_space)
+    for ax_id in checked.iter(qn("c:axId"), qn("c:crossAx")):
+        ax_id.set("val", str(abs(int(ax_id.get("val")))))
+    _CHART_SCHEMA.assertValid(checked)
+
+
+def _accents(ctx_factory, theme, *accents):
+    """A palette whose accents make the right label ink obvious without measuring it."""
+    roles = dict(theme.palette.roles)
+    roles.update({f"accent-{i}": hex_ for i, hex_ in enumerate(accents, start=1)})
+    palette = build_palette(roles, pairs={"page": ("ink", "page")})
+    palette = dataclasses.replace(
+        palette, accents=tuple(f"accent-{i}" for i in range(1, len(accents) + 1))
+    )
+    styled = dataclasses.replace(theme, palette=palette, chart=ChartStyle(thousands_sep=False))
+    return ctx_factory({"title": "T"}, theme_override=styled)
+
+
+def _label_inks(labels):
+    """The ink a label element sets for itself, not for any point label inside it."""
+    return [
+        c.get("val")
+        for c in labels.find(qn("c:txPr")).iter(qn("a:srgbClr"))
+        if c.getparent().getparent().tag == qn("a:defRPr")
+    ]
+
+
+def _series_dlbls(chart):
+    return [ser.find(qn("c:dLbls")) for ser in chart._chartSpace.iter(qn("c:ser"))]
+
+
+def test_labels_on_a_dark_area_fill_are_inked_white(ctx_factory, theme):
+    ctx = _accents(ctx_factory, theme, "1F5FA8", "0F6E63", "A8431C")
+    chart = add_native_chart(ctx, _spec_for("area"), ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    assert own is not None
+    assert own.find(qn("c:showVal")).get("val") == "1"
+    assert _label_inks(own) == ["FFFFFF"]
+    _assert_chart_valid(chart._chartSpace)
+
+
+def test_labels_on_a_pale_fill_keep_the_dark_ink(ctx_factory, theme):
+    ctx = _accents(ctx_factory, theme, "F7D774", "0F6E63", "A8431C")
+    chart = add_native_chart(ctx, _spec_for("area"), ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    assert _label_inks(own) == ["2D0937"]
+
+
+def test_each_wedge_label_is_inked_for_its_own_wedge(ctx_factory, theme):
+    """One pie, a pale wedge between two dark ones: a single label colour cannot serve all three."""
+    ctx = _accents(ctx_factory, theme, "1F5FA8", "F7D774", "A8431C")
+    spec = _spec_for("pie", (5.0, 3.0, 2.0))
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    by_point = {d.find(qn("c:idx")).get("val"): _label_inks(d) for d in own.findall(qn("c:dLbl"))}
+    series_ink = [c.get("val") for c in own.find(qn("c:txPr")).iter(qn("a:srgbClr"))]
+    inks = [by_point.get(str(i), series_ink) for i in range(3)]
+    assert inks == [["FFFFFF"], ["2D0937"], ["FFFFFF"]]
+    assert all(d.find(qn("c:showCatName")).get("val") == "1" for d in own.findall(qn("c:dLbl")))
+    _assert_chart_valid(chart._chartSpace)
+
+
+def test_labels_beside_a_clustered_column_stay_on_the_slides_ink(ctx_factory, theme):
+    """`outside_end` sets the label on the page, not on the bar, so nothing is re-inked."""
+    ctx = _accents(ctx_factory, theme, "1F5FA8", "0F6E63", "A8431C")
+    chart = add_native_chart(ctx, _spec_for("column"), ctx.body_rect).chart
+    assert _series_dlbls(chart) == [None]
+
+
+def test_a_stacked_series_whose_labels_are_off_stays_off(ctx_factory, theme):
+    ctx = _accents(ctx_factory, theme, "1F5FA8", "0F6E63", "A8431C")
+    spec = ChartSpec(
+        type="column-stacked",
+        categories=("Q1", "Q2"),
+        series=(
+            Series(name="A", values=(1.0, 2.0)),
+            Series(name="B", values=(3.0, 4.0), labels=False),
+        ),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    first, second = _series_dlbls(chart)
+    assert _label_inks(first) == ["FFFFFF"]
+    assert second.find(qn("c:showVal")).get("val") == "0"
+    assert second.findall(qn("c:dLbl")) == []
+    _assert_chart_valid(chart._chartSpace)
+
+
+@pytest.mark.parametrize(("base", "expected"), [("1F5FA8", "FFFFFF"), ("2E7DC4", "2D0937")])
+def test_a_gradient_label_takes_the_ink_whose_weakest_stop_reads_best(
+    ctx_factory, theme, base, expected
+):
+    """The label crosses both stops, and here each stop alone would pick the other ink."""
+    ctx = _accents(ctx_factory, theme, base, "0F6E63", "A8431C")
+    gradient = dataclasses.replace(ctx.theme, chart=ChartStyle(thousands_sep=False, gradient=True))
+    ctx = ctx_factory({"title": "T"}, theme_override=gradient)
+    chart = add_native_chart(ctx, _spec_for("area"), ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    assert _label_inks(own) == [expected]
+
+
+def _axis_floor(chart):
+    scaling = chart._chartSpace.find(".//" + qn("c:valAx")).find(qn("c:scaling"))
+    floor = scaling.find(qn("c:min"))
+    return None if floor is None else float(floor.get("val"))
+
+
+@pytest.mark.parametrize("chart_type", ("column", "bar", "column-stacked", "bar-stacked"))
+def test_a_bar_starts_at_zero_when_nothing_pins_its_axis(ctx_factory, theme, chart_type):
+    """A bar encodes length from its baseline; an axis from 275 draws 284 against 297 as 1 to 2.4."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for(chart_type, (284.0, 297.0, 290.0)), ctx.body_rect).chart
+    assert _axis_floor(chart) == 0.0
+
+
+def test_an_authored_y_min_still_wins_on_a_bar(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    spec = dataclasses.replace(_spec_for("column", (284.0, 297.0, 290.0)), y_min=250.0)
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert _axis_floor(chart) == 250.0
+
+
+def test_a_bar_with_a_negative_value_keeps_automatic_scaling(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for("column", (-5.0, 12.0, 30.0)), ctx.body_rect).chart
+    assert _axis_floor(chart) is None
+
+
+def test_a_line_keeps_automatic_scaling(ctx_factory, theme):
+    """A line encodes change, not length, so a floor at zero would flatten it."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for("line", (284.0, 297.0, 290.0)), ctx.body_rect).chart
+    assert _axis_floor(chart) is None
+
+
+def _point_offsets(dlbls):
+    """``idx -> manualLayout x`` for each point label that is moved."""
+    moved = {}
+    for label in dlbls.findall(qn("c:dLbl")):
+        x = label.find(f"{qn('c:layout')}/{qn('c:manualLayout')}/{qn('c:x')}")
+        if x is not None:
+            moved[int(label.find(qn("c:idx")).get("val"))] = float(x.get("val"))
+    return moved
+
+
+def test_an_area_charts_edge_labels_are_moved_in_off_the_axis(ctx_factory, theme):
+    """Its first and last points sit on the plot's edges, so their labels land on the axis."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for("area", (3.0, 9.0, 17.0, 68.0)), ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    moved = _point_offsets(own)
+    assert sorted(moved) == [0, 3]
+    assert moved[0] > 0 > moved[3]
+    _assert_chart_valid(chart._chartSpace)
+
+
+def test_a_wider_edge_label_is_moved_further(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    narrow = add_native_chart(ctx, _spec_for("area", (3.0, 9.0)), ctx.body_rect).chart
+    wide = add_native_chart(ctx, _spec_for("area", (30000.0, 9.0)), ctx.body_rect).chart
+    assert _point_offsets(_series_dlbls(wide)[0])[0] > _point_offsets(_series_dlbls(narrow)[0])[0]
+
+
+def test_moved_area_labels_draw_no_leader_line(ctx_factory, theme):
+    """LibreOffice draws a line from a moved label back to its point unless told not to."""
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(ctx, _spec_for("area", (3.0, 9.0, 17.0)), ctx.body_rect).chart
+    [own] = _series_dlbls(chart)
+    assert own.find(qn("c:showLeaderLines")).get("val") == "0"
+    ext = own.find(qn("c:extLst"))
+    assert ext is not None
+    assert b'showLeaderLines val="0"' in etree.tostring(ext)
+
+
+def test_a_stacked_columns_labels_are_not_moved(ctx_factory, theme):
+    ctx = _plain_ctx(ctx_factory, theme)
+    chart = add_native_chart(
+        ctx, _spec_for("column-stacked", (3.0, 9.0, 17.0)), ctx.body_rect
+    ).chart
+    assert all(_point_offsets(d) == {} for d in _series_dlbls(chart) if d is not None)

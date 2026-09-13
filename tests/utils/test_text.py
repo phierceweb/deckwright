@@ -77,3 +77,98 @@ def test_a_wrap_estimated_in_the_face_it_renders_in_can_need_fewer_lines():
     assert wrapped_lines(text, width_in=WIDTH_IN, size_pt=54, face="Calibri") < wrapped_lines(
         text, width_in=WIDTH_IN, size_pt=54
     )
+
+
+def test_a_fit_refusal_on_a_face_with_no_table_says_its_estimate_errs_wide():
+    from deckwright.utils.text import estimate_caveat
+
+    assert (
+        estimate_caveat("Segoe UI")
+        == " ('Segoe UI' has no width table, so this estimate errs wide)"
+    )
+
+
+def test_a_measured_face_and_an_unnamed_one_add_no_caveat():
+    from deckwright.utils.text import estimate_caveat
+
+    assert estimate_caveat("Calibri", None) == ""
+
+
+def test_the_caveat_names_each_unmeasured_face_once():
+    from deckwright.utils.text import estimate_caveat
+
+    assert estimate_caveat("Segoe UI", "Calibri", "Segoe UI", "Georgia Pro") == (
+        " ('Segoe UI', 'Georgia Pro' has no width table, so this estimate errs wide)"
+    )
+
+
+def test_the_first_word_too_wide_for_the_measure_is_named():
+    from deckwright.utils.text import overlong_word
+
+    word = overlong_word(
+        "An Internationalization plan", width_in=2.0, size_pt=22.0, face="Helvetica"
+    )
+    assert word is not None and word[0] == "Internationalization"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "business-to-business-to-consumer",
+        "business—to—business—to—consumer",
+        "用户体验设计原则与数据驱动",
+    ],
+    ids=["hyphen", "em-dash", "cjk"],
+)
+def test_a_run_a_renderer_can_break_inside_is_not_one_word(text):
+    """LibreOffice sets 'business-to-business-to-' / 'consumer' in a 2.42in tile."""
+    from deckwright.utils.text import overlong_word
+
+    assert text_em(text, "Helvetica") * 14 / 72 > 2.42, "the whole run fits, so this proves nothing"
+    assert overlong_word(text, width_in=2.42, size_pt=14.0, face="Helvetica") is None
+
+
+def test_a_url_is_one_run_because_a_renderer_breaks_it_mid_word():
+    """LibreOffice sets 'phierceweb/deck' / 'wright/blob', not a break after a slash."""
+    from deckwright.utils.text import overlong_word
+
+    url = "github.com/phierceweb/deckwright/blob/main/docs"
+    found = overlong_word(url, width_in=2.42, size_pt=14.0, face="Helvetica")
+    assert found is not None and found[0] == url
+
+
+def test_the_widest_piece_between_breaks_is_what_is_named():
+    from deckwright.utils.text import overlong_word
+
+    found = overlong_word("pre-Internationalization", width_in=2.0, size_pt=22.0, face="Helvetica")
+    assert found is not None and found[0] == "Internationalization"
+
+
+@pytest.mark.parametrize(("width_in", "lines"), [(1.63, 1), (1.5, 2)])
+def test_a_lone_word_breaks_where_its_real_width_does(width_in, lines):
+    """'Reproduce' is 1.596in in Arial Bold at 22pt: the margin must not reserve it a second line."""
+    assert wrapped_lines("Reproduce", width_in=width_in, size_pt=22.0, face="Helvetica") == lines
+
+
+def test_a_word_that_fits_its_widest_cut_is_not_refused_for_the_sizing_margin():
+    """'Reproduce' is 1.596in in Arial Bold at 22pt; a card leaving 1.63in holds it."""
+    from deckwright.utils.text import overlong_word
+
+    assert overlong_word("Reproduce", width_in=1.63, size_pt=22.0, face="Helvetica") is None
+
+
+def test_an_overlong_word_reports_the_width_it_really_needs():
+    from deckwright.utils.text import overlong_word
+
+    found = overlong_word("Reproduce", width_in=1.5, size_pt=22.0, face="Helvetica")
+    assert found is not None
+    assert found == ("Reproduce", pytest.approx(1.596, abs=0.001))
+
+
+def test_no_word_is_named_when_every_word_fits():
+    from deckwright.utils.text import overlong_word
+
+    assert (
+        overlong_word("An Internationalization plan", width_in=5.0, size_pt=22.0, face="Helvetica")
+        is None
+    )

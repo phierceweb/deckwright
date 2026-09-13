@@ -130,4 +130,4 @@ def document(ctx: SlideCtx) -> BodyResult:
             f"'side: left'/'side: right' to narrow it. Do not copy part of the file "
             f"into a shorter one; the copy is what this component exists to avoid"
         )
-    return BodyResult(groups=[[picture.shape_id]], height=height)
+    return BodyResult(groups=[[(picture.shape_id, "figure")]], height=height)

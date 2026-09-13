@@ -42,6 +42,13 @@ def _clipped(plate: Rect, bounds: Rect) -> Rect:
     return Rect(left, top, max(0.0, right - left), max(0.0, bottom - top))
 
 
+@dataclass(frozen=True)
+class Disc:
+    """A round fill in ``painted``: its frame's corners show whatever was under it."""
+
+    fill: str
+
+
 @dataclass
 class SlideCtx:
     """The slide, the theme, the spec, the recorder — and the placement being drawn."""
@@ -62,8 +69,8 @@ class SlideCtx:
     placements: dict[str, Rect] = field(default_factory=dict)
     base: Path | None = None  # the deck spec's own directory
     backdrop: Backdrop | None = None  # the art painted over this slide's surface
-    panels: list[tuple[Rect, str]] = field(default_factory=list)
-    art: list[tuple[Rect, Any]] = field(default_factory=list)
+    # In paint order: a later entry covers an earlier one, fill or picture alike.
+    painted: list[tuple[Rect, str | Disc | Backdrop]] = field(default_factory=list)
 
     @property
     def grid(self) -> Grid:
@@ -108,17 +115,18 @@ class SlideCtx:
             return paper
         probe = ink or self.pair.fg
         candidates = [paper if self.backdrop is None else self.backdrop.behind(rect, ink=probe)]
-        # In paint order, so the last thing laid over the whole rect is what shows.
-        for frame, backdrop in self.art:
+        for frame, surface in self.painted:
             shared = _overlap(frame, rect)
             if shared is None:
                 continue
-            sampled = backdrop.behind(shared, ink=probe)
-            candidates = [sampled] if _covers(frame, rect) else [*candidates, sampled]
-        for panel, fill in self.panels:
-            if _overlap(panel, rect) is None:
-                continue
-            candidates = [fill] if _covers(panel, rect) else [*candidates, fill]
+            solid = frame
+            if isinstance(surface, Disc):
+                colour, solid = surface.fill, _inscribed(frame)
+            elif isinstance(surface, str):
+                colour = surface
+            else:
+                colour = surface.behind(shared, ink=probe)
+            candidates = [colour] if _covers(solid, rect) else [*candidates, colour]
         return min(candidates, key=lambda colour: contrast_ratio(probe, colour))
 
     def ink_at(self, rect: Rect, *, preferred: str, required: float = AA_LARGE) -> tuple[str, str]:
@@ -162,7 +170,7 @@ class SlideCtx:
             fill_rect(self.slide, plate.left, plate.top, plate.width, plate.height, self.rgb(fill)),
             plate=True,
         )
-        self.panels.append((plate, fill))
+        self.painted.append((plate, fill))
         return fill
 
     def dim(self) -> RGBColor:
@@ -189,6 +197,23 @@ class SlideCtx:
     def accent(self, *, size_pt: float, name: str = "accent-1") -> str:
         """An accent as text on the slide's own background."""
         return self.accent_on(self.pair.bg, size_pt=size_pt, name=name)
+
+    def text_ink(self, box: Rect, *, size_pt: float, muted: bool = False) -> tuple[str, str]:
+        """The ink for text set in ``box``, and the colour it is really on.
+
+        ``muted`` keeps the muted role only on the page pair, where it was vetted.
+        """
+        preferred = (
+            self.theme.palette.role("muted")
+            if muted and self.spec.background.pair == "page"
+            else self.pair.fg
+        )
+        return self.ink_at(box, preferred=preferred, required=required_ratio(size_pt))
+
+    def accent_at(self, box: Rect, *, size_pt: float, name: str = "accent-1") -> tuple[str, str]:
+        """An accent as text in ``box``, measured against what is behind it there."""
+        paper = self.behind(box, ink=self.theme.palette.role(name))
+        return self.accent_on(paper, size_pt=size_pt, name=name), paper
 
     def text_align(self):
         """The placement's ``align:`` as a paragraph alignment."""
@@ -239,6 +264,14 @@ def _covers(outer: Rect, inner: Rect) -> bool:
         and outer.top <= inner.top
         and outer.right >= inner.right
         and outer.bottom >= inner.bottom
+    )
+
+
+def _inscribed(frame: Rect) -> Rect:
+    """The square a circle drawn in ``frame`` fully covers."""
+    side = min(frame.width, frame.height) / 2**0.5
+    return Rect(
+        frame.left + (frame.width - side) / 2, frame.top + (frame.height - side) / 2, side, side
     )
 
 

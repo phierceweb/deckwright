@@ -83,7 +83,7 @@ def swatches(ctx: SlideCtx) -> BodyResult:
         )
         para(frame, hex_value, caption_style.size, ctx.dim(), space_after=0, font=ctx.theme.mono)
         ctx.manifest.record(frame._parent, text=role)
-        groups.append([chip.shape_id, frame._parent.shape_id])
+        groups.append([(chip.shape_id, "surface"), (frame._parent.shape_id, "text")])
 
     if caption:
         top = (
@@ -95,15 +95,14 @@ def swatches(ctx: SlideCtx) -> BodyResult:
         note = textbox(ctx.slide, rect.left, top, caption_w, caption_h)
         body_line(ctx, note, caption, first=True)
         ctx.manifest.record(note._parent, text=caption)
-        groups.append([note._parent.shape_id])
+        groups.append([(note._parent.shape_id, "text")])
     return BodyResult(groups=groups, height=extent)
 
 
 def _caption_h(ctx: SlideCtx, caption: str, width_in: float) -> float:
     """How deep the caption sets at *width_in*.
 
-    Reserved and drawn from the same measure: a flat two label-lines both wasted the
-    depth a one-line caption does not use and refused a placement that would have fit.
+    Reserved and drawn from the same measure, so the two cannot disagree.
     """
     if not caption:
         return 0.0

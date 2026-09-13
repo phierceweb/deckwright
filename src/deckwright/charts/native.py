@@ -20,23 +20,21 @@ from deckwright.charts._native_types import (
     _AXIS_CHART_TYPES,
     _CHART_TYPES,
     _CONNECTED_CHART_TYPES,
-    _CONNECTED_LABEL_POSITION,
     _GAP_WIDTH_CHART_TYPES,
     _HORIZONTAL_BAR_CHART_TYPES,
-    _LABEL_POSITIONS,
     _MARKER_CHART_TYPES,
     _MARKER_STYLES,
     _NO_DATA_LABEL_CHART_TYPES,
     _PERCENT_AXIS_CHART_TYPES,
     _PIE_FAMILY_CHART_TYPES,
     _SERIES_FILL_CHART_TYPES,
-    _INSIDE_END_CHART_TYPES,
-    _POINT_LABEL_CHART_TYPES,
     _RADAR_CHART_TYPES,
+    _SMOOTH_CHART_TYPES,
     _STROKE_CHART_TYPES,
     _STRUCTURAL_GRIDLINE_CHART_TYPES,
 )
-from deckwright.charts._shared import label_number_format, lighten, value_decimals
+from deckwright.charts._shared import lighten
+from deckwright.charts.labels import label_format, style_data_labels
 from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec
 from deckwright.errors import LayoutError, ThemeError
 from deckwright.theme.chartstyle import ChartStyle
@@ -80,13 +78,20 @@ def add_native_chart(ctx: SlideCtx, spec: ChartSpec, rect: Rect) -> GraphicFrame
         chart_data,
     )
     chart = frame.chart
+    chart.has_title = False
+    # Inked for what the frame sits on: a chart laid over a panel is on the panel.
+    caption = ctx.style("caption").size
+    ink, _ = ctx.text_ink(rect, size_pt=caption)
+    muted, _ = ctx.text_ink(rect, size_pt=caption, muted=True)
     if spec.type in _RADAR_CHART_TYPES:
         _drop_smooth(chart)
+    elif spec.type in _SMOOTH_CHART_TYPES:
+        _smooth(chart)
     _style_series(ctx, chart, spec)
     if spec.type not in _NO_DATA_LABEL_CHART_TYPES:
-        _style_data_labels(ctx, chart, spec)
+        style_data_labels(ctx, chart, spec, frame_width=rect.width, ink=ink)
     if spec.type in _AXIS_CHART_TYPES:
-        _style_axes(ctx, chart, spec)
+        _style_axes(ctx, chart, spec, ink=muted)
     if spec.type in _GAP_WIDTH_CHART_TYPES:
         chart.plots[0].gap_width = ctx.theme.chart.gap_width
     chart.has_legend = len(spec.series) > 1
@@ -107,7 +112,7 @@ def add_native_chart(ctx: SlideCtx, spec: ChartSpec, rect: Rect) -> GraphicFrame
             face=ctx.theme.face,
             legend=chart.has_legend,
         )
-    _style_text(ctx, chart)
+    _style_text(ctx, chart, ink=ink)
     return frame
 
 
@@ -213,10 +218,8 @@ def _style_series(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
                         point.marker.format.fill.solid()
                         point.marker.format.fill.fore_color.rgb = highlight
             continue
-        # On one series, emphasis is isolation: the marked point keeps the accent and
-        # everything else goes muted, so it is the only saturated thing on the plot. A
-        # second hue reads as a second category. Multi-series keeps the second accent —
-        # muting other points there would erase the series distinction.
+        # One series mutes every other point, since a second hue reads as a second
+        # category; with several, muting would erase the series distinction.
         mute = ctx.color("muted") if highlight is not None and len(spec.series) == 1 else None
         for index, point in enumerate(series.points):
             if mute is not None:
@@ -277,85 +280,26 @@ def _fill_point(
         apply_shadow(point.format.element.get_or_add_spPr(), style)
 
 
-def _style_text(ctx: SlideCtx, chart: Chart) -> None:
+def _style_text(ctx: SlideCtx, chart: Chart, *, ink: str) -> None:
     """Chart-wide text defaults, and the legend.
 
-    The legend and the title PowerPoint generates for a single-series chart carry no
-    colour of their own, so without this they take the presentation theme's dark ink
-    and vanish on a dark slide.
+    The legend carries no colour of its own, so without this it takes the presentation
+    theme's dark ink and vanishes on a dark slide.
     """
     chart.font.name = ctx.theme.face
-    chart.font.color.rgb = ctx.fg()
+    chart.font.color.rgb = ctx.rgb(ink)
     if not chart.has_legend:
         return
     chart.legend.font.name = ctx.theme.face
     chart.legend.font.size = Pt(ctx.style("caption").size)
-    chart.legend.font.color.rgb = ctx.fg()
+    chart.legend.font.color.rgb = ctx.rgb(ink)
 
 
-def _label_decimals(spec: ChartSpec) -> int:
-    """Places the labels print: what ``decimals:`` asked for, else what the data needs.
-
-    A 100% type is no exception. Its *axis* shows the computed share, but each label
-    still prints that series' own authored value.
-    """
-    if spec.decimals is not None:
-        return spec.decimals
-    plotted = [v for s in spec.series for v in (s.values or ())]
-    plotted += [p[1] for s in spec.series for p in (s.points or ())]
-    return value_decimals(plotted)
-
-
-def _number_format(ctx: SlideCtx, spec: ChartSpec) -> str | None:
-    """The code the chart's numbers print in, or ``None`` to leave python-pptx's default."""
-    # A 100% type is already a percentage, so a series unit of "%" would print a second sign.
-    unit = None if spec.type in _PERCENT_AXIS_CHART_TYPES else spec.series[0].unit
-    return label_number_format(
-        unit, thousands_sep=ctx.theme.chart.thousands_sep, decimals=_label_decimals(spec)
-    )
-
-
-def _style_data_labels(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
-    style = ctx.theme.chart
-    plot = chart.plots[0]
-    if style.label_position == "none":
-        plot.has_data_labels = False
-        return
-
-    plot.has_data_labels = True
-    # The value is the point of the chart, so it outranks the axis scale that frames it.
-    value_style = ctx.style("kicker")
-    labels = plot.data_labels
-    labels.font.size = Pt(value_style.size)
-    labels.font.bold = True
-    labels.font.italic = value_style.italic
-    labels.font.name = ctx.theme.face
-    labels.font.color.rgb = ctx.fg()
-    if style.label_position in _LABEL_POSITIONS and spec.type in _INSIDE_END_CHART_TYPES:
-        labels.position = _LABEL_POSITIONS[style.label_position]
-    elif spec.type in _POINT_LABEL_CHART_TYPES:
-        # `outside_end`, the default, is a bar position: a line has no bar end, so the
-        # label lands on the point it names.
-        labels.position = _CONNECTED_LABEL_POSITION
-    number_format = _number_format(ctx, spec)
-    if number_format is not None:
-        labels.number_format = number_format
-    if spec.type in _PIE_FAMILY_CHART_TYPES:
-        # Colour alone no longer names a wedge, and a pie/doughnut's single series
-        # never gets a legend — the label is the only thing that can name a slice.
-        labels.show_category_name = True
-    _hide_series_labels(chart, spec)
-
-
-def _hide_series_labels(chart: Chart, spec: ChartSpec) -> None:
-    """Silence the series that asked for no labels.
-
-    A series' own ``c:dLbls`` overrides the plot's, which is the only way one series can
-    drop its labels while the rest keep theirs.
-    """
-    for series, wanted in zip(chart.series, spec.series, strict=True):
-        if not wanted.labels:
-            series.data_labels.show_value = False
+def _smooth(chart: Chart) -> None:
+    """Set `c:smooth` on each series: it outranks `scatterStyle`, and python-pptx writes it 0."""
+    for ser in chart._chartSpace.iter(qn("c:ser")):
+        for smooth in ser.findall(qn("c:smooth")):
+            smooth.set("val", "1")
 
 
 def _drop_smooth(chart: Chart) -> None:
@@ -369,7 +313,11 @@ def _drop_smooth(chart: Chart) -> None:
             ser.remove(smooth)
 
 
-def _style_axes(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
+def _all_non_negative(spec: ChartSpec) -> bool:
+    return all(v >= 0 for series in spec.series for v in series.values or ())
+
+
+def _style_axes(ctx: SlideCtx, chart: Chart, spec: ChartSpec, *, ink: str) -> None:
     rule = ctx.color("line")
     show_grid = ctx.theme.chart.grid == "horizontal"
     caption = ctx.style("caption")
@@ -379,7 +327,7 @@ def _style_axes(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
         # Untouched, tick labels inherit the template's size and dominate the values.
         axis.tick_labels.font.size = Pt(caption.size)
         axis.tick_labels.font.name = ctx.theme.face
-        axis.tick_labels.font.color.rgb = ctx.dim()
+        axis.tick_labels.font.color.rgb = ctx.rgb(ink)
     if spec.type not in _STRUCTURAL_GRIDLINE_CHART_TYPES:
         chart.category_axis.has_major_gridlines = False
         if show_grid:
@@ -392,11 +340,15 @@ def _style_axes(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
         chart.value_axis.tick_labels.number_format = "0%"
     elif spec.series[0].unit:
         # Without it the scale and the values it frames disagree about what the numbers are.
-        number_format = _number_format(ctx, spec)
+        number_format = label_format(ctx, spec)
         if number_format is not None:
             chart.value_axis.tick_labels.number_format = number_format
-    if spec.y_min is not None:
-        chart.value_axis.minimum_scale = spec.y_min
+    floor = spec.y_min
+    if floor is None and spec.type in _GAP_WIDTH_CHART_TYPES and _all_non_negative(spec):
+        # A bar encodes length from its baseline, so auto-scaling above zero distorts it.
+        floor = 0.0
+    if floor is not None and (spec.y_max is None or spec.y_max > floor):
+        chart.value_axis.minimum_scale = floor
     if spec.y_max is not None:
         chart.value_axis.maximum_scale = spec.y_max
 

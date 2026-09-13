@@ -107,7 +107,10 @@ def fanout(ctx: SlideCtx) -> BodyResult:
     src_h = min(r.height * 0.32, _SOURCE_MAX_H)
     src_y = r.top + (r.height - src_h) / 2
     plate = rrect(ctx.slide, r.left, src_y, src_w, src_h, ctx.color("accent-1"), radius=0.12)
-    ctx.manifest.record(plate)
+    ctx.manifest.record(
+        plate, fill=accent_hex, ground=ctx.behind(Rect(r.left, src_y, src_w, src_h), ink=accent_hex)
+    )
+    ctx.painted.append((Rect(r.left, src_y, src_w, src_h), accent_hex))
     tf = textbox(ctx.slide, r.left + 0.16, src_y, src_w - 0.32, src_h, anchor=MSO_ANCHOR.MIDDLE)
     para(
         tf,
@@ -141,7 +144,14 @@ def fanout(ctx: SlideCtx) -> BodyResult:
     spine = rect(ctx.slide, spine_x - stroke / 2, first_y, stroke, last_y - first_y, bus)
     ctx.manifest.record(trunk)
     ctx.manifest.record(spine)
-    groups.append([plate.shape_id, tf._parent.shape_id, trunk.shape_id, spine.shape_id])
+    groups.append(
+        [
+            (plate.shape_id, "surface"),
+            (tf._parent.shape_id, "text"),
+            (trunk.shape_id, "line"),
+            (spine.shape_id, "line"),
+        ]
+    )
 
     for index, item in enumerate(items):
         mid = r.top + index * lane + lane / 2
@@ -151,7 +161,7 @@ def fanout(ctx: SlideCtx) -> BodyResult:
             ctx.slide, spine_x, mid - stroke / 2, icon_x - spine_x - _HEAD - 0.04, stroke, bus
         )
         ctx.manifest.record(branch)
-        ids.append(branch.shape_id)
+        ids.append((branch.shape_id, "line"))
 
         # A triangle turned a quarter is the arrowhead; a rectangle cannot carry one.
         tip = ctx.slide.shapes.add_shape(
@@ -165,7 +175,7 @@ def fanout(ctx: SlideCtx) -> BodyResult:
         tip.line.fill.background()
         solid(tip, bus)
         ctx.manifest.record(tip)
-        ids.append(tip.shape_id)
+        ids.append((tip.shape_id, "line"))
 
         if item.get("icon"):
             # Into the row's group: a shape outside every group is unanimated, which
@@ -178,17 +188,16 @@ def fanout(ctx: SlideCtx) -> BodyResult:
                 theme=ctx.theme,
             )
             ctx.manifest.record(mark)
-            ids.append(mark.shape_id)
+            ids.append((mark.shape_id, "figure"))
 
         text = str(item["text"])
         chip = textbox(
             ctx.slide, chip_x, mid - chip_h / 2, chip_w, chip_h, anchor=MSO_ANCHOR.MIDDLE
         )
-        para(chip, text, body.size, ctx.fg(), first=True, space_after=0, font=ctx.theme.face)
-        ctx.manifest.record(
-            chip._parent, lines=[text], font_pt=body.size, fg=ctx.pair.fg, bg=ctx.pair.bg
-        )
-        ids.append(chip._parent.shape_id)
+        ink, paper = ctx.text_ink(Rect(chip_x, mid - chip_h / 2, chip_w, chip_h), size_pt=body.size)
+        para(chip, text, body.size, ctx.rgb(ink), first=True, space_after=0, font=ctx.theme.face)
+        ctx.manifest.record(chip._parent, lines=[text], font_pt=body.size, fg=ink, bg=paper)
+        ids.append((chip._parent.shape_id, "text"))
         groups.append(ids)
 
     return BodyResult(groups=groups, height=r.height)

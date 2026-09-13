@@ -374,8 +374,7 @@ def test_binding_a_slot_name_without_a_template_is_rejected(tmp_path):
 
 
 def test_a_templateless_theme_that_binds_nothing_keeps_every_default(tmp_path):
-    """The bind path replaced a straight DEFAULT_PALETTE assignment — it must be a
-    no-op when the theme declares no colours."""
+    """Binding nothing must reproduce DEFAULT_PALETTE exactly."""
     path = tmp_path / "bare.yaml"
     path.write_text("name: bare\n")
     assert load_theme(path).palette == DEFAULT_PALETTE
@@ -465,7 +464,7 @@ def test_a_mark_without_media_is_rejected_at_load(tmp_path, synthetic_template):
 
 def test_a_ramp_entry_naming_only_a_size_keeps_its_rungs_weight_and_face(tmp_path):
     """`title: {pt: 34}` resizes the title; it must not quietly un-bold it or strip the
-    heading face — which is exactly what the packaged base ramp did to every deck."""
+    heading face."""
     path = tmp_path / "t.yaml"
     path.write_text("name: t\ntype:\n  ramp:\n    title: {pt: 34}\n    body: {pt: 14}\n")
     theme = load_theme(path)
@@ -482,7 +481,7 @@ def test_an_explicit_bold_false_still_wins(tmp_path):
 
 
 def test_a_bare_theme_name_loads_the_packaged_builtin(tmp_path, monkeypatch):
-    """`deckwright.load_theme("base")` is the advertised way in; a path was the only one."""
+    """`deckwright.load_theme("base")` is the advertised way in."""
     monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path / "no-such-dir"))
     assert load_theme("base").name == "base"
 
@@ -494,7 +493,7 @@ def test_a_bare_name_prefers_the_theme_directory_over_the_packaged_builtin(tmp_p
 
 
 def test_an_unknown_name_names_the_directory_it_searched_and_the_remedy(tmp_path, monkeypatch):
-    """'theme file not found: acme' named no directory, no env var and no way out."""
+    """Not a bare 'theme file not found: acme', which names no directory, env var or way out."""
     monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
     with pytest.raises(ThemeError) as excinfo:
         load_theme("acme")
@@ -684,7 +683,7 @@ def test_an_integer_too_large_to_weigh_is_refused_by_name(tmp_path, block, names
     ],
 )
 def test_a_typo_in_a_nested_theme_block_is_refused(tmp_path, block, message):
-    """The value was dropped and the default stood, so the theme read as if honoured."""
+    """Dropped, the value leaves the default standing and the theme reads as if honoured."""
     path = tmp_path / "probe.theme.yaml"
     path.write_text(f"name: probe\n{block}", encoding="utf-8")
     with pytest.raises(ThemeError) as e:
@@ -704,3 +703,128 @@ def test_every_key_a_nested_block_really_reads_is_accepted(tmp_path, block):
     path = tmp_path / "probe.theme.yaml"
     path.write_text(f"name: probe\n{block}", encoding="utf-8")
     assert load_theme(path).name == "probe"
+
+
+def _routed(ref) -> str:
+    with pytest.raises(ThemeError) as e:
+        load_theme(ref)
+    return str(e.value)
+
+
+def _command(message: str) -> list[str]:
+    """The backticked command, split the way a shell would read it."""
+    import shlex
+
+    return shlex.split(message.split("`")[1])
+
+
+def test_a_template_in_the_theme_dir_is_sent_to_conform_in_a_command_that_pastes(
+    tmp_path, monkeypatch
+):
+    """Most real template names carry spaces or brackets, which a shell splits or globs."""
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
+    brand = tmp_path / "Free Doodle [Dark].pptx"
+    Presentation().save(str(brand))
+    message = _routed("Free Doodle [Dark].pptx")
+    assert "is a template, not a theme" in message
+    assert _command(message) == ["deckwright", "conform", str(brand), "--adopt", "free-doodle-dark"]
+    assert message.endswith("then build with 'theme: free-doodle-dark'")
+
+
+def test_a_template_already_adopted_names_the_theme_to_build_with(tmp_path, monkeypatch):
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
+    Presentation().save(str(tmp_path / "Brand.pptx"))
+    (tmp_path / "house.theme.yaml").write_text("name: house\ntemplate: Brand.pptx\n")
+    (tmp_path / "other.theme.yaml").write_text("name: other\ntemplate: Else.pptx\n")
+    assert _routed(tmp_path / "Brand.pptx").endswith(
+        "it is already adopted — build with 'theme: house'"
+    )
+
+
+def test_a_template_outside_the_theme_dir_is_moved_in_before_conform(tmp_path, monkeypatch):
+    """`conform --adopt` refuses a template that does not live in the theme dir."""
+    root = tmp_path / "themes"
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(root))
+    brand = tmp_path / "My Brand.pptx"
+    Presentation().save(str(brand))
+    words = _command(_routed(brand))
+    assert words[:3] == ["mkdir", "-p", str(root)]
+    assert words[4:7] == ["mv", str(brand), f"{root}/"]
+    assert words[8:] == [
+        "deckwright",
+        "conform",
+        str(root / "My Brand.pptx"),
+        "--adopt",
+        "my-brand",
+    ]
+
+
+def test_a_template_whose_name_is_taken_in_the_theme_dir_is_never_moved_over_it(
+    tmp_path, monkeypatch
+):
+    """`mv` into the theme dir would replace the adopted binary, then re-adopt over its theme."""
+    root = tmp_path / "themes"
+    root.mkdir()
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(root))
+    Presentation().save(str(root / "Brand.pptx"))
+    (root / "house.theme.yaml").write_text("name: house\ntemplate: Brand.pptx\n")
+    newer = Presentation()
+    newer.slides.add_slide(newer.slide_layouts[0])
+    newer.save(str(tmp_path / "Brand.pptx"))
+
+    message = _routed(tmp_path / "Brand.pptx")
+
+    assert "mv " not in message
+    assert f"{root}/ already holds a different Brand.pptx, adopted as 'house'," in message
+
+
+def test_a_copy_of_a_template_already_in_the_theme_dir_routes_to_that_one(tmp_path, monkeypatch):
+    import shutil
+
+    root = tmp_path / "themes"
+    root.mkdir()
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(root))
+    Presentation().save(str(root / "Brand.pptx"))
+    (root / "house.theme.yaml").write_text("name: house\ntemplate: Brand.pptx\n")
+    shutil.copy(root / "Brand.pptx", tmp_path / "Brand.pptx")
+
+    assert _routed(tmp_path / "Brand.pptx").endswith(
+        "it is already adopted — build with 'theme: house'"
+    )
+
+
+def test_a_template_symlinked_into_the_theme_dir_is_routed_as_living_there(tmp_path, monkeypatch):
+    """Resolving the link itself compares the file with itself, forever."""
+    root = tmp_path / "themes"
+    root.mkdir()
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(root))
+    Presentation().save(str(tmp_path / "Brand.pptx"))
+    (root / "Brand.pptx").symlink_to(tmp_path / "Brand.pptx")
+
+    assert _command(_routed(root / "Brand.pptx")) == [
+        "deckwright",
+        "conform",
+        str(root / "Brand.pptx"),
+        "--adopt",
+        "brand",
+    ]
+
+
+def test_a_template_that_is_nowhere_still_routes_to_conform(tmp_path, monkeypatch):
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
+    message = _routed("Brand.pptx")
+    assert f"there is no file at Brand.pptx or in {tmp_path}/" in message
+    assert _command(message) == [
+        "deckwright",
+        "conform",
+        str(tmp_path / "Brand.pptx"),
+        "--adopt",
+        "brand",
+    ]
+
+
+def test_a_theme_file_that_is_not_text_is_a_theme_error(tmp_path):
+    binary = tmp_path / "noise.yaml"
+    binary.write_bytes(b"\x8b\xff\x00\x91 not utf-8")
+    with pytest.raises(ThemeError, match=r"noise\.yaml is not a text theme file"):
+        load_theme(binary)

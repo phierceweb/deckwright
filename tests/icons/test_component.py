@@ -19,13 +19,13 @@ def _draw(ctx):
 
 
 _EMU = 914400
-# The rect, and the size, from the overrun BAKEOFF_ISSUES issue 4 reported.
-_ISSUE_RECT = Rect(0.8, 2.7, 2.267, 1.95)
+# A narrow placement, 1.95in on its short side.
+_NARROW_RECT = Rect(0.8, 2.7, 2.267, 1.95)
 
 
 def _placed(ctx_factory, size, *, align="left", anchor="top"):
     ctx = ctx_factory({"icon": {"name": "square", "size": size}})
-    ctx.rect, ctx.align, ctx.anchor = _ISSUE_RECT, align, anchor
+    ctx.rect, ctx.align, ctx.anchor = _NARROW_RECT, align, anchor
     shape = _draw(ctx)
     return tuple(round(v / _EMU, 3) for v in (shape.left, shape.top, shape.width, shape.height))
 
@@ -86,8 +86,8 @@ def test_a_box_no_colour_reads_across_gets_a_plate_like_a_chrome_line(ctx_factor
     rect = ctx.body_rect
     # The glyph squares off to the placement's short side, anchored at the left.
     side = min(rect.width, rect.height)
-    ctx.panels.append((Rect(rect.left, rect.top, side / 2, rect.height), "FFFFFF"))
-    ctx.panels.append((Rect(rect.left + side / 2, rect.top, side / 2, rect.height), "2D0937"))
+    ctx.painted.append((Rect(rect.left, rect.top, side / 2, rect.height), "FFFFFF"))
+    ctx.painted.append((Rect(rect.left + side / 2, rect.top, side / 2, rect.height), "2D0937"))
     before = len(ctx.slide.shapes)
     get_component("icon")(ctx)
     assert len(ctx.slide.shapes) == before + 2  # the plate, then the glyph
@@ -101,10 +101,9 @@ def test_an_icon_is_squared_off_inside_a_wide_placement(ctx_factory):
     assert shape.width == shape.height
 
 
-def test_size_draws_the_square_the_rule_states_at_the_rect_that_was_reported(ctx_factory):
-    """A build refused with this rect and 0.9, claiming a 0.19in overrun. It draws 1.755in
-    inside 1.95in. Literal numbers: recomputing the rule with the rule agrees with `max`,
-    with `size` dropped, and with `align`/`anchor` ignored."""
+def test_size_draws_the_square_the_rule_states(ctx_factory):
+    """At 0.9 it draws 1.755in inside 1.95in. Literal numbers: recomputing the rule with the
+    rule agrees with `max`, with `size` dropped, and with `align`/`anchor` ignored."""
     for size, side in ((0.5, 0.975), (0.7, 1.365), (0.9, 1.755), (1.0, 1.95)):
         assert _placed(ctx_factory, size) == (0.8, 2.7, side, side), size
 
@@ -166,25 +165,24 @@ def test_shape_ids_stay_unique_when_several_glyphs_land(ctx_factory):
 
 def test_a_marks_plate_never_reaches_past_the_placement_that_asked_for_it(ctx_factory):
     """On artwork no accent reads across, the mark gets a plate — and the plate, not the
-    glyph, is the shape that leaves the rect. It is drawn first, so it is `#1`, which is
-    what the overrun BAKEOFF_ISSUES issue 4 reported named. `placement-fit` skips plates,
-    so nothing else in the project would say."""
+    glyph, is the shape that leaves the rect. `placement-fit` skips plates, so nothing else
+    in the project would say."""
     ctx = ctx_factory({"icon": {"name": "square", "size": 0.9}})
-    ctx.rect = _ISSUE_RECT
+    ctx.rect = _NARROW_RECT
     # Half the rect white, half black: no single ink reads across it, which is the branch
     # that plates.
-    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top, 2.267, 0.975), "FFFFFF"))
-    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top + 0.975, 2.267, 0.975), "000000"))
+    ctx.painted.append((Rect(_NARROW_RECT.left, _NARROW_RECT.top, 2.267, 0.975), "FFFFFF"))
+    ctx.painted.append((Rect(_NARROW_RECT.left, _NARROW_RECT.top + 0.975, 2.267, 0.975), "000000"))
     get_component("icon")(ctx)
 
     drawn = [s for s in ctx.manifest.slides[0].shapes]
     plates = [s for s in drawn if s.plate]
     assert plates, "no plate was drawn — this test no longer exercises the branch it names"
-    right, bottom = _ISSUE_RECT.left + _ISSUE_RECT.width, _ISSUE_RECT.top + _ISSUE_RECT.height
+    right, bottom = _NARROW_RECT.left + _NARROW_RECT.width, _NARROW_RECT.top + _NARROW_RECT.height
     for shape in drawn:
         box = shape.box
-        assert box.x >= _ISSUE_RECT.left - 0.001, (shape.name, box)
-        assert box.y >= _ISSUE_RECT.top - 0.001, (shape.name, box)
+        assert box.x >= _NARROW_RECT.left - 0.001, (shape.name, box)
+        assert box.y >= _NARROW_RECT.top - 0.001, (shape.name, box)
         assert box.x + box.w <= right + 0.001, (shape.name, box)
         assert box.y + box.h <= bottom + 0.001, (shape.name, box)
 
@@ -193,9 +191,9 @@ def test_a_plate_still_covers_the_glyph_it_was_drawn_for(ctx_factory):
     """Clipping the plate to the placement must not shrink it inside the glyph — a plate
     that no longer covers the mark buys nothing and the mark stops reading."""
     ctx = ctx_factory({"icon": {"name": "square", "size": 0.9}})
-    ctx.rect = _ISSUE_RECT
-    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top, 2.267, 0.975), "FFFFFF"))
-    ctx.panels.append((Rect(_ISSUE_RECT.left, _ISSUE_RECT.top + 0.975, 2.267, 0.975), "000000"))
+    ctx.rect = _NARROW_RECT
+    ctx.painted.append((Rect(_NARROW_RECT.left, _NARROW_RECT.top, 2.267, 0.975), "FFFFFF"))
+    ctx.painted.append((Rect(_NARROW_RECT.left, _NARROW_RECT.top + 0.975, 2.267, 0.975), "000000"))
     get_component("icon")(ctx)
 
     plate = next(s for s in ctx.manifest.slides[0].shapes if s.plate)

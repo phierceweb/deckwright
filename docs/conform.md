@@ -100,7 +100,8 @@ The spine. Every step has a section of its own below.
    `templates/`; nothing under `out/` is needed again.
 
 Re-running `conform` on the same template is safe: it rewrites `out/` and leaves
-`templates/<name>.theme.yaml` alone unless you pass `--force`.
+`templates/<name>.theme.yaml` as it is unless you pass `--force`, except for an `inverse`
+that vanishes into the page, which `--adopt` rebinds (see below).
 
 ## Running it
 
@@ -132,17 +133,21 @@ Exit status is non-zero if any exercise failed, so it works as a gate.
 brand.pptx
   · canvas 13.33 x 7.50in
   · composes on 'Blank' across 2 master(s)
-  · page lt1=FFFFFF, ink dk2=1A1A2E (16.9:1)
+  · page lt1=FFFFFF, ink dk2=1A1A2E (17.1:1), inverse dk2=1A1A2E (17.1:1 on the page)
   · ignored 3 unedited stock accent(s): accent4, accent5, accent6
+  · ink came from dk2, not dk1 — dk1 is not this template's darkest
   ok    cover
   FAIL  panel: <the error, first line, truncated>
   <passed>/98 exercises
 ```
 
-The `·` notes are what a reader of the derived theme needs to know about this template —
-its canvas, which layout generated slides compose on, the page/ink pair with its measured
-contrast, and any judgement call worth surfacing (a stock accent ignored, an ink that did
-not come from `dk1`).
+The `·` notes are what a reader of the theme needs to know about this template: its
+canvas, which layout generated slides compose on, the `page`, `ink` and `inverse` it
+bound with their measured contrast, and any judgement call worth surfacing (a stock
+accent ignored, a dark ink that did not come from `dk1`). The colours are read from the
+theme the run **wrote**, not from the scheme. A master that paints its own dark ground
+reports that ground, so a dark template reads as light ink on a dark page. A slot is
+shown as `slot=RRGGBB`; a colour sampled from the master is shown as the bare hex.
 
 Then one line per exercise, and a count. A `FAIL` line carries the build error, so most
 are diagnosable without re-running.
@@ -194,10 +199,23 @@ copy of the binary; a `.pptx` somewhere else is refused, naming the `mv` that fi
 
 **A sidecar theme beside the binary is installed instead of the derivation.** When
 `--adopt brand` finds `brand.theme.yaml` next to the `.pptx`, the exercises run against
-the sidecar — what gets validated is what gets installed — and it is installed verbatim.
+the sidecar — what gets validated is what gets installed — and the file keeps its
+comments and layout: only a line whose value changes, such as a `template:` pointer, is
+rewritten.
 This is how a tuned theme survives leaving the repo: keep it beside the binary, and
 re-onboarding costs one command. The report
 carries `· theme from sidecar …` so a derived run and a re-onboard are never confused.
+
+The one exception is an `inverse` that stands under 3:1 off the sidecar's `page` — the
+binding a dark master got before `inverse` was derived against the page, and what a load
+logs as `theme_inverse_matches_page`, whether the sidecar binds `inverse` or leaves it at
+the default. Re-adopting rebinds `inverse` and `inverse-ink` as a fresh derivation would,
+rewrites only those lines, and reports
+`· rebound inverse dk1 -> lt1: 1.2:1 off the page, now 9.6:1`. A `bind:` written in flow
+style (`bind: {page: lt1}`) cannot be edited a line at a time, so the file is rewritten
+whole and its comments are lost, which the log reports as `theme_comments_dropped`. A run
+that exercises the theme without `--adopt` changes nothing and ends that note with
+`— re-adopting rebinds it`.
 
 **Adoption does not make the derivation authoritative.** It changes *which file you
 edit*. Without it the only copy sits in a directory built to be wiped, so editing it is
@@ -211,7 +229,7 @@ than the whole run:
 | Refusal | Why |
 |---|---|
 | `theme 'brand' already exists … and binds …` | That name is live on another template that is also here, and repointing it hijacks the theme; the existing file may be hand-edited, and nothing would recover it. Adopt under another name, or pass `--force`. |
-| `a template is adopted where it lives` | The theme binds its template by a bare filename resolved beside it, so the `.pptx` has to be in the theme directory already. The message names the `mv`. |
+| `a template is adopted where it lives` | The theme binds its template by a bare filename resolved beside it, so the `.pptx` has to be in the theme directory already. The message names the `mv` — unless the theme directory already holds a file of that name: an identical copy is sent to adopt the one there, and a different file is told to be renamed first, because the `mv` would overwrite it. |
 | `--adopt takes a bare theme name` | The name becomes a filename and a deck's `theme:` line. Letters, digits, `-` and `_`. |
 | `template not found` | Named before anything is written. |
 
@@ -246,7 +264,7 @@ The interesting part of `conform/derive.py` is what it refuses to trust:
 | The master's own paint | **Outranks the scheme.** What a slide will really show is the master's paint, so when it differs meaningfully from the page slot, every surface role is re-derived against it — a `clrScheme` has no slot for "secondary text on this template's photograph". |
 | A background picture | **Sampled, not guessed.** The colour taken is the spot that reads *worst* against whatever ink will land on it, because a title crosses the whole frame and the palette's stated contrast should be the real floor. |
 | Type sizes | **Only when they nearly match a built-in rung.** A measured rung further than the tolerance from any built-in is noise, not a decision, and is left out. |
-| `inverse` | **The darkest slot carrying hue**, not the darkest slot. Pure black is every brand's black; a dark with hue in it is *this* brand's dark. |
+| `inverse` | **The slot farthest from the page that still reads on it**, measured against the page a slide really shows rather than a presumed white one. A light page gets a dark inverse and a dark master gets a light one, since slot names are no guide (a scheme may keep its dark page colour in `lt2`). Among the slots that clear AA on the page, one carrying hue wins: pure black is every brand's black, and a dark with hue in it is *this* brand's dark. A light inverse also gets its own `inverse-ink`, because the default white would disappear on it. |
 
 One derived block is not a colour at all: when the template's background art leaves a
 wide enough uniform horizontal run in the chrome band, `chrome:` is written with a

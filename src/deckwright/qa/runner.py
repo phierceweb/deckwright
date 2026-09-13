@@ -20,6 +20,7 @@ from deckwright.qa.geometry import (
     check_type_sizes,
 )
 from deckwright.qa.charts import check_charts
+from deckwright.qa.fills import check_fill_ground
 from deckwright.qa.fonts import check_faces
 from deckwright.qa.imagery import check_render_contrast
 from deckwright.qa.model import Finding, QaReport, Severity
@@ -159,6 +160,7 @@ def run_qa(
         check_reserved,
         check_type_sizes,
         check_contrast,
+        check_fill_ground,
         check_text_fit,
         check_placeholder,
         check_beats,

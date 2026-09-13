@@ -298,9 +298,12 @@ a `.pptx` is parsed with entity expansion and network access refused.
 
 ## License
 
-MIT — see [LICENSE](https://github.com/phierceweb/deckwright/blob/main/LICENSE). Bundled
+Apache License 2.0 — see [LICENSE](https://github.com/phierceweb/deckwright/blob/main/LICENSE)
+and [NOTICE](https://github.com/phierceweb/deckwright/blob/main/NOTICE), which carries the
+attributions section 4(d) makes travel with a copy. Bundled
 [Material Symbols](https://github.com/google/material-design-icons) glyphs are Copyright
-Google, Apache License 2.0 — their licence ships beside them at
-`src/deckwright/icons/glyphs/material/LICENSE`, which is why the distributed artifact is
-`MIT AND Apache-2.0` rather than MIT alone. The test suite carries ECMA-376 (ISO/IEC 29500)
+Google LLC, Apache License 2.0 — their licence ships beside them at
+`src/deckwright/icons/glyphs/material/LICENSE`. The test suite carries ECMA-376 (ISO/IEC 29500)
 schema files under `tests/schemas/ooxml/`; provenance in that directory's `SOURCE.md`.
+
+Built by Mike Farr at [Phierce Web](https://github.com/phierceweb).

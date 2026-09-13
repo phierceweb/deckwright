@@ -8,7 +8,7 @@ from pptx.enum.text import PP_ALIGN
 import deckwright.components  # noqa: F401 — registers the built-in components
 from deckwright.components.card import _ICON_LINES
 from deckwright.errors import LayoutError, ThemeError
-from deckwright.layouts.components import get_component, registered_components
+from deckwright.layouts.components import get_component, registered_components, shape_id
 from deckwright.theme.model import Rect
 from deckwright.utils.text import LINE_HEIGHT
 
@@ -248,7 +248,9 @@ def test_the_card_is_recorded_for_qa_with_its_lines_on_its_own_fill(ctx_factory)
 def test_the_whole_card_arrives_as_one_reveal_group(ctx_factory):
     ctx = ctx_factory({"card": {"heading": "Discovery", "body": "one line"}})
     result = get_component("card")(ctx)
-    assert result.groups == [[s.shape_id for s in ctx.slide.shapes]]
+    assert [[shape_id(i) for i in g] for g in result.groups] == [
+        [s.shape_id for s in ctx.slide.shapes]
+    ]
 
 
 def test_the_card_is_registered():
@@ -349,3 +351,45 @@ def test_plate_height_is_unchanged_for_the_radius_every_card_uses(ctx_factory):
     assert plate_height(
         ctx, width=2.4, heading="H", copy=words, radius=_RADIUS_DEFAULT
     ) == plate_height(ctx, width=2.4, heading="H", copy=words, radius=0.0)
+
+
+def test_a_card_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_factory, theme):
+    unmeasured = dataclasses.replace(theme, face="Segoe UI", heading_face="Segoe UI")
+    ctx = ctx_factory({"card": {"heading": "Discovery"}}, theme_override=unmeasured)
+    ctx.rect = Rect(1.0, 1.0, 2.0, 0.5)
+    with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
+        get_component("card")(ctx)
+
+
+def test_a_card_refusal_on_a_measured_face_adds_no_caveat(ctx_factory):
+    ctx = ctx_factory({"card": {"heading": "Discovery"}})
+    ctx.rect = Rect(1.0, 1.0, 2.0, 0.5)
+    with pytest.raises(LayoutError) as refused:
+        get_component("card")(ctx)
+    assert "the card's type wants" in str(refused.value)
+    assert "width table" not in str(refused.value)
+
+
+def test_a_heading_word_wider_than_the_card_is_refused_naming_the_word(ctx_factory):
+    """A word cannot wrap, so the renderer breaks it mid-word: 'Internati / onalizatio / n'."""
+    ctx = ctx_factory({"card": {"heading": "Counterrevolutionaries"}})
+    ctx.rect = Rect(1.0, 1.0, 1.6, 4.0)
+    with pytest.raises(LayoutError, match=r"'Counterrevolutionaries' .*would break mid-word"):
+        get_component("card")(ctx)
+
+
+def test_a_body_word_wider_than_the_card_is_refused_naming_the_word(ctx_factory):
+    ctx = ctx_factory(
+        {"card": {"heading": "Plan", "body": "See supercalifragilisticexpialidocious"}}
+    )
+    ctx.rect = Rect(1.0, 1.0, 1.6, 4.0)
+    with pytest.raises(
+        LayoutError, match=r"'supercalifragilisticexpialidocious' .*would break mid-word"
+    ):
+        get_component("card")(ctx)
+
+
+def test_a_card_whose_words_all_fit_is_drawn(ctx_factory):
+    ctx = ctx_factory({"card": {"heading": "Plan", "body": "Short words only."}})
+    ctx.rect = Rect(1.0, 1.0, 1.6, 4.0)
+    assert get_component("card")(ctx).groups

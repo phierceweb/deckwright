@@ -3,6 +3,110 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.3.0 — 2026-09-12
+
+- Licensed **Apache-2.0**, replacing MIT, with a `NOTICE` file. The distribution's
+  `license` metadata is `Apache-2.0`.
+- `python-pptx` is pinned to `~=1.0.2`.
+
+### Theme and conform
+
+- `conform` derives `inverse` against the page a slide shows. A dark master gets a light
+  `inverse` and its own `inverse-ink`; a light-page template derives as before.
+  **Re-adopting a dark-page template changes its inverse surfaces.**
+- Loading a theme whose `inverse` is within 3:1 of its `page` logs
+  `theme_inverse_matches_page`. Re-adopting its template rebinds `inverse` and
+  `inverse-ink`, bound or left at the default; `conform` without `--adopt` reports it.
+- Re-adopting a theme keeps its comments and layout: only the lines whose values change
+  are rewritten. A change a line edit cannot make, such as a flow-style `bind:`, rewrites
+  the file and logs `theme_comments_dropped` when it had comments.
+- `conform`'s report names the `page`, `ink` and `inverse` of the theme it wrote, each
+  with its contrast, instead of the colour scheme's pair; an unbound one is marked
+  `(default)`.
+- A template outside the theme directory whose filename is already taken there is refused
+  without printing an `mv` over it, by `conform --adopt` and by a `theme:` naming it.
+- A template symlinked into the theme directory is adopted where the link is.
+
+### Spec
+
+- A number in a spec prints as it was written: `1.10` and `2.50` stay as typed in a table
+  or a stat. What YAML 1.1 reads in another base — `007`, `0x1F`, `1:30` — loads as the
+  text written, and an unquoted `crop: 16:9` is that aspect. A whole-number field such as
+  a column index refuses one by name.
+
+### Colour
+
+- **Text a component sets on the slide is inked for what is painted under it**: prose, bullets,
+  callouts, captions, `nav`, `fanout`, `diverge`, `code`, `grid` and a chart's labels, axis text
+  and legend over a `panel` or a picture, and a table's body cells on an inverse band. The
+  manifest records that ground, and a picture's scrim is part of it.
+- A `bleed:` card, disc, callout dot, `versus` or `fanout` plate, `diverge` plate or bar, or
+  `grid` bar is the ground for text laid over it, as a panel is. A disc covers its inscribed
+  square.
+- Text over a picture laid on top of a panel is inked for the picture.
+
+### Type
+
+- Width tables for Poppins, Open Sans, Montserrat, Amatic, Sniglet, Bebas Neue and Barlow
+  Semi Condensed. **Decks in those faces lay out against their real widths**, so prose,
+  cards, tables and titles take less room than the conservative estimate gave them.
+- A fit refusal whose estimate ran on a face with no width table says so.
+- **A `card` heading or body, a `stats` value or label, or a `flow` step holding a run wider
+  than its frame is refused**, naming the run and the width it needs, measured without the
+  sizing margin. A run ends at a space, after a hyphen or dash, and at each CJK character.
+  A word that fits its line is no longer counted as two lines by the wrap estimate that
+  sizes cards, flow steps, discs, chrome lines, prose, table rows, picture text and swatch
+  captions, and that `qa`'s `text-fit` check measures against.
+
+### Components
+
+- `nav` with no `items:` takes the deck's `sections:`, and with no `active:` marks the
+  slide's own `section:` when it is one of the items.
+- `SlideCtx.text_ink` and `SlideCtx.accent_at` return an ink for a box and the ground painted
+  under it, for components written outside the package; `ctx.painted` takes a `Disc` for a round
+  fill.
+
+### Motion
+
+- **`animate: one_at_a_time` reveals a single-column `bullets` list one bullet per click**, as a
+  PowerPoint build by paragraph in one text box. A list with several columns still reveals a
+  column per click, and `together` is unchanged.
+- Every component reports a motion role for each shape it reveals, so `motion.roles`
+  binds how text, surfaces, lines, figures and charts enter; a chart's own build takes the
+  `datum` entrance. **The lines in a `fanout` and between `flow` steps now wipe by default**,
+  as `rule` and `connector` do; a vertical stroke wipes along its length.
+
+### Charts
+
+- Area, doughnut and bubble charts print their data labels.
+- An area chart's first and last data labels are moved in off the plot edge, so they do not
+  sit on the value axis.
+- `xy-scatter-smooth` and `xy-scatter-smooth-no-markers` draw curves.
+- A data label drawn on a series' fill (pie and doughnut wedges, area bands, stacked bars,
+  `inside_end` bars) is inked for that fill, per wedge where wedges differ.
+- A chart with one named series is not titled with that series' name.
+- A chart's data labels, axis text and legend are recorded in the manifest with the ink and
+  ground they are drawn on, so `qa`'s `contrast` and `min-font` checks cover them.
+- **A bar or column chart's value axis starts at zero** when every value is zero or more.
+  `y_min` still overrides it; line, area, radar, scatter and bubble keep automatic scaling.
+
+### QA
+
+- `qa` warns `fill-ground` when a shape filled to stand off its ground (an inverse or accent
+  panel, card or disc, a plate, a bar, a dot) is separated from it by neither luminance nor
+  colour.
+
+### Errors
+
+- **Slides whose chapters run out of the order `sections:` lists are refused**, naming both.
+- A `theme:` naming a `.pptx`, at a path or by bare filename, is refused with the theme already
+  adopted from it, or else the `conform --adopt` command that onboards it, paths quoted and the
+  move into the theme directory included. A theme file that is not UTF-8 text is a
+  `ThemeError`.
+- Commands printed by `sample` and by `conform --adopt`'s refusal quote their paths.
+- An exception from a component's own code keeps its traceback and ends with a line
+  naming the slide and component. A component's `LayoutError` is unchanged.
+
 ## v0.2.0 — 2026-09-04
 
 - **The project is `deckwright`.** The package, the `deckwright` command, the

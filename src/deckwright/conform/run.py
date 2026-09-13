@@ -20,6 +20,7 @@ from deckwright.conform.adopt import install, plan
 from deckwright.conform.derive import derive, notes
 from deckwright.conform import assemble
 from deckwright.conform.exercise import EXERCISE
+from deckwright.conform.rebind import rebound_inverse, scheme_of
 from deckwright.errors import LayoutError, MissingToolError, RenderError, SpecError, ThemeError
 from deckwright.paths import scratch
 
@@ -74,13 +75,31 @@ def _write_theme_file(theme: dict, template: Path, outdir: Path) -> Path:
     return path
 
 
-def _copy_sidecar(sidecar: Path, template: Path, outdir: Path) -> Path:
+def _copy_sidecar(
+    sidecar: Path, template: Path, outdir: Path, *, prefer: str | None, rebind: bool
+) -> tuple[Path, str | None]:
     """Bring a kept theme into the run, pointed back at the template it binds to.
 
-    Everything else is verbatim: the sidecar is the hand-tuned artefact, and rewriting
-    any of it would discard the edits it exists to keep.
+    Verbatim, but for an ``inverse`` that vanishes into the page: ``rebind`` derives it
+    afresh, otherwise the returned note only says so.
     """
-    return _write_theme_file(yaml.safe_load(sidecar.read_text(encoding="utf-8")), template, outdir)
+    theme = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+    bind = theme.get("bind") or {}
+    # A malformed `bind:` is left for the theme loader to refuse by name.
+    repair = (
+        rebound_inverse(scheme_of(template, prefer=prefer), bind)
+        if isinstance(bind, dict)
+        else None
+    )
+    note = None
+    if repair is not None:
+        bind, change = repair
+        if rebind:
+            theme["bind"] = bind
+            note = f"rebound {change}"
+        else:
+            note = f"{change} — re-adopting rebinds it"
+    return _write_theme_file(theme, template, outdir), note
 
 
 def _write_theme(template: Path, outdir: Path, *, prefer: str | None = None) -> Path:
@@ -139,16 +158,28 @@ def conform(
             )
             if prefer:
                 break
-    result = Conformance(template=template.name, notes=notes(template, prefer=prefer))
-    if sidecar is not None and sidecar.is_file():
+    tuned = sidecar if sidecar is not None and sidecar.is_file() else None
+    repaired = None
+    if tuned is not None:
         # The exercises run against the sidecar, so what is validated is what is
         # installed.
-        theme_path = _copy_sidecar(sidecar, template, outdir)
-        result.notes.append(f"theme from sidecar {sidecar.name} — tuned, not derived")
+        theme_path, repaired = _copy_sidecar(
+            tuned, template, outdir, prefer=prefer, rebind=adoption is not None
+        )
     else:
         theme_path = _write_theme(template, outdir, prefer=prefer)
+    written = yaml.safe_load(theme_path.read_text(encoding="utf-8"))
+    bound = written.get("bind")
+    result = Conformance(
+        template=template.name,
+        notes=notes(template, bind=bound if isinstance(bound, dict) else {}, prefer=prefer),
+    )
+    if tuned is not None:
+        result.notes.append(f"theme from sidecar {tuned.name} — tuned, not derived")
+    if repaired is not None:
+        result.notes.append(repaired)
     result.theme = theme_path
-    theme_name = yaml.safe_load(theme_path.read_text(encoding="utf-8"))["name"]
+    theme_name = written["name"]
 
     kit = assemble.assets(work)
 

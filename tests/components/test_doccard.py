@@ -3,7 +3,7 @@ from PIL import Image
 
 import deckwright.components  # noqa: F401 — registers the built-ins
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import as_body_result, get_component
+from deckwright.layouts.components import as_body_result, get_component, shape_id
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ def test_one_reveal_group_holds_the_card(ctx_factory, doc, fake_render, monkeypa
     ctx = _ctx(ctx_factory, doc)
     result = as_body_result(get_component("document")(ctx))
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert len(result.groups) == 1 and result.groups[0][0] in ids
+    assert len(result.groups) == 1 and shape_id(result.groups[0][0]) in ids
 
 
 def test_the_source_is_found_beside_the_deck_spec(ctx_factory, fake_render, monkeypatch, tmp_path):

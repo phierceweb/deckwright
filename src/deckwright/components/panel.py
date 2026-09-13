@@ -41,10 +41,15 @@ def panel(ctx: SlideCtx) -> BodyResult:
         if radius
         else fill_rect(ctx.slide, rect.left, rect.top, rect.width, rect.height, fill, line=edge)
     )
-    ctx.manifest.record(shape)
+    stands_off = name != "surface"
+    ctx.manifest.record(
+        shape,
+        fill=pair.bg if stands_off else None,
+        ground=ctx.behind(rect, ink=pair.bg) if stands_off else None,
+    )
     # Chrome drawn over this panel reads its fill, not the slide's surface.
-    ctx.panels.append((rect, pair.bg))
-    return BodyResult(groups=[[shape.shape_id]], height=rect.height)
+    ctx.painted.append((rect, pair.bg))
+    return BodyResult(groups=[[(shape.shape_id, "surface")]], height=rect.height)
 
 
 def _radius(ctx: SlideCtx) -> float:

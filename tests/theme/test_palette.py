@@ -71,7 +71,7 @@ def test_an_undeclared_pair_is_rejected():
 
 def test_a_pair_below_aa_is_built_and_reported(caplog):
     """Built, not refused: `deckwright qa` decides this against what was really painted, and
-    refusing here as well made a brand's own palette unloadable over a weaker check."""
+    refusing here as well would make a brand's own palette unloadable over a weaker check."""
     with caplog.at_level(logging.WARNING):
         palette = _palette(pairs={"page": Pair("CCCCCC", "FFFFFF")})
     assert palette.pair("page").fg == "CCCCCC"
@@ -138,7 +138,7 @@ def test_an_auto_pair_takes_page_when_ink_cannot_be_read_on_the_background():
 
 
 def test_an_auto_pair_takes_ink_when_page_cannot_be_read_on_the_background():
-    """A fixed white accent-ink made a light brand accent fail to load at all."""
+    """A fixed white accent-ink would make a light brand accent fail to load at all."""
     # page FFFFFF on FFC000 is 1.64:1; ink 111111 is 11.50:1.
     assert _auto("FFC000").pair("brand") == Pair("111111", "FFC000")
 
@@ -177,7 +177,7 @@ def test_an_auto_pair_naming_an_undeclared_background_is_rejected():
 
 
 def test_shade_matches_the_ooxml_lummod_a_real_deck_paints():
-    # Restaurant paints its signature red as accent1 FB0304 under lumMod 75%.
+    # A brand red painted as accent1 FB0304 under lumMod 75%.
     got, want = _channels(_palette().shade("accent-1", 25)), _channels("BC0203")
     assert all(abs(a - b) <= 1 for a, b in zip(got, want, strict=True)), got
 
@@ -220,3 +220,39 @@ def test_a_percentage_outside_zero_to_a_hundred_is_rejected():
 def test_a_transform_rejects_an_undeclared_role():
     with pytest.raises(ThemeError, match="no colour role 'nope'"):
         _palette().tint("nope", 75)
+
+
+def _grounds(page, inverse):
+    roles = {**_ROLES, "page": page, "inverse": inverse}
+    return _palette(roles=roles, pairs={})
+
+
+@pytest.mark.parametrize(
+    ("page", "inverse"),
+    [("1E2A3A", "1E2A3A"), ("2F7FBF", "44546A")],
+    ids=["identical", "1.80"],
+)
+def test_an_inverse_the_page_swallows_is_reported(caplog, page, inverse):
+    """A kept theme holds its binding until its template is re-adopted, so load says so."""
+    with caplog.at_level(logging.WARNING):
+        _grounds(page, inverse)
+    assert "theme_inverse_matches_page" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("page", "inverse"),
+    [("7E48A8", "000000"), ("FFFFFF", "2D0937")],
+    ids=["3.38", "light-page"],
+)
+def test_an_inverse_that_stands_off_the_page_is_not_reported(caplog, page, inverse):
+    """3.38:1 is a visible plate; the warning is for one that vanishes, not one below AA."""
+    with caplog.at_level(logging.WARNING):
+        _grounds(page, inverse)
+    assert "theme_inverse_matches_page" not in caplog.text
+
+
+def test_a_palette_without_an_inverse_role_is_not_checked_for_one(caplog):
+    roles = {k: v for k, v in _ROLES.items() if k != "inverse"}
+    with caplog.at_level(logging.WARNING):
+        _palette(roles=roles, pairs={})
+    assert "theme_inverse_matches_page" not in caplog.text

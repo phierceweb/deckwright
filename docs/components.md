@@ -69,7 +69,7 @@ place:
         - Chrome-only slides
 ```
 
-One reveal group per column.
+One reveal group per bullet when the list is one column, so `one_at_a_time` stages it a line per click; one group per column when it has several. The heading arrives with the first bullet.
 
 ### `callouts` — a mark beside a heading and a line of copy
 
@@ -591,13 +591,13 @@ right on a dark slide and a ghost on a white one, where the rule takes `muted` i
 
 | Field | Required | Default | What it does |
 |---|---|---|---|
-| `items` | **yes** | — | The section names, left to right. Non-empty list. |
-| `active` | no | none | Which of them this slide is in. Must be one of `items`; a name that is not is an error, because a renamed section would otherwise read as no section. |
+| `items` | no | the deck's `sections:` | The section names, left to right. Non-empty list. Leave it out and the nav follows the deck, so a rename or a reorder in `sections:` reaches every slide. |
+| `active` | no | the slide's own `section:`, when it is one of `items` | Which of them this slide is in. A name given here must be one of `items`; a name that is not is an error, because a renamed section would otherwise read as no section. Labels shorter than the section names mark nothing unless `active:` names one. |
 | `color` | no | the guarded accent | A palette **role** for the active label. |
 
 A section eyebrow, for a deck long enough that a reader loses the thread but not long
-enough to want a divider slide between every act. Set it in a one-row band and repeat
-the placement on the slides of that section.
+enough to want a divider slide between every act. Set it in a one-row band as `nav: {}`
+and repeat the placement: each slide marks the section it declares.
 
 **No reveal group.** An eyebrow is chrome, and a slide that builds its body should not
 spend its first click arriving at its own furniture — so the band is on screen from the

@@ -65,19 +65,24 @@ def add_click_build(slide, target_spids, stagger_ms: int = 0) -> None:
 def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | None = None) -> None:
     """Reveal ``groups`` one per click.
 
-    Each group is a list whose items are ``spid`` (default fade) or ``(spid, kind)``
-    with ``kind`` in :data:`ENTRANCES`; items in a group reveal together.
+    Each group is a list whose items are ``spid`` (default fade), ``(spid, kind)`` with
+    ``kind`` in :data:`ENTRANCES`, or ``(spid, kind, paragraph)`` to reveal one paragraph
+    of a text box; items in a group reveal together.
     ``stagger_ms`` cascades a group's items in list order on its single click.
     ``beat_ms`` instead chains every group onto **one** click, each starting that
     many milliseconds after the previous finishes.
     """
     P, A = _P, _A
     EFFECTS = _EFFECTS
-    all_spids = [
-        item[0] if isinstance(item, (tuple, list)) else item for group in groups for item in group
-    ]
-    builds = bld_p_list(slide, all_spids)
+    items = [_item(item) for group in groups for item in group]
+    all_spids = list(dict.fromkeys(spid for spid, _, _ in items))
+    by_paragraph = {spid for spid, _, para in items if para is not None}
     built = text_bearing(slide, all_spids)
+    builds = bld_p_list(slide, [s for s in all_spids if s not in by_paragraph]) + "".join(
+        f'<p:bldP spid="{s}" grpId="0" build="p"/>'
+        for s in all_spids
+        if s in by_paragraph and s in built
+    )
     chained = beat_ms is not None
     cid = 3
     clickgroups = ""
@@ -88,7 +93,12 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
         gate = f"{beat_ms}" if auto else "indefinite"
         effects = ""
         for i, item in enumerate(group):
-            spid, kind = item if isinstance(item, (tuple, list)) else (item, "fade")
+            spid, kind, para = _item(item)
+            target = (
+                f'<p:spTgt spid="{spid}"/>'
+                if para is None
+                else f'<p:spTgt spid="{spid}"><p:txEl><p:pRg st="{para}" end="{para}"/></p:txEl></p:spTgt>'
+            )
             pid, psub, filt, dur = EFFECTS[kind]
             grp = ' grpId="0"' if int(spid) in built else ""
             first = "afterEffect" if auto else "clickEffect"
@@ -100,11 +110,11 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
                 f'<p:par><p:cTn id="{e}" presetID="{pid}" presetClass="entr" presetSubtype="{psub}" fill="hold"{grp} nodeType="{node}">'
                 f'<p:stCondLst><p:cond delay="{delay}"/></p:stCondLst><p:childTnLst>'
                 f'<p:set><p:cBhvr><p:cTn id="{cset}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>'
-                f'<p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl>'
+                f"<p:tgtEl>{target}</p:tgtEl>"
                 f"<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>"
                 f'<p:to><p:strVal val="visible"/></p:to></p:set>'
                 f'<p:animEffect transition="in" filter="{filt}"><p:cBhvr><p:cTn id="{canim}" dur="{dur}"/>'
-                f'<p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:animEffect>'
+                f"<p:tgtEl>{target}</p:tgtEl></p:cBhvr></p:animEffect>"
                 f"</p:childTnLst></p:cTn></p:par>"
             )
         clickgroups += (
@@ -126,3 +136,10 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
         f"{bld}</p:timing>"
     )
     attach(slide, xml)
+
+
+def _item(item) -> tuple[int, str, int | None]:
+    """``(spid, kind, paragraph)`` from an id, an ``(id, kind)`` or ``(id, kind, paragraph)``."""
+    if not isinstance(item, (tuple, list)):
+        return int(item), "fade", None
+    return int(item[0]), item[1], item[2] if len(item) > 2 else None

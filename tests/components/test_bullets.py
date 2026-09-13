@@ -4,7 +4,7 @@ import pytest
 
 import deckwright.components  # noqa: F401 — registers the built-in components
 from deckwright.errors import LayoutError
-from deckwright.layouts.components import get_component
+from deckwright.layouts.components import get_component, shape_id
 from deckwright.theme import Scale
 from deckwright.theme.defaults import DEFAULT_PALETTE
 from deckwright.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio
@@ -97,11 +97,6 @@ def test_bullets_is_registered():
     assert "bullets" in registered_components()
 
 
-def test_a_single_column_returns_one_reveal_group(ctx_factory):
-    ctx = ctx_factory({"bullets": {"items": ["a", "b"]}})
-    assert len(get_component("bullets")(ctx).groups) == 1
-
-
 def test_two_columns_return_one_group_each(ctx_factory):
     ctx = ctx_factory({"bullets": {"columns": 2, "items": ["a", "b", "c", "d"]}})
     assert len(get_component("bullets")(ctx).groups) == 2
@@ -111,7 +106,7 @@ def test_every_returned_id_is_a_real_shape_on_the_slide(ctx_factory):
     ctx = ctx_factory({"bullets": {"items": ["a"]}})
     groups = get_component("bullets")(ctx).groups
     ids = {s.shape_id for s in ctx.slide.shapes}
-    assert all(spid in ids for group in groups for spid in group)
+    assert all(shape_id(spid) in ids for group in groups for spid in group)
 
 
 def test_content_stays_inside_the_body_rect(ctx_factory):
@@ -159,7 +154,7 @@ def test_more_columns_than_items_clamps_to_the_item_count(ctx_factory):
 def test_a_heading_does_not_misalign_the_first_column(ctx_factory):
     ctx = ctx_factory({"bullets": {"columns": 2, "heading": "H", "items": ["a", "b", "c", "d"]}})
     groups = get_component("bullets")(ctx).groups
-    ids = {i for g in groups for i in g}
+    ids = {shape_id(i) for g in groups for i in g}
     bullet_tops = {
         s.top
         for s in ctx.slide.shapes
@@ -247,7 +242,7 @@ def test_the_heading_animates_in_with_the_column_it_titles(ctx_factory):
     heading_id = next(
         s.shape_id for s in ctx.slide.shapes if s.has_text_frame and s.text_frame.text == "H"
     )
-    assert heading_id in result.groups[0]
+    assert heading_id in [shape_id(i) for i in result.groups[0]]
 
 
 def test_an_uneven_split_gives_the_remainder_to_the_leftmost_columns(ctx_factory):
@@ -284,3 +279,26 @@ def test_a_number_is_still_accepted_as_a_bullet(ctx_factory):
     ctx = ctx_factory({"bullets": {"items": [2027, "and a word"]}})
     get_component("bullets")(ctx)
     assert "2027" in "\n".join(s.text_frame.text for s in ctx.slide.shapes if s.has_text_frame)
+
+
+def _targets(groups):
+    return [[item[2] if len(item) == 3 else None for item in group] for group in groups]
+
+
+def test_a_single_column_reveals_one_bullet_per_group(ctx_factory):
+    """One text box is one click; a staged list needs a click per bullet."""
+    groups = get_component("bullets")(ctx_factory({"bullets": {"items": ["a", "b", "c"]}})).groups
+    assert _targets(groups) == [[0], [1], [2]]
+    assert len({shape_id(i) for g in groups for i in g}) == 1
+
+
+def test_a_heading_arrives_with_the_first_bullet(ctx_factory):
+    ctx = ctx_factory({"bullets": {"heading": "Why", "items": ["a", "b"]}})
+    groups = get_component("bullets")(ctx).groups
+    assert _targets(groups) == [[None, 0], [1]]
+
+
+def test_columns_still_reveal_one_column_per_group(ctx_factory):
+    ctx = ctx_factory({"bullets": {"columns": 2, "items": ["a", "b", "c", "d"]}})
+    groups = get_component("bullets")(ctx).groups
+    assert _targets(groups) == [[None], [None]]

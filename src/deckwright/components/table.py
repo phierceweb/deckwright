@@ -152,7 +152,7 @@ def table(ctx: SlideCtx) -> BodyResult:
         rule_pt=weight_pt(ctx),
     )
     _draw(ctx, frame, rows, placed, rows_in, columns_in, columns_align, look, rect)
-    return BodyResult(groups=[[frame.shape_id]], height=extent)
+    return BodyResult(groups=[[(frame.shape_id, "text")]], height=extent)
 
 
 def _draw(
@@ -186,6 +186,7 @@ def _draw(
             ctx,
             target,
             cell,
+            box=box,
             look=look,
             pair=pair,
             row=row,
@@ -305,6 +306,7 @@ def _cell(
     cell_shape,
     cell: Cell,
     *,
+    box: Rect,
     look: _Look,
     pair: Pair | None,
     row: Row,
@@ -314,7 +316,7 @@ def _cell(
     """Paint one cell and set its type; returns the ink it was written in."""
     if pair is None:
         cell_shape.fill.background()
-        ink = ctx.pair.fg
+        ink, _ = ctx.text_ink(box, size_pt=look.style.size)
     else:
         cell_shape.fill.solid()
         cell_shape.fill.fore_color.rgb = ctx.rgb(pair.bg)

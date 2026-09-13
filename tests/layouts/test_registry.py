@@ -135,7 +135,7 @@ def test_an_image_beside_the_deck_spec_is_found_though_the_template_lacks_it(
 def test_a_rect_hanging_off_a_panel_is_measured_against_whichever_half_reads_worse(theme):
     """A line crossing a panel edge sits on two surfaces, and both single answers are wrong in
     opposite directions — so the worse of the two rejects both."""
-    ctx = _ctx(theme, panels=[(Rect(0.0, 0.0, 6.0, 4.0), "2D0937")])
+    ctx = _ctx(theme, painted=[(Rect(0.0, 0.0, 6.0, 4.0), "2D0937")])
 
     contained = Rect(1.0, 1.0, 2.0, 0.5)
     over_the_right_edge = Rect(1.0, 1.0, 8.0, 0.5)
@@ -240,3 +240,28 @@ def test_an_accent_gives_way_to_the_ink_where_it_cannot_be_read(ctx_factory, the
 
     assert ctx.accent_on("FFFFFF", size_pt=12) == "2D0937"  # unreadable -> the ink
     assert ctx.accent_on("2D0937", size_pt=12) == "18CEDA"  # readable -> the accent
+
+
+class _Picture:
+    """A backdrop reading one flat colour: ordering is under test, not pixel sampling."""
+
+    def __init__(self, colour):
+        self.colour = colour
+
+    def behind(self, rect, *, ink):
+        return self.colour
+
+
+def test_a_picture_laid_over_a_panel_is_what_text_on_that_rect_sits_on(theme):
+    """Paint order decides what shows, not whether the surface is a fill or a picture."""
+    rect = Rect(1.0, 1.0, 2.0, 0.5)
+    whole = Rect(0.0, 0.0, 6.0, 4.0)
+    ctx = _ctx(theme, painted=[(whole, "12161B"), (whole, _Picture("FFFFFF"))])
+    assert ctx.behind(rect, ink="FFFFFF") == "FFFFFF"
+
+
+def test_a_panel_laid_over_a_picture_is_what_text_on_that_rect_sits_on(theme):
+    rect = Rect(1.0, 1.0, 2.0, 0.5)
+    whole = Rect(0.0, 0.0, 6.0, 4.0)
+    ctx = _ctx(theme, painted=[(whole, _Picture("FFFFFF")), (whole, "12161B")])
+    assert ctx.behind(rect, ink="FFFFFF") == "12161B"

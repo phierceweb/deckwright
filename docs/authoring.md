@@ -154,6 +154,13 @@ bin/run qa "out/example/Example v1.pptx"
 
 A `.deck.yaml` is a **multi-document YAML file**. Documents are separated by `---` on its own line.
 
+A number keeps the text you wrote it in wherever it prints: `1.10` stays `1.10` in a table
+cell or a stat, not the `1.1` YAML reads. It still counts as a number wherever one is
+expected. What YAML 1.1 would read in another base — `007`, `0x1F`, `1:30`, `16:9` — is the
+text you wrote, never 7, 31, 90 or 969: it prints as typed and `crop: 16:9` is that
+aspect. A field that takes any number reads it as a decimal (`007` is 7) or refuses it by
+name; a whole-number field such as a column index refuses it.
+
 - **The first document is the deck document.** Theme, section names, output path.
 - **Every document after it is one slide,** in order.
 
@@ -657,7 +664,7 @@ Scatter kinds carry no data labels — the numbers do not print beside the point
 |---|---|
 | `none` | Nothing animates. Same as leaving `animate:` out. |
 | `together` | One click reveals the whole component at once. |
-| `one_at_a_time` | One click per group: one bullet column, one callout row, one stat tile. |
+| `one_at_a_time` | One click per group: one bullet (or one column, when a list has several), one callout row, one stat tile. |
 | `by_category` | **Charts only.** The chart builds one category at a time — Q1, then Q2, then Q3. |
 | `by_series` | **Charts only.** The chart builds one series at a time — all of Ads, then all of Organic. |
 
@@ -678,7 +685,7 @@ What counts as a group for `one_at_a_time`:
 
 | Component | One click reveals |
 |---|---|
-| `bullets` | One column (the heading rides with the first). |
+| `bullets` | One bullet in a single-column list, one column in a list with several; the heading rides with the first. |
 | `callouts` | One row — its dot and its text together. |
 | `stats` | One tile; the caption rides with the last tile. |
 | `document` | The whole card — it is a single group. |
