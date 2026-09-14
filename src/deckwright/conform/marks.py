@@ -15,10 +15,13 @@ def mark_slides() -> dict[str, dict[str, Any]]:
     slides["icons"] = {
         "title": "Marks drawn as geometry",
         "place": [
-            {"at": {"cols": {"from": 0, "to": 3}, "rows": "top-third"}, "icon": {"name": "target"}},
+            {
+                "at": {"cols": {"from": 0, "to": 3}, "rows": "top-third"},
+                "icon": {"name": "target", "alt": "A target"},
+            },
             {
                 "at": {"cols": {"from": 3, "to": 6}, "rows": "top-third"},
-                "icon": {"name": "chart-bar"},
+                "icon": {"name": "chart-bar", "decorative": True},
             },
             {"at": {"cols": {"from": 6, "to": 9}, "rows": "top-third"}, "icon": {"name": "users"}},
             {"at": {"cols": {"from": 9, "to": 12}, "rows": "top-third"}, "icon": {"name": "globe"}},

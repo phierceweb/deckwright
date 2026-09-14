@@ -28,6 +28,9 @@ with teeth, and `bin/check-framework` is what enforces it.
 - [`poly.py` — reserved-region geometry](#polypy--reserved-region-geometry)
 - [`shapes.py` and `deck.py` — the python-pptx primitives](#shapespy-and-deckpy--the-python-pptx-primitives)
 - [`xml.py` — parsing XML somebody else wrote](#xmlpy--parsing-xml-somebody-else-wrote)
+- [`mce.py` — shapes inside `mc:AlternateContent`](#mcepy--shapes-inside-mcalternatecontent)
+- [`a11y.py` — alternative text and the decorative flag](#a11ypy--alternative-text-and-the-decorative-flag)
+- [`links.py` — `[words](address)` in copy](#linkspy--wordsaddress-in-copy)
 - [What was checked against pf-core](#what-was-checked-against-pf-core)
 - [Adding a helper here](#adding-a-helper-here)
 
@@ -119,7 +122,18 @@ Three traps for anyone editing this pair:
   real width does; an allowance in either refuses, or reserves a second line for, a word
   that fits its widest cut.
 - **`advance_em` over-counts every character no table carries**, charging it the widest
-  measured glyph of its class, so a CJK or accented run is never under-counted.
+  measured glyph of its class, so an accented run is never under-counted. CJK is the
+  exception: `_cjk.py` charges every ideograph, kana, hangul syllable and fullwidth form
+  `CJK_EM` (1.0), the em square those scripts are drawn on in every face.
+
+**CJK lines break where the renderer breaks them.** `wrapped_lines` sends any text carrying
+CJK to a simulator built on `_cjk.atoms`: each ideograph and kana is breakable, a Latin or
+hangul word moves whole (Korean breaks at spaces), a closing bracket, full stop, comma,
+small kana or `ー` joins the character before it, an opening bracket joins the character
+after it, and a trailing `、。，．` hangs past a full line. The classes are W3C JLREQ's and
+UAX #14's, pinned against LibreOffice renders in `tests/utils/test_cjk.py`, which also holds
+`text_em` to never measure CJK narrower than any installed CJK font draws it. Latin-only
+text never reaches the simulator.
 
 `tests/utils/test_metrics.py` is both the gate and the generator. Run as a script
 (`bin/py tests/utils/test_metrics.py`) it prints freshly measured dict literals
@@ -289,6 +303,44 @@ DTD a few lines long expands to whatever size it likes.
 `tests/test_xml_safety.py` is the gate, and it has two halves: the behaviour, and a
 sweep refusing any direct `etree.fromstring` elsewhere in `src/deckwright`. Reach for the
 helper, not the library.
+
+## `mce.py` — shapes inside `mc:AlternateContent`
+
+```python
+from deckwright.utils.mce import resolved_shapes
+for shape in resolved_shapes(slide.shapes): ...
+```
+
+python-pptx's `slide.shapes` skips an `mc:AlternateContent`, which is how PowerPoint stores
+an equation, a 3D model and other shapes from a newer namespace. `resolved_shapes` returns
+the same proxies with each wrapper replaced by one branch: the `mc:Fallback`, or the first
+`mc:Choice` when there is none. That is the branch ISO/IEC 29500-3 §7.5 gives a reader that
+understands none of the extension namespaces, which deckwright is.
+
+`qa/inspect.py` and `compile/readback.py` read through it, so `inspect` lists the shape and
+`diff` stops reporting it `gone`. `spec/_tree.py` (`extract`) and `qa/package.py` do not:
+extract names the wrapper in `dropped`, and the package check walks both branches.
+
+## `a11y.py` — alternative text and the decorative flag
+
+`describe(shape, alt=, decorative=)` writes a shape's `descr`, or Office's
+`adec:decorative` extension inside `cNvPr`'s `a:extLst`. Without `alt` it **removes** any
+existing `descr`, because python-pptx's `add_picture` writes the image's file name there.
+`described(shape)` and `description(cNvPr)` read both back; the manifest and `extract` read
+through the first, and `qa`'s `alt-text` check, which has no shape proxies, through the second.
+`is_file_name(text)` is the one test for a description that is only a file name.
+
+## `links.py` — `[words](address)` in copy
+
+`spans(text)` splits a line into runs around its links, `plain(text)` is what the line shows,
+and `addresses(text)` lists where it links. `text.py` and `versus`'s word floor measure
+`plain`, so an address never widens a line, and `figure_text` stores `alt:` as `plain`.
+`shapes.para()` writes one run per span, a link through `link_run`; `ManifestRecorder.record`
+stores the words and the addresses; `spec/parse.py` refuses a bad address before anything is
+drawn; and `spec/_tree.py` writes a hyperlinked run back as markup for `extract`.
+`para(links=False)` and `record(literal=True)` keep markup as written, which is what `code`
+asks for. `web_address_problem` is the one test of an address, shared by the spec check,
+`para()` and `qa`'s `link` check.
 
 ## What was checked against pf-core
 

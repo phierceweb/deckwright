@@ -6,7 +6,7 @@ default, solved against the pixels those lines actually cover.
 
 from __future__ import annotations
 
-from deckwright.components._shape import known_fields
+from deckwright.components._shape import figure_text, known_fields
 from deckwright.components._shared import LINE_HEIGHT
 from deckwright.errors import LayoutError
 from deckwright.imagery.backdrop import Backdrop
@@ -18,11 +18,12 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
+from deckwright.utils.a11y import describe
 from deckwright.utils.color import required_ratio
 from deckwright.utils.shapes import ALIGN, ANCHOR, para, textbox
 from deckwright.utils.text import wrapped_lines
 
-_FIELDS = ("src", "fit", "crop", "mask", "radius", "inset", "scrim", "over")
+_FIELDS = ("src", "alt", "decorative", "fit", "crop", "mask", "radius", "inset", "scrim", "over")
 _OVER_KEYS = ("text", "rung", "align")
 _MAX_RADIUS = 0.5
 _INSET_DEFAULT = 0.025  # fraction of canvas width between the picture and its text
@@ -34,6 +35,7 @@ _OVER_PAIR_DEFAULT = "inverse"
 def image(ctx: SlideCtx) -> BodyResult:
     """Fit a source into the placement, mask it, scrim it, and write any text on it."""
     known_fields(ctx, _FIELDS)
+    alt, decorative = figure_text(ctx)
     src = ctx.body.get("src")
     if not src:
         raise LayoutError(f"{_where(ctx)}: 'src' must name an image file")
@@ -60,6 +62,7 @@ def image(ctx: SlideCtx) -> BodyResult:
         anchor=ctx.anchor,
     )
     picture = place_picture(ctx.slide, str(path), fit, mask=mask, radius=_radius(ctx))
+    describe(picture, alt=alt, decorative=decorative)
     ctx.manifest.record(picture, rendered="picture")
     shapes: list[RevealItem] = [(picture.shape_id, "figure")]
     lines = _over(ctx)

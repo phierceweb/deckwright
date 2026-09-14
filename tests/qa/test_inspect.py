@@ -44,3 +44,29 @@ def test_a_deck_that_will_not_open_is_refused(tmp_path):
 
     with pytest.raises(SpecError, match=r"deck .*d\.pptx is not a readable \.pptx"):
         inspect_deck(deck)
+
+
+def test_a_shape_inside_markup_compatibility_is_listed_once(tmp_path):
+    """python-pptx's own `slide.shapes` skips an `mc:AlternateContent`; inspection lists the
+    branch a reader of no extension namespace takes, so each shape appears once."""
+    import copy
+
+    from lxml import etree
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    shape = slide.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(3.0), Inches(0.5))
+    shape.name = "equation"
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    alternate = etree.Element(f"{{{mc}}}AlternateContent", nsmap={"mc": mc})
+    shape._element.addprevious(alternate)
+    choice = copy.deepcopy(shape._element)
+    choice.find(".//{http://schemas.openxmlformats.org/drawingml/2006/main}off").set("x", "0")
+    etree.SubElement(alternate, f"{{{mc}}}Choice", Requires="a14").append(choice)
+    etree.SubElement(alternate, f"{{{mc}}}Fallback").append(shape._element)
+    deck = tmp_path / "d.pptx"
+    prs.save(str(deck))
+
+    shapes = inspect_deck(deck)[0]["shapes"]
+
+    assert [(s["name"], s["box"]["x"]) for s in shapes] == [("equation", 1.0)]

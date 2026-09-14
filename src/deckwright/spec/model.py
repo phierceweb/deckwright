@@ -34,6 +34,10 @@ class Background:
         return _PAIR_FOR_KIND.get(self.kind, self.kind)
 
 
+# What `goto:` takes besides a slide id: a jump relative to the running show.
+GOTO_JUMPS = ("first", "previous", "next", "last")
+
+
 @dataclass(frozen=True)
 class Placement:
     """One component, the mapping it reads, and where it goes.
@@ -46,9 +50,11 @@ class Placement:
     body: dict[str, Any] = field(default_factory=dict)
     id: str | None = None
     reveals: str | None = None
+    goto: str | None = None  # a slide id, or a relative jump in GOTO_JUMPS
     bleed: bool = False
     align: str = "left"
     anchor: str = "top"
+    where: str = field(default="", compare=False)  # how refusals name it: "…: placement 2: split 1"
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,8 @@ class SlideSpec:
     """
 
     index: int  # 1-based, for error messages and the manifest
+    id: str | None = None  # what a placement's goto: names
+    lang: str | None = None  # the language this slide's CJK text is in, over the deck's
     background: Background = Background()
     title: str | None = None
     kicker: str | None = None
@@ -82,3 +90,4 @@ class DeckSpec:
     sections: tuple[str, ...] = ()
     out: Path | None = None
     extends: Path | None = None
+    lang: str | None = None  # a BCP 47 tag: which language Han-only text is written in

@@ -51,6 +51,9 @@ Read this first. Several of these words are jargon kept deliberately in the code
 - [animate](#animate)
 - [transition](#transition)
 - [reveals](#reveals)
+- [goto](#goto)
+- [Links in text](#links-in-text)
+- [CJK text](#cjk-text)
 - [What lives in the theme, not the spec](#what-lives-in-the-theme-not-the-spec)
 - [Adding a component the spec cannot express](#adding-a-component-the-spec-cannot-express)
 
@@ -189,8 +192,9 @@ Do not put a `---` before the deck document. A deck needs at least one slide doc
 | `sections` | no | The deck's chapter names, in order. Every slide's `section:` must be one of them. |
 | `extends` | no | A Python module registering bespoke components. Resolved relative to the spec file. **It is imported and executed**, before any placement is validated — so building someone else's `.deck.yaml` runs their code on your machine. See [Adding a component](#adding-a-component-the-spec-cannot-express). |
 | `title` | no | Metadata only. The compiler does not draw it — the opening slide's own `title:` is what appears. |
+| `lang` | no | The language the deck's Chinese, Japanese or Korean text is written in, as a tag: `ja`, `ko`, `zh-Hans`, `zh-Hant`, `zh-TW`. See [CJK text](#cjk-text). |
 
-Those five are the whole list. Any other key in the deck document is an error, and the message suggests the field you probably meant.
+Those six are the whole list. Any other key in the deck document is an error, and the message suggests the field you probably meant.
 
 ```yaml
 theme: base
@@ -224,6 +228,8 @@ There is no `layout:`. Every field below is optional; an absent field draws noth
 | `transition` | Only ever `none` — a deliberate hard cut into this slide, refusing the theme's transition. See [transition](#transition). |
 | `place` | A list of placements. See below. |
 | `chrome` | Where the title, kicker and subtitle go, overriding the theme. See [Moving the chrome](#moving-the-chrome). |
+| `id` | A name for the slide, so a placement's `goto:` can jump to it. Unique in the deck. See [goto](#goto). |
+| `lang` | The language this slide's CJK text is written in, over the deck's `lang`. See [CJK text](#cjk-text). |
 
 ```yaml
 kicker: Q3 RESULTS
@@ -402,7 +408,7 @@ each 12 by default. A name a grid cannot divide evenly — thirds on a 10-column
 theme — is an error telling you to state the span outright, rather than rounding
 two "thirds" to different widths on the same slide.
 
-Five optional keys sit beside `at:`: `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle.
+Six optional keys sit beside `at:`: `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `goto:` makes a click on it jump to another slide (see [goto](#goto)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle.
 
 **`id:` also names the shapes.** Every shape the build draws is named for the placement that drew it, in the manifest and in the `.pptx` — `s7.p2.card#1` for the second placement on slide 7, `s7.hero.card#1` where you wrote `id: hero`. PowerPoint keeps those names through a hand-edit, so they are what tie an edited deck back to this file. A number moves when a placement is inserted above it; an `id:` does not. See [what the manifest records](qa.md#what-the-manifest-records).
 
@@ -474,6 +480,8 @@ deck-local component into the library, are [`docs/extending.md`](extending.md).
 |---|---|---|
 | `kind` | **yes** | Which chart to draw. One of the [29 kinds](#all-29-chart-kinds). |
 | `data` | **yes** | The datapoints, one row per point. Non-empty list. |
+| `alt` | no | What a screen reader says in place of the chart — the claim it makes, since a screen reader does not read a chart's data. Without it, or `decorative`, `qa` warns. |
+| `decorative` | no | `true` marks the chart for a screen reader to skip. Refused beside `alt`. |
 | `unit` | no | A unit on every data label — `%`, `k`, `pt`. A currency sign (`$`, `£`, `€`, `¥`, `₹`) is written *before* the number, everything else after. **Category-shaped kinds only**; an XY or bubble row has no single unit to carry, and one written there is accepted and does nothing. Written into the number format as a literal, so `36` reads `36%` without Excel's `%` code multiplying it by a hundred. The **value axis takes the same format**, so the scale and the values it frames agree. Ignored on the `*-stacked-100` kinds, whose axis is already a percentage. |
 | `decimals` | no | How many decimal places the data labels print, 0 to 6. Omit it and the places are read off the data — a series of `11.2, 9.6` labels to one place, whole numbers to none — so this is only for overriding that: `0` rounds a noisy series to whole numbers, a larger number pads to a fixed width. |
 | `labels` | no | Which named series print their data labels — a mapping of series name to `true` or `false`. Reach for it when a flat reference series would otherwise stamp the same number over every point: `labels: {Platform average: false}` keeps the line, its colour and its legend entry, and drops only its labels. Every series prints them by default and `true` is that default written out, so this key only ever takes labels away. It needs named series, which means `values:` rows — the `value:` shorthand and the xy/bubble kinds have one unnamed series and refuse it. |
@@ -760,6 +768,112 @@ carries, or naming itself, is likewise an error listing the ids that do exist.
 
 > Like every build, this is invisible to `bin/run render` — the shape is drawn in its
 > final state. Only presentation mode shows it held back.
+
+---
+
+## goto
+
+`goto:` is a **placement** field. Clicking anything that placement drew, in the show,
+jumps to another slide.
+
+```yaml
+---
+title: Agenda
+place:
+  - at: {cols: left-half}
+    goto: appendix          # the slide whose id: is appendix
+    card: {heading: The numbers, body: In the appendix}
+  - at: {cols: right-half}
+    goto: next
+    icon: {name: arrow_forward, alt: Next slide}
+---
+id: appendix
+title: Appendix
+```
+
+It takes a slide's `id:`, or a jump relative to the running show: `first`, `previous`,
+`next` or `last`. A relative jump needs no id and still works when slides move, so it is
+the one to reach for on navigation repeated across slides. Past either end of the deck it
+does nothing.
+
+Every shape the placement drew jumps, as with `reveals:`, so the whole card is the target.
+The build refuses a `goto:` naming no slide, one naming the slide it is on, and one on a
+placement another placement's `reveals:` makes a trigger, since a click cannot both reveal
+and leave. `qa`'s [`link`](qa.md#the-checks) check reads the saved file and reports a jump
+to a slide the show no longer contains.
+
+> A click action does nothing in `bin/run render`. LibreOffice's PDF keeps a relative jump
+> as a link and drops a jump to a named slide, though it imports both.
+
+---
+
+## Links in text
+
+Any line of copy a component sets can link part of itself, written the way Markdown writes
+it:
+
+```yaml
+place:
+  - at: {cols: full}
+    prose:
+      paragraphs:
+        - Read [the setup guide](https://example.com/setup) before the workshop.
+        - Questions go to [the team](mailto:team@example.com).
+```
+
+The words between the brackets are drawn and the address is not, so the line is measured
+by its words. A link keeps the ink its line was given, contrast-checked like the rest of the
+line, and is underlined so colour is not the only thing marking it. The address must be
+`http://`, `https://` or `mailto:`; anything else is refused, since PowerPoint runs or opens
+it as a local file. Titles, kickers and subtitles take links too.
+
+- **`\[` keeps a bracket as text.** `\[1](see note)` draws `[1](see note)`. Brackets with a
+  space in the parentheses are never a link, so ordinary asides need no escaping.
+- **`code` shows markup as written.** A listing is literal, so Markdown in it stays Markdown.
+- **A chart takes no links.** Its labels are drawn by the chart rather than set as runs, and
+  a link written in a chart block is refused.
+- **Keynote draws a link in the template's own hyperlink colour.** PowerPoint and
+  LibreOffice read the colour the build writes; Keynote ignores it and uses the template's
+  `hlink` slot, which nothing checks against the slide.
+
+`extract` writes a linked run back as `[words](address)`, so a drafted spec keeps its links.
+
+---
+
+## CJK text
+
+Chinese, Japanese and Korean text goes in any field, as written:
+
+```yaml
+theme: brand
+lang: zh-Hans
+out: ../../out/q3/Q3 v1.pptx
+---
+title: 季度收入超过去年同期
+---
+lang: ja
+title: 四半期の売上は前年を上回りました
+```
+
+Each run carrying CJK is marked with its language and set in the theme's face for that
+script (`type.ea` in [`theme.md`](theme.md#cjk-faces)). A paragraph is judged whole, and its
+language comes from the text where the text can say: kana is Japanese and hangul is Korean.
+Otherwise `lang:` on the deck, or on a slide over it, decides, read by subtag, so `zh-TW` and
+`yue-Hant-HK` are Traditional and `lang: ko` sets Hanja in the Korean face. Han characters
+with no kana, hangul or CJK `lang:` could be Japanese, Simplified or Traditional Chinese: a
+theme that sets those in different faces refuses them rather than guessing a face a reader
+of the other script would find wrong. Fullwidth digits and CJK punctuation alone decide
+nothing: they are marked only when `lang:` names a CJK language.
+
+The build measures CJK at one em per character and wraps it the way a renderer does: between
+ideographs and kana, at spaces in Korean, never starting a line with closing punctuation or
+small kana, never ending one on an opening bracket, and letting a full stop hang past a full
+line. A chart's labels are drawn by the chart and are not marked.
+
+> The render is only as good as this machine's CJK fonts. A LibreOffice that cannot reach
+> them draws the text blank or as empty boxes while `pdftotext` still extracts the words,
+> so read the contact sheet; `qa`'s `font-substituted` says which faces the render did not
+> use, and `cjk-unrendered` which slides it could not draw.
 
 ---
 

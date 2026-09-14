@@ -18,6 +18,7 @@ from deckwright.imagery.sample import aspect, cells
 from deckwright.imagery.scrim import gradient_fraction, resolve
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
+from deckwright.utils.a11y import describe
 from deckwright.utils.color import AA_NORMAL
 from deckwright.utils.shapes import rect as fill_rect
 
@@ -54,7 +55,10 @@ def paint_backdrop(ctx: SlideCtx) -> None:
         # Brand art is drawn for this canvas, so it is stretched to it, never cropped.
         path = resolve_media(art, template=ctx.theme.template)
         fit = ImageFit(canvas)
-    ctx.manifest.record(place_picture(ctx.slide, str(path), fit), rendered="picture")
+    picture = place_picture(ctx.slide, str(path), fit)
+    # A backdrop is what the slide is painted on, never something the slide says.
+    describe(picture, decorative=True)
+    ctx.manifest.record(picture, rendered="picture")
     scrim = None
     if background.scrim is not None:
         scrim = resolve(

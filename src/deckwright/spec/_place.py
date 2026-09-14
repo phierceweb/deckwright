@@ -11,7 +11,7 @@ from deckwright.utils.shapes import ALIGNS, ANCHORS
 from deckwright.utils.spans import Share, parse_box, parse_span
 from deckwright.utils.keys import unknown_field
 
-PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals")
+PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals", "goto")
 AT_FIELDS = ("cols", "rows", "box")
 
 
@@ -150,9 +150,11 @@ def _placement(entry: Any, *, where: str) -> Placement:
         body=body,
         id=_named(entry.get("id"), "'id'", where=where),
         reveals=_named(entry.get("reveals"), "'reveals'", where=where),
+        goto=_named(entry.get("goto"), "'goto'", where=where),
         bleed=bleed,
         align=_choice(entry.get("align"), "align", ALIGNS, default="left", where=where),
         anchor=_choice(entry.get("anchor"), "anchor", ANCHORS, default="top", where=where),
+        where=where,
     )
 
 

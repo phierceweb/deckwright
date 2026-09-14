@@ -18,7 +18,7 @@ from typer.testing import CliRunner
 from deckwright.cli import app
 from deckwright.compile import build_deck
 from deckwright.errors import SpecError
-from deckwright.spec.draft import render_spec
+from deckwright.spec.draft import render_markdown, render_spec
 from deckwright.spec.extract import MAX_GROUP_DEPTH, harvest
 
 runner = CliRunner()
@@ -1198,3 +1198,88 @@ def test_a_soft_line_break_is_a_space_never_a_control_character(tmp_path):
         if p.has_text_frame
     )
     assert "_x000B_" not in xml and "\x0b" not in xml
+
+
+def test_harvest_carries_a_figures_alt_text_and_skips_a_file_name(tmp_path):
+    from deckwright.utils.a11y import describe
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    png = tmp_path / "dot.png"
+    png.write_bytes(_DOT_PNG)
+    described = slide.shapes.add_picture(str(png), Inches(1), Inches(1))
+    describe(described, alt="The team,\n  at the summit")
+    described.name = "Summit"
+    slide.shapes.add_picture(str(png), Inches(3), Inches(1)).name = "Unnamed"
+    path = tmp_path / "alt.pptx"
+    prs.save(path)
+
+    content = harvest(path)[0]
+
+    assert content.alt == ("picture 'Summit': The team, at the summit",)
+    assert "# alt text on picture 'Summit': The team, at the summit" in render_spec(
+        [content], title="Deck"
+    )
+    assert "*alt text on picture 'Summit': The team, at the summit*" in render_markdown(
+        [content], title="Deck"
+    )
+
+
+def test_harvest_writes_a_hyperlinked_run_back_as_link_markup(tmp_path):
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    frame = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1)).text_frame
+    paragraph = frame.paragraphs[0]
+    for text, address in (
+        ("Read ", None),
+        ("the guide", "https://example.com/g"),
+        (" [1](x)", None),
+    ):
+        run = paragraph.add_run()
+        run.text = text
+        if address:
+            run.hyperlink.address = address
+    path = tmp_path / "linked.pptx"
+    prs.save(path)
+
+    assert harvest(path)[0].blocks == (("Read [the guide](https://example.com/g) \\[1](x)",),)
+
+
+def test_stacked_chrome_keeps_its_links_through_extract(tmp_path):
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "c.deck.yaml"
+    spec.write_text(
+        "theme: base\nout: c.pptx\n---\nkicker: KICK\n"
+        "title: 'A [linked](https://t.example.com) title'\n"
+        "subtitle: 'The [subtitle](https://s.example.com)'\n"
+    )
+    build_deck(spec)
+    slide = harvest(tmp_path / "c.pptx")[0]
+    assert slide.title == "A [linked](https://t.example.com) title"
+    assert slide.subtitle == "The [subtitle](https://s.example.com)"
+
+
+def test_copy_that_reads_as_a_link_without_being_one_is_escaped_in_the_draft(tmp_path):
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    frame = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1)).text_frame
+    frame.text = "print('[x](https://code.example.com)')"
+    path = tmp_path / "literal.pptx"
+    prs.save(path)
+    assert harvest(path)[0].blocks == ((r"print('\[x](https://code.example.com)')",),)
+
+
+def test_harvest_carries_a_drawn_shapes_alt_text_too(tmp_path):
+    """A glyph icon is a freeform with an empty text frame, not a picture."""
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "i.deck.yaml"
+    spec.write_text(
+        "theme: base\nout: i.pptx\n---\ntitle: T\nplace:\n  - at: {cols: full}\n"
+        "    icon: {name: target, alt: Hit the quarterly target}\n"
+    )
+    build_deck(spec)
+    assert harvest(tmp_path / "i.pptx")[0].alt == (
+        "freeform 's1.p1.icon#1': Hit the quarterly target",
+    )

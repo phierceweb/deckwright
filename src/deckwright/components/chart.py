@@ -11,7 +11,9 @@ from deckwright.layouts.components import BodyResult, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.motion import add_chart_build
 
+from deckwright.components._shape import figure_text
 from deckwright.components._shared import require_default_align
+from deckwright.utils.a11y import describe
 
 _EMU_PER_INCH = 914400
 
@@ -29,10 +31,12 @@ def chart(ctx: SlideCtx) -> BodyResult:
     """
     require_default_align(ctx)
     spec = ChartSpec.from_body(ctx, ctx.body)
+    alt, decorative = figure_text(ctx)
     rect = ctx.body_rect
     animate = ctx.spec.animate
 
     frame = add_native_chart(ctx, spec, rect)
+    describe(frame, alt=alt, decorative=decorative)
     ctx.manifest.record(frame, rendered="native")
     record_chart_text(ctx, frame, spec)
     height = frame.height / _EMU_PER_INCH

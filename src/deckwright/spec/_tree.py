@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
+from deckwright.utils.links import LINK, spans
+
 # A group nested deeper than this is named in `dropped` rather than walked, so a
 # pathological file cannot exhaust the stack.
 MAX_GROUP_DEPTH = 8
@@ -156,6 +158,39 @@ def _bottom(shape) -> int:
 
 
 SOFT_BREAK = "\x0b"  # what python-pptx hands back for an ``<a:br/>`` inside a paragraph
+
+
+def linked_text(paragraph) -> str:
+    """A paragraph's text as a spec writes it: a hyperlinked run as ``[words](address)``,
+    and copy that would read as a link without being one with its bracket escaped.
+
+    A hyperlink whose markup would not parse back is written as its words alone.
+    """
+    parts = []
+    runs = iter(paragraph.runs)  # one proxy per a:r, in document order
+    for child in paragraph._p.iterchildren():
+        tag = child.tag.rpartition("}")[2]
+        if tag == "br":
+            parts.append(SOFT_BREAK)
+        elif tag in ("r", "fld"):
+            run = next(runs) if tag == "r" else None
+            text = "".join(t.text or "" for t in child.iter(qn("a:t")))
+            address = run.hyperlink.address if run is not None else None
+            markup = f"[{text}]({address})"
+            if address and text.strip() and spans(markup) == [(text, address)]:
+                parts.append(markup)
+            else:
+                parts.append(_escaped(text))
+    return "".join(parts)
+
+
+def _escaped(text: str) -> str:
+    """``text`` with a backslash before each bracket that would open a link."""
+    out, at = [], 0
+    for match in LINK.finditer(text):
+        out.append(text[at : match.start()] + "\\[")
+        at = match.start() + 1
+    return "".join(out) + text[at:]
 
 
 def flat(text: str) -> str:

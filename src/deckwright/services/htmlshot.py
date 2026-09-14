@@ -24,6 +24,7 @@ from pf_core.utils.env import resolve_bool, resolve_int
 
 from deckwright.errors import MissingToolError, RenderError
 from deckwright.services.render import install_hint
+from deckwright.utils.a11y import describe
 from deckwright.utils.env import env_str
 
 logger = get_logger(__name__)
@@ -424,10 +425,12 @@ def card_to_slide(
         fd, png_path = tempfile.mkstemp(suffix=".png")
         os.close(fd)
     render_html_to_png(html, png_path, width=render_width, scale=scale, chrome=chrome)
-    return slide.shapes.add_picture(
+    picture = slide.shapes.add_picture(
         png_path,
         Inches(left),
         Inches(top),
         width=Inches(width) if width is not None else None,
         height=Inches(height) if height is not None else None,
     )
+    describe(picture)
+    return picture

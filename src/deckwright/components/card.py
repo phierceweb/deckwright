@@ -16,10 +16,12 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
+from deckwright.utils.a11y import describe
 from deckwright.utils.shapes import ANCHOR, para, rrect, textbox
 from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, overlong_word, wrapped_lines
 
 from deckwright.components._shape import (
+    figure_text,
     _where,
     known_fields,
     number,
@@ -29,7 +31,7 @@ from deckwright.components._shape import (
 )
 from deckwright.components._shared import HEAD_SPACE_AFTER_PT, mark_colour
 
-_FIELDS = ("pair", "heading", "body", "icon", "radius", "shadow")
+_FIELDS = ("pair", "heading", "body", "icon", "alt", "decorative", "radius", "shadow")
 _PAIR_DEFAULT = "surface"
 _RADIUS_DEFAULT = 0.06
 _MAX_RADIUS = 0.5
@@ -83,7 +85,11 @@ def card(ctx: SlideCtx) -> BodyResult:
             f"the {inset:.2f}in the theme's gutter insets a card by on every side"
         )
     if icon:
-        area = _icon(ctx, area, str(icon), shapes)
+        area = _icon(ctx, area, str(icon), shapes, worded=bool(heading or copy))
+    elif "alt" in ctx.body or "decorative" in ctx.body:
+        raise LayoutError(
+            f"{_where(ctx)}: 'alt' and 'decorative' describe the card's icon, and it has none"
+        )
     if heading or copy:
         shapes.append(
             (_copy(ctx, area, heading=heading, copy=copy, ink=pair.fg, bg=pair.bg), "text")
@@ -193,7 +199,7 @@ def _corner_reach(rect: Rect, radius: float, *, depth: float) -> float:
     return r - math.sqrt(r * r - (r - depth) * (r - depth))
 
 
-def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[RevealItem]) -> Rect:
+def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[RevealItem], *, worded: bool) -> Rect:
     """Place the icon at the top of the card's inner area; return what is left below it.
 
     A bare name is a glyph, drawn as vector and painted from the palette; anything
@@ -212,10 +218,16 @@ def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[RevealItem]) -> Rec
         shape = ctx.slide.shapes.add_picture(
             str(media), Inches(box.left), Inches(box.top), Inches(side), Inches(side)
         )
+        alt, decorative = figure_text(ctx)
+        # Beside the card's own words an unlabelled icon is a mark; alone it is the content.
+        describe(shape, alt=alt, decorative=decorative or (worded and alt is None))
         ctx.manifest.record(shape, rendered="image")
     else:
         fill = mark_colour(ctx, box)
         shape = place_icon(ctx.slide, name, box, fill=fill, theme=ctx.theme)
+        alt, decorative = figure_text(ctx)
+        if alt is not None or decorative:
+            describe(shape, alt=alt, decorative=decorative)
         ctx.manifest.record(shape, fg=fill, bg=ctx.behind(box, ink=fill))
     shapes.append((shape.shape_id, "figure"))
     gap = ctx.grid.gutter

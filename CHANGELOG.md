@@ -3,6 +3,55 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.4.0 — 2026-09-14
+
+### Accessibility
+
+- `image`, `icon`, `document` and `chart` take `alt:`, written as the shape's alternative
+  text, and `decorative: true`, written as Office's decorative flag. Giving both is refused.
+- A slide's background image or theme art, and a `card`'s picture icon beside its words,
+  are marked decorative. `card` takes `alt:` and `decorative:` for its icon.
+- Pictures no longer carry their file name as alternative text.
+- `qa` reports `alt-text`: a picture or chart with neither alt text nor the decorative
+  flag, or with only a file name. WARN.
+- The manifest records `alt` and `decorative` per shape.
+- `extract` writes each dropped figure's alt text into the draft as a comment.
+
+### Links
+
+- A slide takes `id:`, and a placement takes `goto:` naming a slide id or a relative jump
+  (`first`, `previous`, `next`, `last`). Every shape the placement drew jumps when clicked.
+  A goto naming no slide, its own slide, or sitting on a `reveals:` trigger is refused.
+- `qa` reports `link`: a jump to a slide the show no longer contains, an unknown relative
+  jump, or a web link that is not an `http`, `https` or `mailto` address.
+- Copy takes `[words](address)` links to `http`, `https` or `mailto` addresses, in the
+  line's own ink and underlined. `code` keeps markup as written; a chart refuses a link;
+  `\[` escapes a bracket. `extract` writes linked runs back as markup.
+- The manifest records `goto` and `links` per shape, and a linked line's text as its words.
+- `relationship` no longer reports an empty `r:id`, which PowerPoint writes for click
+  actions that relate to nothing.
+
+### CJK
+
+- Chinese, Japanese and Korean text is measured at one em per ideograph, kana, hangul
+  syllable and fullwidth form, instead of the widest Latin glyph, and wraps where the
+  renderer breaks it: between ideographs and kana, at spaces in Korean, with kinsoku
+  (closing punctuation and small kana never start a line, opening brackets never end one)
+  and a trailing full stop or comma hanging past a full line.
+- Each run carrying CJK is written with its `lang` and the theme's face for its script. The
+  theme takes those faces from `type.ea` (`ja`, `ko`, `zh-Hans`, `zh-Hant`), else from the
+  template's `fontScheme` script entries.
+- The deck and each slide take `lang:`. **Han-only text with no `lang:` is refused on a theme
+  that sets Japanese and Chinese in different faces**, which most brand templates do.
+- `qa`'s `font-substituted` reads the fonts the rendered PDF embeds (Poppler `pdffonts`),
+  falling back to `fc-list`. A face installed but unreachable by LibreOffice is now reported.
+- `qa` reports `cjk-unrendered`: a slide with CJK text whose render embeds no CJK font. ERROR.
+
+### Reading decks
+
+- `inspect` and `diff` read a shape stored inside `mc:AlternateContent` from its fallback.
+  `inspect` listed nothing for one, and `diff` reported it `gone`.
+
 ## v0.3.0 — 2026-09-12
 
 - Licensed **Apache-2.0**, replacing MIT, with a `NOTICE` file. The distribution's

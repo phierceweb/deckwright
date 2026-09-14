@@ -1,4 +1,7 @@
-"""Text helpers: near-match suggestions, and how tall a string wraps."""
+"""Text helpers: near-match suggestions, and how tall a string wraps.
+
+A string is measured as it shows, so a ``[words](address)`` link counts its words only.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,8 @@ from deckwright.utils._metrics import (  # noqa: F401 — re-exported; _metrics 
     measured,
     table_for,
 )
+from deckwright.utils._cjk import CJK_EM, HANG, atoms, carries_cjk, is_cjk, is_hangul
+from deckwright.utils.links import plain
 
 LINE_HEIGHT = 1.2
 """Single-spaced line advance as a multiple of nominal point size, in the faces we set."""
@@ -33,28 +38,38 @@ def closest_match(name: str, options: Iterable[str]) -> str | None:
     return matches[0] if matches else None
 
 
-def text_em(text: str, face: str | None = None) -> float:
+def text_em(text: str, face: str | None = None, *, links: bool = True) -> float:
     """Width of ``text`` in ems when set in ``face``, held ``_MARGIN`` wide.
 
     ``face`` routes to that family's measured advances (bold folded in); ``None`` or
-    a face with no table gets ``CEILING``.
+    a face with no table gets ``CEILING``. ``links=False`` measures text already shown,
+    such as a manifest line, exactly as written.
     """
+    return _em(plain(text) if links else text, face)
+
+
+def _em(shown: str, face: str | None) -> float:
     table = table_for(face)
-    return _MARGIN * sum(advance_em(ch, table) for ch in text)
+    return _MARGIN * sum(advance_em(ch, table) for ch in shown)
 
 
-def wrapped_lines(text: str, *, width_in: float, size_pt: float, face: str | None = None) -> int:
+def wrapped_lines(
+    text: str, *, width_in: float, size_pt: float, face: str | None = None, links: bool = True
+) -> int:
     """How many lines ``text`` occupies when wrapped to ``width_in`` at ``size_pt``.
 
     ``_MARGIN`` errs wide by design, so a box is never sized a line short of its text.
     """
     if width_in <= 0 or size_pt <= 0:
         return 1
+    shown = plain(text) if links else text
     capacity = width_in * 72 / size_pt
+    if carries_cjk(shown):
+        return _cjk_lines(shown, capacity=capacity, face=face)
     space = _MARGIN * advance_em(" ", table_for(face))
     lines, used = 1, 0.0
-    for word in text.split():
-        width = text_em(word, face)
+    for word in shown.split():
+        width = _em(word, face)
         need = width if used == 0.0 else used + space + width
         if need <= capacity:
             used = need
@@ -65,6 +80,32 @@ def wrapped_lines(text: str, *, width_in: float, size_pt: float, face: str | Non
         rows = max(1, ceil(width / _MARGIN / capacity))
         lines += rows - 1
         used = width - (rows - 1) * capacity
+    return lines
+
+
+def _cjk_lines(text: str, *, capacity: float, face: str | None) -> int:
+    """Lines for text carrying CJK, broken where ``_cjk.atoms`` allows.
+
+    A hanging mark at the end of a full line is drawn past its edge rather than carrying
+    the character before it down, so it is not charged against the line.
+    """
+    space = _MARGIN * advance_em(" ", table_for(face))
+    lines, used, gap = 1, 0.0, 0.0
+    for atom in atoms(text):
+        if atom.isspace() and not is_cjk(atom):
+            gap += space if used > 0.0 else 0.0
+            continue
+        width = _em(atom, face)
+        need = used + gap + width if used > 0.0 else width
+        hung = need - _MARGIN * CJK_EM if atom[-1] in HANG else need
+        if need <= capacity or hung <= capacity:
+            used, gap = min(need, capacity), 0.0
+            continue
+        if used > 0.0:
+            lines += 1
+        rows = max(1, ceil(width / _MARGIN / capacity))
+        lines += rows - 1
+        used, gap = width - (rows - 1) * capacity, 0.0
     return lines
 
 
@@ -80,9 +121,10 @@ def estimate_caveat(*faces: str | None) -> str:
 def _unbreakable_runs(text: str) -> Iterator[str]:
     """The runs of ``text`` no line break can fall inside.
 
-    A renderer breaks at a space, after a hyphen or dash, and on either side of a wide
-    character: CJK wraps between any two of its characters. Not after a slash: LibreOffice
-    sets a URL broken mid-word.
+    A renderer breaks at a space, after a hyphen or dash, and on either side of a wide or
+    CJK character other than hangul, since Korean breaks at spaces. Not after a slash:
+    LibreOffice sets a URL broken mid-word. Where a CJK line really breaks, kinsoku
+    included, is ``_cjk.atoms``.
     """
     run = ""
     for ch in text:
@@ -90,7 +132,7 @@ def _unbreakable_runs(text: str) -> Iterator[str]:
             if run:
                 yield run
             run = ""
-        elif unicodedata.east_asian_width(ch) in _WIDE:
+        elif (unicodedata.east_asian_width(ch) in _WIDE or is_cjk(ch)) and not is_hangul(ch):
             if run:
                 yield run
             yield ch
@@ -113,7 +155,7 @@ def overlong_word(
     ``_MARGIN``: a sizing allowance would refuse runs that fit.
     """
     table = table_for(face)
-    for word in _unbreakable_runs(text):
+    for word in _unbreakable_runs(plain(text)):
         need = sum(advance_em(ch, table) for ch in word) * size_pt / 72
         if need > width_in:
             return word, need

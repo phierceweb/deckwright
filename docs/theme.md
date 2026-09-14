@@ -60,7 +60,7 @@ a theme is not a place where a typo is silently ignored. Everything is optional 
 | `drop_template_slides` | Delete the template's own slides after loading it. Almost always `true` for a brand template, whose slides are examples rather than content. |
 | `bind` | Maps semantic roles onto the template's `clrScheme` slots, or onto literal `RRGGBB` values. Literals need no template. |
 | `scale` | Margins, `columns`, `rows` and gutter. `rows` is the divisor a placement's `rows:` indexes — 12 by default, and stated here so an author can read the number they are indexing. |
-| `type` | `face`, `heading_face`, `mono`, `reference_height`, `min_pt`, `line_weight_pt`, and per-rung `ramp` overrides written in `pt`. |
+| `type` | `face`, `heading_face`, `mono`, `ea`, `reference_height`, `min_pt`, `line_weight_pt`, and per-rung `ramp` overrides written in `pt`. |
 | `chart` | The chart renderer's aesthetic knobs — gap width, gradients, shadows, markers, gridlines, label position. See [`charts.md`](charts.md). |
 | `chrome` | Where each chrome line sits and how it is set. |
 | `icons` | A directory of `.svg` glyphs searched before the shipped set. |
@@ -303,6 +303,21 @@ LibreOffice; Courier New is native on macOS and Windows, and Liberation Mono und
 LibreOffice. **Never default to a Microsoft-only face** — Calibri, Aptos and Consolas
 have no counterpart off Windows, so they substitute to something unrelated without
 saying so.
+
+### CJK faces
+
+`type.ea` names the face Chinese, Japanese and Korean text is set in, one per script:
+
+```yaml
+type:
+  ea: {ja: Hiragino Sans, ko: Apple SD Gothic Neo, zh-Hans: PingFang SC, zh-Hant: PingFang TC}
+```
+
+The keys are `ja`, `ko`, `zh-Hans` and `zh-Hant`. A script the theme leaves out takes the
+face the template's `fontScheme` names for it in its `a:font script=` entries (`Jpan`,
+`Hang`, `Hans`, `Hant`); most templates name Microsoft faces there. `base` has no template
+and names none, so a viewer's own CJK face sets that text. How a run picks its script is
+[`authoring.md`](authoring.md#cjk-text).
 
 ## Where the built-in theme lives
 

@@ -10,6 +10,9 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
+from deckwright.errors import LayoutError
+from deckwright.utils.links import link_run, spans, web_address_problem
+
 DEFAULT_FONT = "Helvetica"
 
 ALIGN = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
@@ -45,23 +48,35 @@ def para(
     first: bool = False,
     space_after: float = 6,
     font: str = DEFAULT_FONT,
+    links: bool = True,
 ):
-    """Append a styled single-run paragraph to text frame ``tf``.
+    """Append a styled paragraph to text frame ``tf``, one run per ``[words](address)`` link
+    and per stretch between them.
 
     When ``first`` is set and the frame's first paragraph is still empty, that
-    paragraph is reused instead of adding a new one. Returns the paragraph.
+    paragraph is reused instead of adding a new one. ``links=False`` sets ``text`` exactly
+    as written, for a listing that shows markup. Returns the paragraph.
+
+    Raises:
+        LayoutError: a link's address is not a web address.
     """
     p = tf.paragraphs[0] if first and not tf.paragraphs[0].runs else tf.add_paragraph()
     p.alignment = align
     p.space_after = Pt(space_after)
     p.space_before = Pt(0)
-    r = p.add_run()
-    r.text = text
-    r.font.size = Pt(size)
-    r.font.bold = bold
-    r.font.italic = italic
-    r.font.name = font
-    r.font.color.rgb = color
+    for words, address in spans(text) if links else [(text, None)]:
+        r = p.add_run()
+        r.text = words
+        r.font.size = Pt(size)
+        r.font.bold = bold
+        r.font.italic = italic
+        r.font.name = font
+        r.font.color.rgb = color
+        if address is not None:
+            problem = web_address_problem(address)
+            if problem is not None:
+                raise LayoutError(f"the link [{words}]({address}): {problem}")
+            link_run(r, address)
     return p
 
 

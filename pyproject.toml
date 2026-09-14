@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deckwright"
-version = "0.3.0"
+version = "0.4.0"
 description = "Compile declarative deck specs into branded PowerPoint files — themes, native charts, icons, imagery, animation and QA on python-pptx"
 readme = "README.md"
 requires-python = ">=3.12"

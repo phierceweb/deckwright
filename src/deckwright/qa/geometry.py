@@ -223,7 +223,7 @@ def check_text_fit(manifest: dict[str, Any], theme: Theme) -> list[Finding]:
             if width <= 0 or height <= 0:
                 continue
             needed = sum(
-                wrapped_lines(str(line), width_in=width, size_pt=pt, face=theme.face)
+                wrapped_lines(str(line), width_in=width, size_pt=pt, face=theme.face, links=False)
                 * pt
                 * LINE_HEIGHT
                 / 72

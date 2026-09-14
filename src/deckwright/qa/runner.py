@@ -11,6 +11,8 @@ from pf_core.log import get_logger
 
 from deckwright.errors import SpecError
 from deckwright.paths import render_dir
+from deckwright.qa.alt import check_alt_text
+from deckwright.qa.links import check_links
 from deckwright.qa.geometry import (
     check_bounds,
     check_placement_fit,
@@ -27,6 +29,7 @@ from deckwright.qa.model import Finding, QaReport, Severity
 from deckwright.qa.motion import check_beats, check_triggers
 from deckwright.qa.package import check_package
 from deckwright.qa.placeholder import check_placeholder
+from deckwright.qa.rendered_fonts import check_rendered_faces
 from deckwright.qa.report import write_json, write_markdown
 from deckwright.qa.textflow import check_overflow, extract_pages
 from deckwright.services.render import render_to_images
@@ -166,17 +169,20 @@ def run_qa(
         check_beats,
     ):
         findings.extend(check(data, theme))
-    # These three read the saved package: a hand-edit after the build leaves the manifest
+    # These read the saved package: a hand-edit after the build leaves the manifest
     # describing a file that is gone.
     findings.extend(check_package(deck))
     findings.extend(check_charts(deck))
     findings.extend(check_triggers(deck))
+    findings.extend(check_alt_text(deck))
+    findings.extend(check_links(deck))
 
     out = Path(outdir) if outdir else render_dir(deck)
     if render:
-        findings.extend(check_faces(data, theme))
         images = render_to_images(deck, out)
         pdf = out / f"{deck.stem}.pdf"
+        rendered = check_rendered_faces(deck, pdf, data)
+        findings.extend(rendered if rendered is not None else check_faces(data, theme))
         findings.extend(
             check_overflow(data, extract_pages(pdf), extract_pages(pdf, layout=True), pdf_path=pdf)
         )

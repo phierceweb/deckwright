@@ -127,6 +127,7 @@ class Theme:
     compose_layout: str | None = None  # the template layout named by the theme, if any
     surface: Surface | None = None  # what the template already paints behind a slide
     icons: Path | None = None  # a directory of .svg glyphs searched before the built-in set
+    ea: dict[str, str] = field(default_factory=dict)  # CJK face per script key in EA_SCRIPTS
 
     def font_for(self, style: TypeStyle) -> str:
         """The typeface a ramp rung renders in — its own face, else the body face."""

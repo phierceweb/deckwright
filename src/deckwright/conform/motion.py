@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from deckwright.conform.charts import CATEGORY_ROWS
+from deckwright.conform.charts import CATEGORY_ROWS, CHART_ALT
 
 
 def motion_slides() -> dict[str, dict[str, Any]]:
@@ -27,6 +27,27 @@ def motion_slides() -> dict[str, dict[str, Any]]:
                     "body": "Hidden until the question is clicked.",
                 },
             },
+        ],
+    }
+    # Relative jumps only: each exercise first builds as a one-slide deck, where a named
+    # slide would not exist.
+    slides["goto"] = {
+        "title": "Two ways off this slide",
+        "subtitle": "Each card jumps when clicked in the show",
+        "place": [
+            {
+                "at": {"rows": {"from": 0, "to": 6}},
+                "split": [
+                    {
+                        "goto": "first",
+                        "card": {"heading": "Back to the start", "body": "The first slide."},
+                    },
+                    {
+                        "goto": "next",
+                        "card": {"heading": "Onward", "body": "The slide after this one."},
+                    },
+                ],
+            }
         ],
     }
     slides["staged-beats"] = {
@@ -94,7 +115,11 @@ def build_slides() -> dict[str, dict[str, Any]]:
             "place": [
                 {
                     "at": {"cols": "full", "rows": "top-two-thirds"},
-                    "chart": {"kind": "column", "data": [dict(r) for r in CATEGORY_ROWS]},
+                    "chart": {
+                        "kind": "column",
+                        "alt": CHART_ALT,
+                        "data": [dict(r) for r in CATEGORY_ROWS],
+                    },
                 }
             ],
         },
@@ -108,6 +133,7 @@ def build_slides() -> dict[str, dict[str, Any]]:
                     "at": {"cols": "full", "rows": "top-two-thirds"},
                     "chart": {
                         "kind": "column",
+                        "alt": CHART_ALT,
                         "data": [
                             {
                                 "category": row["category"],

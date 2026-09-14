@@ -225,8 +225,8 @@ def test_a_heavier_than_bold_cut_routes_to_the_ceiling_not_its_family():
 
 def test_a_character_never_measured_is_charged_its_class_ceiling():
     """Literals from the CEILING table: '%' (widest glyph), 'W' (widest upper),
-    'm' (widest lower), and the ceiling space."""
-    assert advance_em("中", CALIBRI) == 1.272
+    'm' (widest lower), and the ceiling space. CJK has its own em-square charge."""
+    assert advance_em("★", CALIBRI) == 1.272
     assert advance_em("É", CALIBRI) == 1.1284
     assert advance_em("é", CALIBRI) == 1.0581
     assert advance_em("\u00a0", CALIBRI) == 0.3516

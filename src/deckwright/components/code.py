@@ -77,10 +77,17 @@ def code(ctx: SlideCtx) -> BodyResult:
             first=(index == 0),
             space_after=0,
             font=ctx.theme.mono,
+            links=False,
         )
         drawn.append(line or " ")
     ctx.manifest.record(
-        plate, lines=drawn, font_pt=size, fg=ctx.ink_on(pair.bg), bg=pair.bg, plate=True
+        plate,
+        lines=drawn,
+        font_pt=size,
+        fg=ctx.ink_on(pair.bg),
+        bg=pair.bg,
+        plate=True,
+        literal=True,
     )
     groups.append([(plate.shape_id, "text")])
     ctx.painted.append((_plate_rect(rect, top, plate_h), pair.bg))

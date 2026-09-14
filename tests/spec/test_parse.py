@@ -351,3 +351,154 @@ def test_chapters_run_out_of_their_declared_order_are_rejected_naming_both(tmp_p
 def test_a_declared_section_with_no_slides_can_be_skipped(tmp_path):
     text = "theme: t\nsections: [Alpha, Beta, Gamma]\n---\nsection: Alpha\n---\nsection: Gamma\n"
     assert [s.section for s in _parse(text, tmp_path).slides] == ["Alpha", "Gamma"]
+
+
+def _deck(*slides: str) -> str:
+    return "theme: base\nout: out/D.pptx\n" + "".join(f"---\n{s}\n" for s in slides)
+
+
+_CARD_TO = "place:\n  - at: {{cols: full}}\n    goto: {}\n    card: {{heading: Go}}"
+
+
+def test_a_slide_id_and_a_goto_naming_it_parse(tmp_path):
+    deck = parse_deck_text(
+        _deck("title: A\n" + _CARD_TO.format("appendix"), "id: appendix\ntitle: B"),
+        source=tmp_path / "d.deck.yaml",
+    )
+    assert deck.slides[1].id == "appendix"
+    assert deck.slides[0].place[0].goto == "appendix"
+
+
+@pytest.mark.parametrize("jump", ["first", "previous", "next", "last"])
+def test_a_relative_jump_needs_no_slide_id(tmp_path, jump):
+    deck = parse_deck_text(
+        _deck("title: A\n" + _CARD_TO.format(jump)), source=tmp_path / "d.deck.yaml"
+    )
+    assert deck.slides[0].place[0].goto == jump
+
+
+def test_a_goto_naming_no_slide_lists_the_ids_there_are(tmp_path):
+    text = _deck("id: intro\ntitle: A\n" + _CARD_TO.format("apendix"), "id: appendix\ntitle: B")
+    with pytest.raises(
+        SpecError, match=r"'goto: apendix' names no slide\. Slide ids in this deck: appendix, intro"
+    ):
+        parse_deck_text(text, source=tmp_path / "d.deck.yaml")
+
+
+def test_a_goto_in_a_deck_with_no_slide_ids_says_to_give_one(tmp_path):
+    with pytest.raises(SpecError, match="none — give the target slide an 'id:'"):
+        parse_deck_text(
+            _deck("title: A\n" + _CARD_TO.format("appendix")), source=tmp_path / "d.deck.yaml"
+        )
+
+
+def test_a_goto_to_its_own_slide_is_refused(tmp_path):
+    with pytest.raises(SpecError, match="is the slide it is on, so the click goes nowhere"):
+        parse_deck_text(
+            _deck("id: here\ntitle: A\n" + _CARD_TO.format("here")), source=tmp_path / "d.deck.yaml"
+        )
+
+
+def test_two_slides_sharing_an_id_are_refused(tmp_path):
+    with pytest.raises(SpecError, match=r"slide 2: duplicate id 'x' — slide 1 already has it"):
+        parse_deck_text(
+            _deck("id: x\ntitle: A", "id: x\ntitle: B"), source=tmp_path / "d.deck.yaml"
+        )
+
+
+def test_a_slide_cannot_take_a_relative_jumps_name_as_its_id(tmp_path):
+    with pytest.raises(SpecError, match="a slide cannot be called 'next'"):
+        parse_deck_text(_deck("id: next\ntitle: A"), source=tmp_path / "d.deck.yaml")
+
+
+def test_a_goto_on_a_reveal_trigger_is_refused(tmp_path):
+    slide = (
+        "title: A\nplace:\n"
+        "  - at: {cols: left-half}\n    id: button\n    goto: next\n    card: {heading: Go}\n"
+        "  - at: {cols: right-half}\n    reveals: button\n    card: {heading: Shown}"
+    )
+    with pytest.raises(SpecError, match="one click cannot both reveal and leave the slide"):
+        parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")
+
+
+def test_a_control_character_in_a_goto_is_refused(tmp_path):
+    with pytest.raises(SpecError, match="'goto' 'a\\\\x01' contains the control character"):
+        parse_deck_text(
+            _deck(
+                'title: A\nplace:\n  - at: {cols: full}\n    goto: "a\\x01"\n    card: {heading: Go}'
+            ),
+            source=tmp_path / "d.deck.yaml",
+        )
+
+
+def test_a_link_to_anything_but_a_web_address_is_refused_with_the_slide_named(tmp_path):
+    slide = "title: A\nplace:\n  - at: {cols: full}\n    card: {heading: Go, body: '[here](htps://x.io)'}"
+    with pytest.raises(
+        SpecError,
+        match=r"slide 1: placement 1 \(card\): the link '\[here\]\(htps://x\.io\)' — 'htps://x\.io' is not a web address",
+    ):
+        parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")
+
+
+def test_a_link_in_a_title_is_checked_too(tmp_path):
+    with pytest.raises(SpecError, match="slide 1: title: the link"):
+        parse_deck_text(_deck("title: '[x](mailto:nobody)'"), source=tmp_path / "d.deck.yaml")
+
+
+def test_a_link_in_a_chart_is_refused(tmp_path):
+    slide = (
+        "title: A\nplace:\n  - at: {cols: full}\n    chart:\n      kind: column\n"
+        "      data: [{category: '[Q1](https://x.io)', value: 1}]"
+    )
+    with pytest.raises(SpecError, match="a chart's labels are drawn by the chart"):
+        parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")
+
+
+def test_a_link_in_a_section_name_is_checked_with_the_deck_config_named(tmp_path):
+    text = "theme: base\nsections: ['[One](ftp://x.io)']\nout: out/D.pptx\n---\ntitle: A\n"
+    with pytest.raises(
+        SpecError, match=r"deck config: sections: the link '\[One\]\(ftp://x\.io\)'"
+    ):
+        parse_deck_text(text, source=tmp_path / "d.deck.yaml")
+
+
+def test_link_markup_in_a_code_listing_is_not_a_link_to_check(tmp_path):
+    slide = "title: A\nplace:\n  - at: {cols: full}\n    code: {lines: ['[x](not-an-address)']}"
+    assert parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml").slides[0].place
+
+
+def test_a_deck_and_a_slide_name_the_language_their_cjk_is_in(tmp_path):
+    deck = parse_deck_text(
+        "theme: base\nlang: zh-Hans\nout: out/D.pptx\n---\ntitle: A\n---\nlang: zh-Hant\ntitle: B\n",
+        source=tmp_path / "d.deck.yaml",
+    )
+    assert deck.lang == "zh-Hans"
+    assert [s.lang for s in deck.slides] == [None, "zh-Hant"]
+
+
+def test_a_lang_that_is_not_a_language_tag_is_refused(tmp_path):
+    with pytest.raises(
+        SpecError,
+        match="'lang' is a language tag like ja, ko, zh-Hans or zh-TW, got 'Japanese please'",
+    ):
+        parse_deck_text(_deck("lang: Japanese please\ntitle: A"), source=tmp_path / "d.deck.yaml")
+
+
+def test_the_chart_link_refusal_does_not_advise_an_escape_a_chart_would_draw(tmp_path):
+    slide = (
+        "title: A\nplace:\n  - at: {cols: full}\n    chart:\n      kind: column\n"
+        "      data: [{category: '[Q1](https://x.io)', value: 1}]"
+    )
+    with pytest.raises(SpecError) as caught:
+        parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")
+    assert "backslash" not in str(caught.value)
+
+
+def test_a_goto_refusal_numbers_placements_as_the_author_wrote_them(tmp_path):
+    slide = (
+        "title: A\nplace:\n  - at: {rows: top-half}\n    split:\n"
+        "      - card: {heading: One}\n      - card: {heading: Two}\n      - card: {heading: Three}\n"
+        "  - at: {cols: full, rows: bottom-half}\n    goto: apendix\n    card: {heading: Go}"
+    )
+    with pytest.raises(SpecError, match=r"slide 1: placement 2: 'goto: apendix' names no slide"):
+        parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")

@@ -203,3 +203,73 @@ def test_a_click_sequence_revealing_paragraphs_of_one_shape_validates(schema):
         box.text_frame.add_paragraph().text = line
     add_click_sequence(slide, [[(box.shape_id, "fade", i)] for i in range(3)])
     assert _validate(schema, prs) == []
+
+
+def test_alt_text_and_the_decorative_flag_validate_on_every_figure_kind(schema):
+    """`descr` on each non-visual block, and the decorative extension inside `cNvPr`'s
+    `a:extLst`, which the schema types as a closed sequence ending in that list."""
+    from deckwright.utils.a11y import describe
+
+    prs, slide, text, blank, chart = _deck()
+    shapes = {s.shape_id: s for s in slide.shapes}
+    describe(shapes[chart], alt="A chart")
+    describe(shapes[text], decorative=True)
+    describe(shapes[blank], alt="A box")
+    assert _validate(schema, prs) == []
+
+
+def test_the_gate_catches_the_decorative_list_out_of_order(schema):
+    """The negative control for the case above: a click action after `a:extLst` breaks the
+    sequence, so an extension written in the wrong place would not pass."""
+    from deckwright.utils.a11y import describe
+
+    prs, slide, text, blank, chart = _deck()
+    describe(next(s for s in slide.shapes if s.shape_id == text), decorative=True)
+    sabotaged = _slide_xml(prs).replace(b"</a:extLst>", b'</a:extLst><a:hlinkClick r:id=""/>')
+
+    assert not schema.validate(etree.fromstring(sabotaged))
+    assert "hlinkClick" in schema.error_log[0].message
+
+
+def test_a_click_action_beside_the_decorative_flag_validates_in_order(schema):
+    """`goto:` writes `a:hlinkClick` into a `cNvPr` whose `a:extLst` alt text may already
+    hold; the sequence puts the click first whichever was written first."""
+    from deckwright.compile.goto import write_gotos
+    from deckwright.utils.a11y import describe
+
+    prs, slide, text, blank, chart = _deck()
+    second = prs.slides.add_slide(prs.slide_layouts[6])
+    shapes = {s.shape_id: s for s in slide.shapes}
+    describe(shapes[text], decorative=True)
+    write_gotos(
+        [(shapes[text], "next"), (shapes[blank], "back"), (shapes[chart], "back")],
+        slides={"back": second},
+    )
+    assert _validate(schema, prs) == []
+    tags = [el.tag.split("}")[1] for el in shapes[text]._element.nvSpPr.cNvPr]
+    assert tags == ["hlinkClick", "extLst"]
+
+
+def test_a_link_run_with_its_colour_extension_validates(schema):
+    """`a:hlinkClick` sits after the run's fill and face in `a:rPr`, and carries the
+    hyperlink-colour extension in its own `a:extLst`."""
+    from deckwright.utils.shapes import para
+    from pptx.dml.color import RGBColor
+
+    prs, slide, text, blank, chart = _deck()
+    frame = next(s for s in slide.shapes if s.shape_id == blank).text_frame
+    para(frame, "Read [the guide](https://example.com/g) first", 18, RGBColor(0, 0, 0), first=True)
+    assert _validate(schema, prs) == []
+
+
+def test_a_cjk_run_marked_with_its_language_and_face_validates(schema):
+    from deckwright.compile.eastasian import mark_east_asian
+
+    prs, slide, text, blank, chart = _deck()
+    frame = next(s for s in slide.shapes if s.shape_id == blank).text_frame
+    run = frame.paragraphs[0].add_run()
+    run.text = "売上は伸びました"
+    run.font.name = "Helvetica"
+    run.hyperlink.address = "https://example.com"
+    mark_east_asian(slide, ea={"ja": "Hiragino Sans"}, lang=None, where="s")
+    assert _validate(schema, prs) == []

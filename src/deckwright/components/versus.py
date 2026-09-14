@@ -16,6 +16,7 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rrect, textbox
+from deckwright.utils.links import plain
 from deckwright.utils.text import estimate_caveat, text_em
 
 from deckwright.components._shape import known_fields, known_item_fields
@@ -81,7 +82,7 @@ def _side_floor(
         (
             text_em(word, value_face if pt == value_pt else text_face) * pt / 72
             for text, pt in rows
-            for word in text.split()
+            for word in plain(text).split()
         ),
         default=0.0,
     )

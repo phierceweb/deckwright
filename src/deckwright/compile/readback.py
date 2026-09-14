@@ -19,6 +19,7 @@ from pf_core.utils.io import atomic_write_text
 from deckwright.compile.record import box_of
 from deckwright.errors import SpecError
 from deckwright.utils.deck import open_presentation
+from deckwright.utils.mce import resolved_shapes
 
 logger = get_logger(__name__)
 
@@ -109,7 +110,7 @@ def _claimed(name: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _slide_drift(slide, records: list[dict[str, Any]], index: int) -> list[Change]:
     out: list[Change] = []
     seen: set[str] = set()
-    for shape in slide.shapes:
+    for shape in resolved_shapes(slide.shapes):
         name = str(shape.name)
         claimed = _claimed(name, records)
         if not claimed:

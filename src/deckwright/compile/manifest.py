@@ -25,6 +25,8 @@ from deckwright.compile.record import (
     SlideRecord,
     _slim,
 )
+from deckwright.utils.a11y import described
+from deckwright.utils.links import addresses, plain
 
 if TYPE_CHECKING:
     from deckwright.theme.model import Rect
@@ -53,6 +55,8 @@ class ManifestRecorder:
         # Set while a placement the author declared 'bleed: true' draws, so its
         # shapes carry that intent into the manifest and out of the bounds check.
         self.bleeding = False
+        # Set while a `goto:` placement draws, so each of its shapes records where it jumps.
+        self.goto: str | None = None
         # Which layout the template resolved to; nothing else in the deck records it.
         self.compose_layout = compose_layout
         self.provenance = Provenance()
@@ -103,6 +107,7 @@ class ManifestRecorder:
         annotation: bool = False,
         fill: str | None = None,
         ground: str | None = None,
+        literal: bool = False,
     ) -> ShapeRecord:
         """Record a placed shape against the current slide, naming it for its origin.
 
@@ -112,7 +117,9 @@ class ManifestRecorder:
         ``line_pt`` is one size per line, for a shape mixing rungs, which ``font_pt``
         alone would over-report. ``annotation`` marks a shape that *depicts* geometry —
         a drawn reserved region — so the geometry checks do not report it against the
-        thing it is a picture of.
+        thing it is a picture of. ``text`` and ``lines`` are recorded as they show, their
+        ``[words](address)`` links as words, unless ``literal`` says the shape sets markup as
+        written.
         """
         if rendered not in _RENDERED_VALUES:
             raise InvalidInputError(
@@ -120,6 +127,12 @@ class ManifestRecorder:
             )
         if not self.slides:
             raise PreconditionError("call begin_slide() before record()")
+        alt, decorative = described(shape)
+        written = [text] if text is not None else list(lines or [])
+        links = [] if literal else [a for line in written for a in addresses(line)]
+        if not literal:
+            text = None if text is None else plain(text)
+            lines = None if lines is None else [plain(line) for line in lines]
         if line_pt is not None and len(line_pt) != len(lines or []):
             raise InvalidInputError(
                 f"line_pt has {len(line_pt)} size(s) for {len(lines or [])} line(s) — "
@@ -141,6 +154,10 @@ class ManifestRecorder:
             annotation=annotation,
             fill=fill,
             ground=ground,
+            alt=alt,
+            decorative=decorative,
+            goto=self.goto,
+            links=links,
         )
         self.slides[-1].shapes.append(rec)
         return rec

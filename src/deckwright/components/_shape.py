@@ -6,6 +6,7 @@ takes the quietest role clearing WCAG's 3:1 non-text minimum against the paper i
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pptx.dml.color import RGBColor
@@ -20,6 +21,7 @@ from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
 from deckwright.theme.palette import Pair
 from deckwright.utils.color import AA_LARGE, contrast_ratio
+from deckwright.utils.links import plain
 from deckwright.utils.shapes import solid
 
 ARROWS = ("none", "end", "both")
@@ -33,6 +35,8 @@ _STROKE_FALLBACK_ROLES = ("muted",)
 # and a line drawn in it is not there at all.
 _MIN_VISIBLE_RATIO = 1.2
 _WEIGHT_RANGE = (0.1, 8.0)
+# Every character XML 1.0 can hold; lxml refuses the rest.
+_XML_CHAR = re.compile("[\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 def known_fields(ctx: SlideCtx, fields: tuple[str, ...]) -> None:
@@ -154,6 +158,35 @@ def flag(ctx: SlideCtx, key: str) -> bool:
     if not isinstance(value, bool):
         raise LayoutError(f"{_where(ctx)}: {key!r} must be true or false, got {value!r}")
     return value
+
+
+def figure_text(ctx: SlideCtx) -> tuple[str | None, bool]:
+    """A figure's ``alt:`` and ``decorative:``: what a screen reader says in its place, or
+    that it says nothing."""
+    decorative = flag(ctx, "decorative")
+    if "alt" not in ctx.body:
+        return None, decorative
+    raw = ctx.body["alt"]
+    if isinstance(raw, bool) or not isinstance(raw, (str, int, float)) or not str(raw).strip():
+        raise LayoutError(
+            f"{_where(ctx)}: 'alt' is the text a screen reader reads in place of the "
+            f"figure, so it must be words; got {raw!r}. A figure that carries no meaning "
+            f"takes 'decorative: true' instead"
+        )
+    alt = plain(str(raw)).strip()
+    bad = next((c for c in alt if not _XML_CHAR.fullmatch(c)), None)
+    if bad is not None:
+        raise LayoutError(
+            f"{_where(ctx)}: 'alt' contains the control character {bad!r}, which cannot "
+            f"be written into the file — use printable characters"
+        )
+    if decorative:
+        raise LayoutError(
+            f"{_where(ctx)}: 'alt' and 'decorative: true' contradict each other — a "
+            f"screen reader skips a decorative figure, so its alt text is never read; "
+            f"keep one"
+        )
+    return alt, False
 
 
 def choice(ctx: SlideCtx, key: str, options: tuple[str, ...], *, default: str) -> str:

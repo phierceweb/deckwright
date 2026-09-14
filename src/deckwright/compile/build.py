@@ -7,6 +7,7 @@ import io
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 from pf_core.log import get_logger
 from pf_core.utils.io import atomic_write_bytes, atomic_write_text
@@ -15,6 +16,8 @@ import deckwright.components  # noqa: F401 — import registers the built-in bod
 from deckwright.compile.background import flatten_master_background
 from deckwright.compile.beats import write_beats
 from deckwright.compile.content import write_content
+from deckwright.compile.eastasian import mark_east_asian
+from deckwright.compile.goto import write_gotos
 from deckwright.compile.record import Provenance
 from deckwright.compile.manifest import ManifestRecorder
 from deckwright.compile.prune import prune_unused_layouts
@@ -94,8 +97,12 @@ def build_deck(
         compose_layout=blank.name,
     )
 
+    gotos: list[tuple[Any, str]] = []
+    by_id: dict[str, Any] = {}
     for slide_spec in spec.slides:
         slide = prs.slides.add_slide(blank)
+        if slide_spec.id is not None:
+            by_id[slide_spec.id] = slide
         manifest.begin_slide(
             slide_spec.index,
             background=slide_spec.background.pair,
@@ -111,9 +118,17 @@ def build_deck(
             base=spec.source.resolve().parent,
         )
         render_slide(ctx)
+        mark_east_asian(
+            slide,
+            ea=theme.ea,
+            lang=slide_spec.lang or spec.lang,
+            where=f"{spec.source.name}: slide {slide_spec.index}",
+        )
+        gotos.extend(ctx.gotos)
         if slide_spec.notes:
             set_notes(slide, slide_spec.notes)
 
+    write_gotos(gotos, slides=by_id)
     if not keep_layouts:
         prune_unused_layouts(prs)
     register_notes_master(prs)

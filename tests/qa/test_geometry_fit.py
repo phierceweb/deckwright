@@ -63,3 +63,10 @@ def test_a_hair_over_is_arithmetic_not_a_defect():
     """Boxes are rounded and the wrap estimate carries its own margin."""
     one_line = 14.0 * 1.2 / 72
     assert check_text_fit(_manifest(_fitted(["short"], height=one_line - 0.03)), _theme()) == []
+
+
+def test_a_recorded_line_is_measured_as_written_even_when_it_reads_as_a_link():
+    """A code listing records its markup literally; measured as a link it would fit."""
+    line = "See [docs](https://example.com/reference/manual/chapter-one/section-two/the-long-page)"
+    findings = check_text_fit(_manifest(_fitted([line], height=0.3, width=2.0)), _theme())
+    assert [f.check for f in findings] == ["text-fit"]

@@ -144,6 +144,7 @@ def draft_spec(
         drafted = _slide_doc(slide, theme=loaded, budget=bullet_budget(loaded, rect), rect=rect)
         unplaced += len(drafted.spilled)
         comments = "".join(f"# not converted: {_comment(it)}\n" for it in _losses(slide.dropped))
+        comments += "".join(f"# alt text on {_comment(it)}\n" for it in slide.alt)
         if drafted.painted:
             comments += _PAINTED.format(rgb=_comment(drafted.painted))
         if drafted.spilled:
@@ -188,4 +189,6 @@ def render_markdown(slides: list[SlideContent], *, title: str) -> str:
             lines += [f"> {line}" for line in slide.notes.splitlines()] + [""]
         for item in _losses(slide.dropped):
             lines += [f"*not converted: {item}*", ""]
+        for item in slide.alt:
+            lines += [f"*alt text on {item}*", ""]
     return "\n".join(lines).rstrip() + "\n"

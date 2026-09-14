@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from deckwright.components._shape import anchored, fraction, known_fields
+from deckwright.components._shape import anchored, figure_text, fraction, known_fields
 from deckwright.components._shared import mark_colour
 from deckwright.icons.draw import place_icon
 from deckwright.layouts.components import BodyResult, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
+from deckwright.utils.a11y import describe
 
-_FIELDS = ("name", "size", "ink")
+_FIELDS = ("name", "alt", "decorative", "size", "ink")
 _SIZE_DEFAULT = 1.0
 
 
@@ -17,6 +18,7 @@ _SIZE_DEFAULT = 1.0
 def icon(ctx: SlideCtx) -> BodyResult:
     """Draw the named glyph in the placement, painted so it reads on what is behind it."""
     known_fields(ctx, _FIELDS)
+    alt, decorative = figure_text(ctx)
     name = str(ctx.body.get("name") or "").strip()
     if not name:
         raise _missing(ctx)
@@ -31,6 +33,7 @@ def icon(ctx: SlideCtx) -> BodyResult:
     box = anchored(rect, side, side, align=ctx.align, anchor=ctx.anchor)
     fill = ink_for(ctx, box)
     shape = place_icon(ctx.slide, name, box, fill=fill, theme=ctx.theme)
+    describe(shape, alt=alt, decorative=decorative)
     ctx.manifest.record(shape, fg=fill, bg=ctx.behind(box, ink=fill))
     return BodyResult(groups=[[(shape.shape_id, "figure")]], height=side)
 

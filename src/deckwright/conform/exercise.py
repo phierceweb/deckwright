@@ -17,6 +17,7 @@ from deckwright.conform.layout import document_slides, layout_slides
 from deckwright.conform.marks import mark_slides
 from deckwright.conform.motion import build_slides, motion_slides
 from deckwright.conform.photos import photo_slides
+from deckwright.conform.scripts import script_slides
 from deckwright.conform.tables import table_slides
 from deckwright.conform.text import text_slides
 from deckwright.conform.titles import title_slides
@@ -38,6 +39,7 @@ for _family in (
     mark_slides,
     figure_slides,
     photo_slides,
+    script_slides,
 ):
     EXERCISE.update(_family())
 del _family

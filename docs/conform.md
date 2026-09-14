@@ -138,7 +138,7 @@ brand.pptx
   · ink came from dk2, not dk1 — dk1 is not this template's darkest
   ok    cover
   FAIL  panel: <the error, first line, truncated>
-  <passed>/98 exercises
+  <passed>/103 exercises
 ```
 
 The `·` notes are what a reader of the theme needs to know about this template: its
@@ -247,7 +247,7 @@ the template at all, so there is nothing worth installing under a project name. 
 report says so and names the derived file to read:
 
 ```
-  0/98 exercises
+  0/103 exercises
   not adopted: no exercise built, so the derived theme does not describe brand.pptx —
   read out/conform/brand/brand.theme.yaml and fix its bind: before adopting
 ```

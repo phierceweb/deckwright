@@ -14,7 +14,11 @@ def text_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": {"from": 0, "to": 7}},
                     "bullets": {
-                        "items": ["The first point", "The second point", "The third point"]
+                        "items": [
+                            "The first point",
+                            "The second point, [with a link](https://example.com/point)",
+                            "The third point",
+                        ]
                     },
                 }
             ],
@@ -39,7 +43,10 @@ def text_slides() -> dict[str, dict[str, Any]]:
                 },
                 {
                     "at": {"cols": "right-third", "rows": {"from": 0, "to": 5}},
-                    "card": {"heading": "Three", "body": "And a third, to fill the row."},
+                    "card": {
+                        "heading": "Three",
+                        "body": "And a third, [to fill the row](https://example.com/row).",
+                    },
                 },
             ],
         },

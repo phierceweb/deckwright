@@ -9,6 +9,7 @@ from typing import Any
 from deckwright.compile.record import Box
 from deckwright.errors import SpecError
 from deckwright.utils.deck import open_presentation
+from deckwright.utils.mce import resolved_shapes
 
 
 def inspect_deck(deck: str | Path) -> list[dict[str, Any]]:
@@ -33,7 +34,7 @@ def inspect_deck(deck: str | Path) -> list[dict[str, Any]]:
                 "name": shape.name,
                 "box": asdict(Box.from_emu(shape.left, shape.top, shape.width, shape.height)),
             }
-            for shape in slide.shapes
+            for shape in resolved_shapes(slide.shapes)
         ]
         slides.append({"index": index, "layout": slide.slide_layout.name, "shapes": shapes})
     return slides

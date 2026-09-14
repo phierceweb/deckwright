@@ -297,3 +297,16 @@ def test_a_versus_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_
     ctx = dataclasses.replace(ctx, rect=dataclasses.replace(ctx.body_rect, width=2.0))
     with pytest.raises(LayoutError, match=r"'Segoe UI' has no width table"):
         get_component("versus")(ctx)
+
+
+def test_a_long_link_address_does_not_widen_the_side_it_sits_in(ctx_factory):
+    long = "https://example.com/documentation/" + "onboarding-" * 20 + "guide"
+    ctx = ctx_factory(
+        {
+            "versus": {
+                "left": {"value": "2 days", "label": f"read [the setup guide]({long}) first"},
+                "right": RIGHT,
+            }
+        }
+    )
+    get_component("versus")(ctx)

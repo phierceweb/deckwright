@@ -135,3 +135,39 @@ def test_the_report_names_the_spec_to_carry_the_edit_back_into(built):
 
 def test_an_unedited_deck_reports_that_there_is_nothing_to_carry_back(built):
     assert "nothing to carry back" in render_drift(read_back(built.deck))
+
+
+def _wrap_in_alternate_content(slide, name, *, fallback=True):
+    """Move ``name`` into an ``mc:AlternateContent``: a Choice holding a copy with other
+    words, and the original as the Fallback."""
+    import copy
+
+    from lxml import etree
+
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    shape = _named(slide, name)._element
+    alternate = etree.Element(f"{{{mc}}}AlternateContent", nsmap={"mc": mc})
+    shape.addprevious(alternate)
+    choice = etree.SubElement(alternate, f"{{{mc}}}Choice", Requires="a14")
+    bare = copy.deepcopy(shape)
+    for text in bare.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}t"):
+        text.text = "only a reader of a14 sees this"
+    choice.append(bare)
+    if fallback:
+        etree.SubElement(alternate, f"{{{mc}}}Fallback").append(shape)
+    else:
+        shape.getparent().remove(shape)
+
+
+def test_a_shape_inside_markup_compatibility_is_read_from_its_fallback(built):
+    """python-pptx skips `mc:AlternateContent`, which reported every equation or 3D model
+    `gone`. The Fallback is what a reader of no extension namespace takes."""
+    _edit(built.deck, lambda s: _wrap_in_alternate_content(s, "s1.p1.bullets#1"))
+    drift = read_back(built.deck)
+    assert drift.edited is True
+    assert drift.changes == ()
+
+
+def test_markup_compatibility_with_no_fallback_is_read_from_its_choice(built):
+    _edit(built.deck, lambda s: _wrap_in_alternate_content(s, "s1.p1.bullets#1", fallback=False))
+    assert read_back(built.deck).of("gone") == []

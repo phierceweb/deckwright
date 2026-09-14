@@ -828,3 +828,34 @@ def test_a_theme_file_that_is_not_text_is_a_theme_error(tmp_path):
     binary.write_bytes(b"\x8b\xff\x00\x91 not utf-8")
     with pytest.raises(ThemeError, match=r"noise\.yaml is not a text theme file"):
         load_theme(binary)
+
+
+def test_cjk_faces_come_from_the_templates_script_fonts(tmp_path, synthetic_template):
+    """The stock Office theme names a face per script in `a:font script=` entries and leaves
+    its `a:ea` slot empty, so those entries are the only place a CJK face is declared."""
+    theme = load_theme(_write(tmp_path, synthetic_template, BASE))
+    assert theme.ea["ja"] == "ＭＳ Ｐゴシック"
+    assert set(theme.ea) == {"ja", "ko", "zh-Hans", "zh-Hant"}
+
+
+def test_type_ea_names_a_cjk_face_over_the_templates(tmp_path, synthetic_template):
+    body = BASE.replace("      min_pt: 10.5", "      min_pt: 10.5\n      ea: {ja: Hiragino Sans}")
+    theme = load_theme(_write(tmp_path, synthetic_template, body))
+    assert theme.ea["ja"] == "Hiragino Sans"
+    assert theme.ea["ko"] != "Hiragino Sans"
+
+
+def test_type_ea_refuses_a_script_it_does_not_know(tmp_path, synthetic_template):
+    body = BASE.replace("      min_pt: 10.5", "      min_pt: 10.5\n      ea: {jp: Hiragino Sans}")
+    with pytest.raises(ThemeError, match="'type.ea'.*jp"):
+        load_theme(_write(tmp_path, synthetic_template, body))
+
+
+def test_type_ea_refuses_a_face_that_is_not_a_name(tmp_path, synthetic_template):
+    body = BASE.replace("      min_pt: 10.5", "      min_pt: 10.5\n      ea: {ko: '+mn-ea'}")
+    with pytest.raises(ThemeError, match="type.ea.ko is '\\+mn-ea'"):
+        load_theme(_write(tmp_path, synthetic_template, body))
+
+
+def test_a_theme_with_no_template_names_no_cjk_face():
+    assert load_theme("base").ea == {}

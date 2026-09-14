@@ -16,6 +16,7 @@ from pf_core.utils.io import atomic_write_bytes
 from deckwright.errors import LayoutError
 from deckwright.panels.cache import PanelRenderer, cached_png
 from deckwright.panels.model import Panel
+from deckwright.utils.a11y import describe
 
 logger = get_logger(__name__)
 
@@ -44,13 +45,16 @@ def place_panel(
     slice_by: str | None = None,
     max_height: float | None = None,
     render: PanelRenderer,
+    alt: str | None = None,
+    decorative: bool = False,
 ) -> dict[str, Any]:
     """Place ``panel`` at (``left``, ``top``) inches; return its pictures by region name.
 
     Pass exactly one of ``width`` / ``height`` to scale while preserving aspect ratio.
     ``slice_by`` cuts the one rendered PNG at region boundaries into a picture each, so
     the parts can animate independently. ``max_height`` raises rather than silently
-    placing a picture taller than that budget.
+    placing a picture taller than that budget. ``alt`` and ``decorative`` go on every
+    picture placed.
     """
     if (width is None) == (height is None):
         raise LayoutError("place_panel needs exactly one of width or height")
@@ -78,6 +82,7 @@ def place_panel(
         picture = ctx.slide.shapes.add_picture(
             str(png), Inches(left), Inches(top), width=Inches(inches_w)
         )
+        describe(picture, alt=alt, decorative=decorative)
         ctx.manifest.record(picture, rendered="image")
         logger.info("panel_placed", regions=1, sliced=False)
         return {"": picture}
@@ -107,6 +112,7 @@ def place_panel(
             Inches(top + region.top * scale * per_px),
             width=Inches(region.width * scale * per_px),
         )
+        describe(picture, alt=alt, decorative=decorative)
         ctx.manifest.record(picture, rendered="image")
         placed[region.name] = picture
     logger.info("panel_placed", regions=len(placed), sliced=True)

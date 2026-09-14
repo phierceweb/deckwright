@@ -31,10 +31,12 @@ from deckwright.spec._tree import (
     Unreadable,
     flat,
     leaves,
+    linked_text,
     members,
     shape_type,
 )
 from deckwright.spec.draft import render_markdown, render_spec  # noqa: F401 — re-exported
+from deckwright.utils.a11y import described, is_file_name
 from deckwright.utils.deck import open_presentation
 
 __all__ = ["MAX_GROUP_DEPTH", "SlideContent", "harvest", "render_markdown", "render_spec"]
@@ -68,6 +70,7 @@ class SlideContent:
     tables: tuple[_Table, ...] = ()
     notes: str | None = None
     dropped: _Lines = ()
+    alt: _Lines = ()  # a dropped figure's alternative text, as "picture 'Logo': the logo"
     background_rgb: str | None = None  # what the slide or a full-bleed shape paints it
 
 
@@ -84,14 +87,18 @@ def _nothing_was_placed(shape) -> bool:
 
 
 def _lines(shape) -> _Lines:
-    lines = (flat(p.text) for p in shape.text_frame.paragraphs)
+    lines = (flat(linked_text(p)) for p in shape.text_frame.paragraphs)
     if _BULLETS_NAME.match(shape.name):
         lines = (line.removeprefix(_BULLET_MARKER) for line in lines)
     return tuple(line for line in lines if line)
 
 
 def _grid(shape) -> _Table:
-    return tuple(tuple(flat(cell.text) for cell in row.cells) for row in shape.table.rows)
+    return tuple(tuple(_cell(cell) for cell in row.cells) for row in shape.table.rows)
+
+
+def _cell(cell) -> str:
+    return flat("\n".join(linked_text(p) for p in cell.text_frame.paragraphs))
 
 
 def _notes(slide) -> str | None:
@@ -108,6 +115,7 @@ def _slide_content(slide, index: int, canvas: tuple[int, int]) -> SlideContent:
     sizes: list[float] = []
     tables: list[_Table] = []
     dropped: list[str] = []
+    alt: list[str] = []
     background, covered = _backdrop(slide, canvas)
     shapes = list(leaves(slide.shapes))
     taken = _claimed(shapes)
@@ -122,11 +130,17 @@ def _slide_content(slide, index: int, canvas: tuple[int, int]) -> SlideContent:
             continue
         if not shape.has_text_frame:
             dropped.append(f"{_kind(shape)} {shape.name!r}")
+            text, _ = described(shape)
+            if text and not is_file_name(text):
+                alt.append(f"{_kind(shape)} {shape.name!r}: {' '.join(text.split())}")
             continue
         lines = _lines(shape)
         if not lines:
             if not _nothing_was_placed(shape):
                 dropped.append(f"{_kind(shape)} {shape.name!r}")
+                text, _ = described(shape)
+                if text and not is_file_name(text):
+                    alt.append(f"{_kind(shape)} {shape.name!r}: {' '.join(text.split())}")
             continue
         sizes += _run_sizes(shape)
         texts += _texts(shape, lines, taken)
@@ -142,6 +156,7 @@ def _slide_content(slide, index: int, canvas: tuple[int, int]) -> SlideContent:
         tables=tuple(tables),
         notes=_notes(slide),
         dropped=tuple(dropped),
+        alt=tuple(alt),
         background_rgb=background,
     )
 

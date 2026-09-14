@@ -188,7 +188,7 @@ for catching. Details:
 
 Twenty-two slide components, 29 native chart kinds, ~4,000 Material Symbols glyphs, imagery
 with fit/crop and automatic scrims, HTML panels rendered through headless Chrome, and
-animation — builds, click-to-reveal and slide transitions. 98 capability exercises cover
+animation — builds, click-to-reveal and slide transitions. 103 capability exercises cover
 them, and the test suite drives all of them against every brand template present, so "it
 works under your brand" is something the suite checks. `conform` reuses the same set to
 report on a template it has just met.

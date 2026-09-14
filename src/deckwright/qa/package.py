@@ -176,11 +176,20 @@ def _dangling_relationships(root, archive, part: str, names: set[str], index: in
     """An ``r:embed``/``r:id`` with no matching relationship, or one pointing nowhere."""
     rels_part = f"{part.rsplit('/', 1)[0]}/_rels/{part.rsplit('/', 1)[1]}.rels"
     targets: dict[str, str] = {}
+    external: set[str] = set()
     if rels_part in names:
         for rel in parse_xml(archive.read(rels_part)):
             targets[str(rel.get("Id"))] = str(rel.get("Target"))
+            if rel.get("TargetMode") == "External":
+                external.add(str(rel.get("Id")))
     findings = []
-    used = {str(v) for el in root.iter() for k, v in el.attrib.items() if k.startswith(f"{{{_R}}}")}
+    # An empty id on a click action is PowerPoint's own spelling for one that relates to nothing.
+    used = {
+        str(v)
+        for el in root.iter()
+        for k, v in el.attrib.items()
+        if k.startswith(f"{{{_R}}}") and (v or el.get("action") is None)
+    }
     for rid in sorted(used):
         if rid not in targets:
             findings.append(
@@ -193,7 +202,8 @@ def _dangling_relationships(root, archive, part: str, names: set[str], index: in
             )
             continue
         target = targets[rid]
-        if target.startswith(("http://", "https://", "mailto:", "../slide")):
+        # An external target is an address, not a part; `link` judges it.
+        if rid in external or target.startswith(("http://", "https://", "mailto:", "../slide")):
             continue
         resolved = _resolve(part, target)
         if resolved not in names:

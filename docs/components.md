@@ -13,6 +13,15 @@ Registering a component of your own is
 read, naming the ones it does — so a misspelled `colums:` fails the build rather than
 rendering one column and saying nothing.
 
+**A figure says what it shows.** `image`, `icon`, `document` and `chart` take `alt:`,
+the words a screen reader reads in the figure's place, written into the file as the
+shape's alternative text. A figure that carries no meaning takes `decorative: true`
+instead, which writes Office's decorative flag so a screen reader skips it; giving both is
+an error. `qa`'s [`alt-text`](qa.md#the-checks) check warns about a picture or chart that
+has neither. The build marks two kinds of picture decorative itself: a slide's
+`background:` image or theme art, and a `card`'s picture icon when the card has a heading
+or body and no `alt:` of its own.
+
 ---
 
 ## Table of Contents
@@ -422,6 +431,8 @@ against the slide's — a white card on a dark slide still reads.
 | `heading` | one of the three | — | Set at the `head` rung. |
 | `body` | one of the three | — | One or two lines at the `body` rung. |
 | `icon` | one of the three | — | A glyph name (`shield`) or an image file (`logo.png`), placed at the top of the plate two heading line-heights square. A bare name is a glyph; anything with a suffix or a path separator is a file, resolved like any deck image. |
+| `alt` | no | — | What a screen reader says in place of the icon. Beside a heading or body an unlabelled picture icon is marked decorative; a card that is only an icon needs this. |
+| `decorative` | no | `false` | `true` marks the icon for a screen reader to skip. Refused beside `alt`. |
 | `pair` | no | `surface` | Any declared palette pair. |
 | `radius` | no | `0.06` | Corner rounding as a fraction of the plate's short side. `0` squares it, `0.5` is a stadium. |
 | `shadow` | no | `false` | Drop the theme's declared shadow behind it. |
@@ -639,6 +650,8 @@ shape.
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `name` | yes | — | Which glyph: a lowercase slug like `chart-bar`. Any Material Symbols name from the shipped set (`rocket_launch`, or the hyphenated `rocket-launch`), or a curated alias (`deploy`, `team`, `growth`). |
+| `alt` | no | — | What a screen reader says in place of the glyph. See [a figure says what it shows](#components--the-field-table-and-a-worked-example-for-each). |
+| `decorative` | no | `false` | `true` marks the glyph for a screen reader to skip. Refused beside `alt`. |
 | `size` | no | `1.0` | The glyph's side as a fraction of the placement's short side — literally `min(width, height) * size`, so the drawn square is predictable from the rect the placement was given. `1.0` fills the short side; the long side keeps the leftover as margin. |
 | `ink` | no | — | A colour role, painted verbatim. Omit and the mark takes the first brand accent that reads where it lands, falling back to the surface's ink — and, where no colour reads across the box at all, to a plate of the slide's paper behind the glyph (see [icons.md](icons.md#the-colour-a-glyph-is-painted)). That plate is padded around the glyph and clipped to the placement, so it never reaches the placement beside it. |
 
@@ -680,6 +693,8 @@ actually covers: write `over:` and you get a measured scrim by default.
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `src` | **yes** | — | The image file. Resolved beside the deck spec, then beside the theme's template, then out of the template's own `ppt/media/`. A relative name may not climb out of those directories with `..`; an absolute path is taken as written. |
+| `alt` | no | — | What a screen reader says in place of the picture. Without it, or `decorative`, `qa` warns. |
+| `decorative` | no | `false` | `true` marks the picture for a screen reader to skip. Refused beside `alt`. |
 | `fit` | no | `cover` | `cover` fills the placement and crops the source; `contain` shrinks the picture to fit whole, letterboxing it. |
 | `crop` | no | — | Trim the source to this aspect first, centred — `16:9`, `4/3`, or a bare `1.78`. Applied *before* `fit`. |
 | `mask` | no | `none` | `none`, `circle`, or `rounded`. |
@@ -728,6 +743,8 @@ Renders the file itself into a macOS-style window card and places it as a pictur
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `source` | **yes** | — | Path to a markdown file. Resolved **beside the deck spec** first, then as given — absolute, or relative to the directory you run the command from. |
+| `alt` | no | — | What a screen reader says in place of the card. The card is a picture, so its words are not otherwise readable. |
+| `decorative` | no | `false` | `true` marks the card for a screen reader to skip. Refused beside `alt`. |
 | `side` | no | `full` | `left`, `right`, or `full`. `left`/`right` render it at half the body width. |
 | `max_width` | no | `1000` | Layout width in CSS pixels before the screenshot. Lower it to make the type read larger on the slide. |
 | `filename` | no | the file's own name | The text in the card's title bar. |

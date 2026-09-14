@@ -14,7 +14,7 @@ from statistics import median
 from pptx.enum.shapes import PP_PLACEHOLDER
 
 from deckwright.layouts.chrome import CHROME_ORDER
-from deckwright.spec._tree import Unreadable, flat
+from deckwright.spec._tree import Unreadable, flat, linked_text
 
 Lines = tuple[str, ...]
 
@@ -69,7 +69,7 @@ def _stacked(shape, taken: frozenset[str]) -> dict[str, str]:
     by position. Two cannot say which fields they are unless a sibling frame already
     holds the title: a kicker over a subtitle is set exactly like a kicker over a title.
     """
-    lines = [flat(para.text) for para in shape.text_frame.paragraphs if flat(para.text)]
+    lines = [flat(linked_text(p)) for p in shape.text_frame.paragraphs if flat(p.text)]
     if not lines:
         return {}
     if len(lines) == 1:

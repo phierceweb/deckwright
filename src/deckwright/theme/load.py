@@ -18,7 +18,12 @@ from deckwright.errors import ThemeError
 from deckwright.theme import blocks
 from deckwright.theme.blocks_motion import motion
 from deckwright.theme.chartstyle import chart_style
-from deckwright.theme.clrscheme import parse_color_scheme, parse_font_scheme, read_theme_xml
+from deckwright.theme.clrscheme import (
+    parse_color_scheme,
+    parse_font_scheme,
+    parse_script_fonts,
+    read_theme_xml,
+)
 from deckwright.theme.defaults import (
     CANVAS_H_DEFAULT,
     CANVAS_W_DEFAULT,
@@ -50,7 +55,10 @@ _TYPE_KEYS = (
     "ramp",
     "min_pt",
     "line_weight_pt",
+    "ea",
 )
+# What `type.ea` keys a face by: the script a CJK run is written in.
+EA_SCRIPTS = ("ja", "ko", "zh-Hans", "zh-Hant")
 
 _EMU_PER_INCH = 914400
 # OOXML's references to a template's own fontScheme entries. Valid in a run's typeface
@@ -127,10 +135,12 @@ def load_theme(
         )
         palette = build_palette(roles, pairs=pairs)
         major, minor = HEADING_FACE_DEFAULT, FACE_DEFAULT
+        scripts: dict[str, str] = {}
     else:
         layout = _compose_layout(prs, raw.get("compose_layout"))
         theme_xml = read_theme_xml(layout.slide_master)
         major, minor = _scheme_faces(theme_xml, theme=name, template=template)
+        scripts = parse_script_fonts(theme_xml)
         roles, pairs = blocks.bind(
             blocks.mapping(raw.get("bind"), "bind", where=where),
             parse_color_scheme(theme_xml),
@@ -146,6 +156,7 @@ def load_theme(
     face = _declared_face(type_cfg, "face", minor, theme=name)
     heading_face = _declared_face(type_cfg, "heading_face", major, theme=name)
     mono = _declared_face(type_cfg, "mono", MONO_DEFAULT, theme=name)
+    ea = {**scripts, **_ea_faces(type_cfg.get("ea"), where=where)}
     # An unmeasured face is estimated with CEILING, which errs wide.
     for role, candidate in (("face", face), ("heading_face", heading_face)):
         if not measured(candidate):
@@ -193,6 +204,7 @@ def load_theme(
         face=face,
         heading_face=heading_face,
         mono=mono,
+        ea=ea,
         ramp=ramp,
         min_pt=scale.pt(_rung(type_cfg, "min_pt", MIN_RUNG_DEFAULT, ref=reference_h, where=where)),
         grid=blocks.grid(
@@ -240,6 +252,21 @@ def _scheme_faces(theme_xml: bytes, *, theme: str, template: Path) -> tuple[str,
             using={"heading_face": HEADING_FACE_DEFAULT, "face": FACE_DEFAULT},
         )
         return HEADING_FACE_DEFAULT, FACE_DEFAULT
+
+
+def _ea_faces(value: Any, *, where: str) -> dict[str, str]:
+    """``type.ea``: a CJK face for each script it names."""
+    cfg = blocks.mapping(value, "type.ea", where=where)
+    blocks.reject_unknown(cfg, EA_SCRIPTS, where=f"{where} 'type.ea'")
+    faces = {}
+    for script, face in cfg.items():
+        if not isinstance(face, str) or not face.strip() or face.startswith(_SCHEME_REF):
+            raise ThemeError(
+                f"{where}: type.ea.{script} is {face!r}; it names the typeface {script} text "
+                f"is set in, like 'Hiragino Sans'"
+            )
+        faces[str(script)] = face.strip()
+    return faces
 
 
 def _declared_face(type_cfg: dict[str, Any], key: str, fallback: str, *, theme: str) -> str:

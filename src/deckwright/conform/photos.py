@@ -15,7 +15,11 @@ SLIDES["photo"] = {
     "place": [
         {
             "at": {"cols": "full", "rows": "top-two-thirds"},
-            "image": {"src": "{photo}", "over": [{"text": "Reversed out of the picture"}]},
+            "image": {
+                "src": "{photo}",
+                "alt": "The exercise photograph",
+                "over": [{"text": "Reversed out of the picture"}],
+            },
         }
     ],
 }
@@ -32,6 +36,7 @@ SLIDES["photo-gradient"] = {
             "anchor": "bottom",
             "image": {
                 "src": "{photo}",
+                "alt": "The exercise photograph",
                 "scrim": {"gradient": "bottom"},
                 "over": [{"text": "A caption in the dark end", "rung": "lead"}],
             },
@@ -43,7 +48,7 @@ SLIDES["photo-crop"] = {
     "place": [
         {
             "at": {"cols": "full", "rows": "top-third"},
-            "image": {"src": "{portrait}", "crop": "16:9"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait", "crop": "16:9"},
         }
     ],
 }
@@ -52,15 +57,15 @@ SLIDES["photo-circles"] = {
     "place": [
         {
             "at": {"cols": "left-third", "rows": "top-half"},
-            "image": {"src": "{portrait}", "mask": "circle"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait", "mask": "circle"},
         },
         {
             "at": {"cols": "mid-third", "rows": "top-half"},
-            "image": {"src": "{portrait}", "mask": "circle"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait", "mask": "circle"},
         },
         {
             "at": {"cols": "right-third", "rows": "top-half"},
-            "image": {"src": "{portrait}", "mask": "circle"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait", "mask": "circle"},
         },
     ],
 }
@@ -69,7 +74,7 @@ SLIDES["photo-rounded"] = {
     "place": [
         {
             "at": {"cols": "left-two-thirds", "rows": "top-half"},
-            "image": {"src": "{photo}", "mask": "rounded", "radius": 0.06},
+            "image": {"src": "{photo}", "decorative": True, "mask": "rounded", "radius": 0.06},
         }
     ],
 }
@@ -78,7 +83,7 @@ SLIDES["photo-contain"] = {
     "place": [
         {
             "at": {"cols": "full", "rows": {"from": 0, "to": 7}},
-            "image": {"src": "{portrait}", "fit": "contain"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait", "fit": "contain"},
         }
     ],
 }
@@ -89,7 +94,7 @@ SLIDES["photo-bleed"] = {
         {
             "at": {"box": {"x": "55%", "y": "0%", "w": "45%", "h": "100%"}},
             "bleed": True,
-            "image": {"src": "{portrait}"},
+            "image": {"src": "{portrait}", "alt": "The exercise portrait"},
         }
     ],
 }

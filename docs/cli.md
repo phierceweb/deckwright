@@ -232,6 +232,9 @@ keeps a shape name through an edit — see
 deck's side, since one shape can answer for several records: chrome's stacked lines
 are paragraphs in a single frame.
 
+A shape PowerPoint stores inside `mc:AlternateContent` — an equation, a 3D model — is
+read from its fallback, the branch a reader of none of the extension namespaces takes.
+
 **What it cannot see:** a colour, a font, a point size, or anything inside a table
 cell — cells were never shapes, so they carry no name. A deck whose bytes changed with
 no shape difference says so rather than reporting nothing.
@@ -257,7 +260,8 @@ A deck deckwright built names each shape for the spec node that drew it — `s1.
 `s3.hero.card#1` — so the name says what to edit and where it came from. On a deck
 from anywhere else the names are whatever PowerPoint assigned (`Rectangle 1`).
 Names are the stable handle; ids restart on every slide. See
-[what the manifest records](qa.md#what-the-manifest-records).
+[what the manifest records](qa.md#what-the-manifest-records). A shape stored inside
+`mc:AlternateContent` is listed once, from its fallback.
 
 Reach for it when a deck has been hand-edited after its build — see the "don't rebuild
 after a hand-edit" rule in [`docs/pptx-deck-building.md`](pptx-deck-building.md).
@@ -296,7 +300,8 @@ the file grew three slides — finds the spec you have been editing at the desti
 refuses rather than replacing it; `--force` is how you say the edits are expendable. The
 refusal comes before the deck is read, as does an `--as` that is neither `yaml` nor `md`.
 
-Kickers, titles, subtitles, body text, tables and speaker notes convert. A table of a
+Kickers, titles, subtitles, body text, tables and speaker notes convert, and a hyperlinked
+run comes back as `[words](address)`. A table of a
 single row — a label band, a one-row layout table — comes back as bullets, since it has no
 body rows to put under a header. A slide painted in one of the theme's own pair
 colours comes back with that `background:`. Size, position and every treatment do not
@@ -305,7 +310,9 @@ that held something and did not convert — a picture, a chart, a connector, a l
 SmartArt, an unlabelled band or arrow — is named in a `# not converted:` comment on the
 slide it came from. Repeats collapse into one line, so twenty-nine freeform icons read as
 `# not converted: 29 × freeform`; the count the command prints is one per shape, and so is
-larger than the number of comment lines.
+larger than the number of comment lines. A dropped shape carrying alternative text also
+gets `# alt text on picture 'Logo': <its alt text>`, or `*alt text on …*` in a transcript, so
+what it showed survives; alt text that is only a file name is left out.
 
 A group is walked rather than named: its children convert as though each sat on the slide,
 ordered among themselves and taking the group's place in the reading order. Eight levels
@@ -544,6 +551,8 @@ directory on startup. Defaults live beside the code that reads them, not here.
 | `DECKWRIGHT_PDFTOTEXT` | The `pdftotext` command QA's text extraction uses. |
 | `DECKWRIGHT_PDFTOTEXT_TIMEOUT_S` | Timeout for it. |
 | `DECKWRIGHT_MAX_BEAT_SHAPES` | Most shapes one beat of a staged build may reveal before `qa` warns (`beat-size`). Default 6. |
+| `DECKWRIGHT_PDFFONTS` | The Poppler `pdffonts` command QA reads a render's embedded fonts with — `font-substituted` and `cjk-unrendered`. Absent, `font-substituted` falls back to `fc-list`. |
+| `DECKWRIGHT_PDFFONTS_TIMEOUT_S` | Timeout for it. |
 | `DECKWRIGHT_FC_LIST` | The fontconfig `fc-list` command that answers which faces this machine has — `doctor`'s `fonts` row and QA's `font-substituted` check. Absent, both go silent rather than guess. |
 | `DECKWRIGHT_FC_LIST_TIMEOUT_S` | Timeout for it. |
 
@@ -552,7 +561,7 @@ pf-core supplies the rest — `LOG_LEVEL`, `LOG_FILE` and the API-key vars. See
 
 ## External tools
 
-Five commands shell out. A tool that is not installed fails with a message naming the
+Six commands shell out. A tool that is not installed fails with a message naming the
 binary it looked for, the command that installs it here, and the `DECKWRIGHT_*` knob that
 points at one installed elsewhere:
 
@@ -561,11 +570,13 @@ points at one installed elsewhere:
 | LibreOffice (`soffice`) | `render`; QA's render-based checks |
 | Poppler `pdftoppm` | `render`; QA's render-based checks |
 | Poppler `pdftotext` | QA's overflow check |
+| Poppler `pdffonts` | QA's `font-substituted` and `cjk-unrendered` checks |
 | Chrome / Chromium / Edge | `shot`; **building** any deck that uses a `document` component |
 | fontconfig `fc-list` | `doctor`'s `fonts` row; QA's `font-substituted` check |
 
-`fc-list` is the exception to the paragraph above: nothing fails without it, and the
-two checks that ask it go silent instead.
+`fc-list` and `pdffonts` are the exceptions to the paragraph above: nothing fails without
+either. Without `pdffonts`, `font-substituted` falls back to `fc-list`, and `cjk-unrendered`
+goes silent; without `fc-list` too, both do.
 
 `inspect` and `qa --no-render` need none of them. `build` needs only Chrome, and only
 when the spec uses `document:` — the one component rendered through HTML. `panel:`

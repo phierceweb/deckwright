@@ -495,3 +495,15 @@ def test_an_interactive_reveal_records_no_click_and_names_its_trigger(slide):
     assert entry["clicks"] == 0
     assert entry["trigger"] == "s1.q.card#1"
     assert entry["steps"] == [["s1.a.card#1"]]
+
+
+def test_recorded_text_is_the_words_a_link_shows_and_the_address_is_kept(slide):
+    recorder = ManifestRecorder(deck="d", theme="t")
+    recorder.begin_slide(1, background="page")
+    shape = _box(slide)
+    by_text = recorder.record(shape, text="Read [the guide](https://example.com/g) first")
+    by_lines = recorder.record(shape, lines=["[a](https://a.io) b", "c"])
+    literal = recorder.record(shape, text="[a](https://a.io)", literal=True)
+    assert (by_text.text, by_text.links) == ("Read the guide first", ["https://example.com/g"])
+    assert (by_lines.lines, by_lines.links) == (["a b", "c"], ["https://a.io"])
+    assert (literal.text, literal.links) == ("[a](https://a.io)", [])

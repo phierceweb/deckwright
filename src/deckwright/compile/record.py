@@ -132,6 +132,10 @@ class ShapeRecord:
     annotation: bool = False  # depicts geometry rather than occupying it
     fill: str | None = None  # a fill meant to stand off its ground; a recess records none
     ground: str | None = None  # what was painted under that fill
+    alt: str | None = None  # the alternative text written into the package
+    decorative: bool = False  # marked for a screen reader to skip
+    goto: str | None = None  # the slide id or relative jump a click on it takes
+    links: list[str] = field(default_factory=list)  # the addresses its text links to
 
 
 @dataclass

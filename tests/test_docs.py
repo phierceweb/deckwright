@@ -65,7 +65,7 @@ def test_the_quoted_registry_listings_match_the_registry():
     so only an exact-string check catches a list that is present but short."""
     shipped = ", ".join(sorted(_shipped()))
     text = _doc("errors.md")
-    for lead in ("known components: ", "reveals, "):
+    for lead in ("known components: ", "goto, "):
         quoted = re.findall(rf"{lead}([a-z, ]+)`", text)
         assert quoted, f"no errors.md row quotes the registry after {lead!r}"
         assert quoted == [shipped] * len(quoted), (

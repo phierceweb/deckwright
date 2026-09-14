@@ -14,6 +14,8 @@ CATEGORY_ROWS: list[dict[str, Any]] = [
     {"category": "Q4", "value": 91},
 ]
 _XY_ROWS = [{"x": 1, "y": 12}, {"x": 2, "y": 34}, {"x": 3, "y": 58}, {"x": 4, "y": 91}]
+# Every figure an exercise draws is labelled, so the corpus can hold a build to saying so.
+CHART_ALT = "The exercise data, rising across the categories"
 _BUBBLE_ROWS = [
     {"x": 1, "y": 12, "size": 4},
     {"x": 2, "y": 34, "size": 9},
@@ -37,7 +39,7 @@ def chart_slides() -> dict[str, dict[str, Any]]:
             "place": [
                 {
                     "at": {"cols": "full", "rows": {"from": 0, "to": 9}},
-                    "chart": {"kind": kind, "data": [dict(r) for r in rows]},
+                    "chart": {"kind": kind, "alt": CHART_ALT, "data": [dict(r) for r in rows]},
                 }
             ],
         }
@@ -53,6 +55,7 @@ def chart_legend_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": "full", "rows": "top-two-thirds"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "line-markers",
                         "unit": "%",
                         "data": [
@@ -70,6 +73,7 @@ def chart_legend_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": "full", "rows": "top-two-thirds"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "line-markers",
                         "unit": "%",
                         "labels": {"Platform average": False},
@@ -89,6 +93,7 @@ def chart_legend_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": "full", "rows": "top-two-thirds"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "column",
                         "data": [
                             {"category": "Atlas", "values": {"Direct": 6140, "Partner": 3070}},
@@ -110,6 +115,7 @@ def chart_intro_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": "full", "rows": "top-two-thirds"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "column",
                         "data": [
                             {"category": "Q1", "value": 12},
@@ -127,6 +133,7 @@ def chart_intro_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": {"from": 0, "to": 10}, "rows": "top-half"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "bar",
                         "unit": "%",
                         "data": [
@@ -145,6 +152,7 @@ def chart_intro_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": {"from": 0, "to": 10}, "rows": "top-half"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "bar-stacked-100",
                         "data": [
                             {
@@ -172,6 +180,7 @@ def chart_intro_slides() -> dict[str, dict[str, Any]]:
                 {
                     "at": {"cols": {"from": 0, "to": 10}, "rows": "top-half"},
                     "chart": {
+                        "alt": CHART_ALT,
                         "kind": "column",
                         "unit": "%",
                         "data": [

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from deckwright.utils._cjk import CJK_EM, is_cjk
 from deckwright.utils._metrics_faces import (
     AMATIC,
     BARLOW_SEMI_CONDENSED,
@@ -354,7 +355,7 @@ CEILING = {
 """Per-character max across every measured face (the two above plus Verdana and DejaVu)."""
 
 # A character no table carries is charged its class's widest measured glyph, so a
-# glyph outside the measured set — CJK above all — is never under-counted.
+# glyph outside the measured set is never under-counted. CJK is measured on its em square.
 _FALLBACK_SPACE = CEILING[" "]
 _FALLBACK_UPPER = max(v for k, v in CEILING.items() if k.isupper())
 _FALLBACK_LOWER = max(v for k, v in CEILING.items() if k.islower())
@@ -381,6 +382,8 @@ def advance_em(ch: str, table: dict[str, float]) -> float:
     got = table.get(ch)
     if got is not None:
         return got
+    if is_cjk(ch):
+        return CJK_EM
     if ch.isspace():
         return _FALLBACK_SPACE
     if ch.isupper():

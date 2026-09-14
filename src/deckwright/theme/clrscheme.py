@@ -128,6 +128,28 @@ def _channels(hex_colour: str, gain: float, bias: float) -> str:
     )
 
 
+# The fontScheme's own script codes for the CJK scripts a theme's `type.ea` names.
+_SCRIPT_CODES = {"Jpan": "ja", "Hang": "ko", "Hans": "zh-Hans", "Hant": "zh-Hant"}
+
+
+def parse_script_fonts(xml: bytes) -> dict[str, str]:
+    """The minor font's CJK typeface per script, keyed as ``type.ea`` keys them.
+
+    A template sets these in ``a:font script="Jpan"`` entries; its ``a:ea`` slot is almost
+    always empty, and names no script when it is not.
+    """
+    root = parse_xml(xml)
+    minor = root.find(f"{{{_A}}}themeElements/{{{_A}}}fontScheme/{{{_A}}}minorFont")
+    if minor is None:
+        return {}
+    out = {}
+    for font in minor.iterfind(f"{{{_A}}}font"):
+        key = _SCRIPT_CODES.get(str(font.get("script")))
+        if key and font.get("typeface"):
+            out[key] = str(font.get("typeface"))
+    return out
+
+
 def parse_font_scheme(xml: bytes) -> tuple[str, str]:
     """Return the ``(major, minor)`` latin typefaces from the theme's fontScheme."""
     root = parse_xml(xml)

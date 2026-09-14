@@ -47,7 +47,7 @@ def document_slides() -> dict[str, dict[str, Any]]:
             "place": [
                 {
                     "at": {"cols": "left-two-thirds", "rows": {"from": 0, "to": 9}},
-                    "document": {"source": "{notes}"},
+                    "document": {"source": "{notes}", "alt": "The exercise notes, rendered"},
                 }
             ],
         },

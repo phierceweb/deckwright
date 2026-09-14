@@ -12,7 +12,7 @@ from deckwright.panels.model import Panel
 from deckwright.panels.place import place_panel
 from deckwright.services.htmlcard import markdown_card
 
-from deckwright.components._shape import known_fields
+from deckwright.components._shape import figure_text, known_fields
 from deckwright.components._shared import coerce_int, require_default_align
 
 _MAX_WIDTH_DEFAULT = 1000
@@ -25,7 +25,7 @@ def _render(html: str, path: str, *, width: int, scale: int) -> str:
     return render_html_to_png(html, path, width=width, scale=scale)
 
 
-_FIELDS = ("source", "side", "max_width", "filename", "lines")
+_FIELDS = ("source", "alt", "decorative", "side", "max_width", "filename", "lines")
 
 
 def _excerpt(ctx: SlideCtx, text: str, spec: object, path: Path) -> str:
@@ -71,6 +71,7 @@ def document(ctx: SlideCtx) -> BodyResult:
     """Place ``source`` markdown as a rendered window card (see :func:`_resolve_source`)."""
     require_default_align(ctx)
     known_fields(ctx, _FIELDS)
+    alt, decorative = figure_text(ctx)
     source = ctx.body.get("source")
     if not source:
         raise LayoutError(f"slide {ctx.spec.index} (component 'document'): 'source' is required")
@@ -118,7 +119,14 @@ def document(ctx: SlideCtx) -> BodyResult:
     left = rect.left if side in ("full", "left") else rect.left + width + ctx.grid.gutter
 
     placed = place_panel(
-        ctx, Panel(html=html, width=max_width), left=left, top=rect.top, width=width, render=_render
+        ctx,
+        Panel(html=html, width=max_width),
+        left=left,
+        top=rect.top,
+        width=width,
+        render=_render,
+        alt=alt,
+        decorative=decorative,
     )
     picture = placed[""]
     height = picture.height / 914400

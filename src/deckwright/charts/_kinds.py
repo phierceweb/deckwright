@@ -49,7 +49,17 @@ _XY_CHART_TYPES = frozenset(
 )
 # A point is an (x, y, size) triple — no categories; size must be positive to render.
 _BUBBLE_CHART_TYPES = frozenset({"bubble", "bubble-3d"})
-_CHART_KEYS = ("kind", "data", "unit", "decimals", "labels", "y_min", "y_max")
+_CHART_KEYS = (
+    "kind",
+    "data",
+    "alt",
+    "decorative",
+    "unit",
+    "decimals",
+    "labels",
+    "y_min",
+    "y_max",
+)
 # A category build needs each category to be a mark of its own. A radar's categories are
 # vertices of one closed outline, so the build would emit clicks that move nothing.
 _BUILDABLE_BY_CATEGORY = frozenset(

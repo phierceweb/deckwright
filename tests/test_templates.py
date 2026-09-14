@@ -140,6 +140,22 @@ def test_powerpoint_would_open_what_the_build_saved(built):
     assert broken == [], f"{built.template}: {[f.detail for f in broken]}"
 
 
+def test_every_picture_and_chart_the_build_placed_says_what_it_shows(built):
+    """Every exercise labels its figures, and the build marks its own backdrops decorative, so
+    a finding is a picture site that dropped the label or left python-pptx's file name as one."""
+    from deckwright.qa.alt import check_alt_text
+
+    unlabelled = check_alt_text(built.deck)
+    assert unlabelled == [], f"{built.template}: {[f.detail for f in unlabelled]}"
+
+
+def test_every_link_and_jump_the_build_wrote_reaches_its_target(built):
+    from deckwright.qa.links import check_links
+
+    broken = check_links(built.deck)
+    assert broken == [], f"{built.template}: {[f.detail for f in broken]}"
+
+
 def test_no_text_is_unreadable_on_what_was_really_painted_behind_it(built):
     """Ink lost on its own background. Errors only: below the 3:1 floor is an error, and a
     warning is a brand accent a percent under AA rather than a defect."""

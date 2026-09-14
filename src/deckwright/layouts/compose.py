@@ -251,6 +251,7 @@ def _draw(
     ctx.align = placement.align
     ctx.anchor = placement.anchor
     ctx.manifest.bleeding = placement.bleed
+    ctx.manifest.goto = placement.goto
     ctx.manifest.origin = origin
     ctx.manifest.record_placement(origin, placement.component, rect)
     # Shape ids, not object ids: lxml frees element proxies and hands their addresses
@@ -268,13 +269,12 @@ def _draw(
         raise
     finally:
         ctx.manifest.bleeding = False
+        ctx.manifest.goto = None
         ctx.manifest.origin = None
+    drawn = [s for s in ctx.slide.shapes if s.shape_id not in before]
     # A bleed is a declared overrun; settling it would undo what the author asked for.
     if placement.anchor != "top" and not placement.bleed:
-        _settle(
-            ctx,
-            rect,
-            placement.anchor,
-            [s for s in ctx.slide.shapes if s.shape_id not in before],
-        )
+        _settle(ctx, rect, placement.anchor, drawn)
+    if placement.goto is not None:
+        ctx.gotos.extend((shape, placement.goto) for shape in drawn)
     return [g for g in result.groups if g]

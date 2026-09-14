@@ -71,6 +71,8 @@ class SlideCtx:
     backdrop: Backdrop | None = None  # the art painted over this slide's surface
     # In paint order: a later entry covers an earlier one, fill or picture alike.
     painted: list[tuple[Rect, str | Disc | Backdrop]] = field(default_factory=list)
+    # Each shape a `goto:` placement drew, with where it jumps; written once every slide exists.
+    gotos: list[tuple[Any, str]] = field(default_factory=list)
 
     @property
     def grid(self) -> Grid:

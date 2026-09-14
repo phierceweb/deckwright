@@ -473,3 +473,23 @@ def test_the_packaged_theme_resolved_by_name_is_not_reported_as_substituted(tmp_
 
     report = run_qa(built.deck, manifest=built.manifest, render=False, outdir=tmp_path)
     assert [f for f in report.findings if f.check == "theme-substituted"] == []
+
+
+@pytest.mark.parametrize("pdffonts_ran", [True, False])
+def test_the_render_font_check_speaks_and_fc_list_only_stands_in_when_it_cannot(
+    tmp_path, theme_file, monkeypatch, dirty_manifest_deck, pdffonts_ran
+):
+    from deckwright.qa.model import Finding
+
+    rendered = Finding(slide=0, check="font-substituted", severity=Severity.WARN, detail="pdf")
+    installed = Finding(slide=0, check="font-substituted", severity=Severity.WARN, detail="fc")
+    monkeypatch.setattr(runner, "render_to_images", lambda deck, out, **kw: [])
+    monkeypatch.setattr(runner, "extract_pages", lambda pdf, **kw: [])
+    monkeypatch.setattr(
+        runner, "check_rendered_faces", lambda *a: [rendered] if pdffonts_ran else None
+    )
+    monkeypatch.setattr(runner, "check_faces", lambda *a: [installed])
+    deck, manifest = dirty_manifest_deck
+    report = runner.run_qa(deck, manifest=manifest, render=True, outdir=tmp_path)
+    details = [f.detail for f in report.findings if f.check == "font-substituted"]
+    assert details == (["pdf"] if pdffonts_ran else ["fc"])

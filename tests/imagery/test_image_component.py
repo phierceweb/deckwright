@@ -108,3 +108,34 @@ def test_what_is_behind_a_scrimmed_picture_is_the_picture_under_its_scrim(ctx_fa
     _draw(ctx)
     ground = ctx.behind(ctx.body_rect, ink="FFFFFF")
     assert relative_luminance(ground) < 0.2
+
+
+def test_a_picture_carries_the_alt_it_was_given_and_never_its_file_name(ctx_factory, white_wide):
+    """python-pptx writes the file name as `descr`; a screen reader would read it aloud."""
+    described = _draw(ctx_factory({"image": {"src": str(white_wide), "alt": "A white sheet"}}))[0]
+    bare = _draw(ctx_factory({"image": {"src": str(white_wide)}}))[0]
+    assert described._element.nvPicPr.cNvPr.get("descr") == "A white sheet"
+    assert bare._element.nvPicPr.cNvPr.get("descr") is None
+
+
+def test_a_background_image_is_marked_decorative(theme, white_wide):
+    """The backdrop has no component to take `alt:`, and is what the slide sits on."""
+    from pptx import Presentation
+
+    from deckwright.compile.manifest import ManifestRecorder
+    from deckwright.imagery.paint import paint_backdrop
+    from deckwright.layouts.registry import SlideCtx
+    from deckwright.spec.model import Background, SlideSpec
+    from deckwright.utils.a11y import described
+
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    spec = SlideSpec(index=1, background=Background(kind="image", image=str(white_wide)))
+    manifest = ManifestRecorder(deck="d", theme="t")
+    manifest.begin_slide(1, background=spec.background.pair)
+    ctx = SlideCtx(
+        slide=prs.slides.add_slide(prs.slide_layouts[6]), theme=theme, spec=spec, manifest=manifest
+    )
+    paint_backdrop(ctx)
+    picture = next(s for s in ctx.slide.shapes if s.shape_type == 13)
+    assert described(picture) == (None, True)

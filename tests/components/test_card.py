@@ -231,7 +231,8 @@ def test_no_shadow_is_drawn_unless_the_card_asks(ctx_factory):
 def test_an_unknown_field_lists_the_ones_the_card_reads(ctx_factory):
     ctx = ctx_factory({"card": {"title": "Discovery"}})
     with pytest.raises(
-        LayoutError, match="known fields: pair, heading, body, icon, radius, shadow"
+        LayoutError,
+        match="known fields: pair, heading, body, icon, alt, decorative, radius, shadow",
     ):
         get_component("card")(ctx)
 

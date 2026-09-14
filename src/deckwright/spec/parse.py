@@ -5,6 +5,7 @@ Validation is strict: an unknown or malformed field is an error, never a silent 
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,9 +15,10 @@ from pf_core.log import get_logger
 
 from deckwright.errors import LayoutError, SpecError
 from deckwright.spec._scalars import SpecLoader
-from deckwright.spec._place import place
+from deckwright.spec._place import _named, place
 from deckwright.utils.keys import unknown_field
-from deckwright.spec.model import Background, DeckSpec, SlideSpec
+from deckwright.utils.links import LINK, web_address_problem
+from deckwright.spec.model import GOTO_JUMPS, Background, DeckSpec, SlideSpec
 
 logger = get_logger(__name__)
 
@@ -31,8 +33,11 @@ _SLIDE_FIELDS = (
     "background",
     "place",
     "chrome",
+    "id",
+    "lang",
 )
-_DECK_CONFIG_FIELDS = ("theme", "title", "sections", "extends", "out")
+_DECK_CONFIG_FIELDS = ("theme", "title", "sections", "extends", "out", "lang")
+_LANG_TAG = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*")
 _BACKGROUND_FIELDS = ("image", "fit", "crop", "scrim")
 _GONE = {
     "layout": (
@@ -91,6 +96,8 @@ def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
             f"got {type(raw_sections).__name__}"
         )
     sections = tuple(str(s) for s in raw_sections)
+    for section in sections:
+        _refuse_bad_links(section, where=f"{source.name}: deck config: sections")
 
     base = source.parent
     extends = (base / str(config["extends"])) if config.get("extends") else None
@@ -102,6 +109,7 @@ def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
         for i, doc in enumerate(slide_docs, start=1)
     )
     _check_section_runs(slides, sections=sections, source=source)
+    _check_gotos(slides, source=source)
     deck = DeckSpec(
         theme=str(config["theme"]),
         slides=slides,
@@ -110,6 +118,7 @@ def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
         sections=sections,
         out=(base / str(config["out"])) if config.get("out") else None,
         extends=extends,
+        lang=_lang(config.get("lang"), where=f"{source.name}: deck config"),
     )
     logger.info("spec_parsed", source=str(source), slides=len(slides), theme=deck.theme)
     return deck
@@ -173,6 +182,62 @@ def _check_section_runs(
         last = slide.index
 
 
+def _lang(value: Any, *, where: str) -> str | None:
+    """A BCP 47 language tag such as ``ja``, ``zh-Hant`` or ``ko-KR``."""
+    if value is None:
+        return None
+    text = str(value)
+    if not _LANG_TAG.fullmatch(text):
+        raise SpecError(
+            f"{where}: 'lang' is a language tag like ja, ko, zh-Hans or zh-TW, got {value!r}"
+        )
+    return text
+
+
+def _check_gotos(slides: tuple[SlideSpec, ...], *, source: Path) -> None:
+    """Refuse a ``goto:`` that has nowhere to go, and a slide id two slides share.
+
+    Raises:
+        SpecError: a duplicate slide id; a goto naming no slide, or the slide it is on; a
+            goto on a placement another placement's ``reveals:`` makes a trigger.
+    """
+    ids: dict[str, int] = {}
+    for slide in slides:
+        if slide.id is None:
+            continue
+        if slide.id in ids:
+            raise SpecError(
+                f"{source.name}: slide {slide.index}: duplicate id {slide.id!r} — slide "
+                f"{ids[slide.id]} already has it, so a goto could not say which it means"
+            )
+        ids[slide.id] = slide.index
+    for slide in slides:
+        triggers = {p.reveals for p in slide.place if p.reveals}
+        for n, placement in enumerate(slide.place, start=1):
+            target = placement.goto
+            if target is None:
+                continue
+            where = placement.where or f"{source.name}: slide {slide.index}: placement {n}"
+            if placement.id is not None and placement.id in triggers:
+                raise SpecError(
+                    f"{where}: 'goto: {target}' is on {placement.id!r}, which another "
+                    f"placement's 'reveals:' makes a trigger — one click cannot both reveal "
+                    f"and leave the slide. Put the goto on a placement of its own"
+                )
+            if target in GOTO_JUMPS:
+                continue
+            if target not in ids:
+                named = ", ".join(sorted(ids)) or "none — give the target slide an 'id:'"
+                raise SpecError(
+                    f"{where}: 'goto: {target}' names no slide. Slide ids in this deck: "
+                    f"{named}; or jump with {', '.join(GOTO_JUMPS)}"
+                )
+            if ids[target] == slide.index:
+                raise SpecError(
+                    f"{where}: 'goto: {target}' is the slide it is on, so the click goes nowhere"
+                )
+
+
 def _slide(doc: Any, *, index: int, sections: tuple[str, ...], source: Path) -> SlideSpec:
     where = f"{source.name}: slide {index}"
     if not isinstance(doc, dict):
@@ -190,8 +255,16 @@ def _slide(doc: Any, *, index: int, sections: tuple[str, ...], source: Path) -> 
             f"{where}: section {section!r} is not in the deck's sections ({', '.join(sections)})"
         )
 
-    return SlideSpec(
+    slide_id = _named(doc.get("id"), "'id'", where=where)
+    if slide_id in GOTO_JUMPS:
+        raise SpecError(
+            f"{where}: a slide cannot be called {slide_id!r} — 'goto: {slide_id}' already "
+            f"jumps relative to the slide clicked; choose another id"
+        )
+    spec = SlideSpec(
         index=index,
+        id=slide_id,
+        lang=_lang(doc.get("lang"), where=where),
         background=_background(doc.get("background"), where=where),
         title=_text(doc.get("title")),
         kicker=_text(doc.get("kicker")),
@@ -203,6 +276,59 @@ def _slide(doc: Any, *, index: int, sections: tuple[str, ...], source: Path) -> 
         place=place(doc.get("place"), where=where),
         chrome=_chrome(doc, where=where),
     )
+    _check_links(spec, where=where)
+    return spec
+
+
+# A listing shows markup as written; a chart's labels are not runs a link can sit on.
+_LITERAL_COMPONENTS = frozenset({"code"})
+_UNLINKABLE_COMPONENTS = frozenset({"chart"})
+
+
+def _check_links(slide: SlideSpec, *, where: str) -> None:
+    """Refuse a ``[words](address)`` whose address a click could not open.
+
+    Raises:
+        SpecError: a link to anything but an http, https or mailto address, or a link in a
+            component whose text cannot carry one.
+    """
+    for field in ("kicker", "title", "subtitle"):
+        _refuse_bad_links(getattr(slide, field), where=f"{where}: {field}")
+    for n, placement in enumerate(slide.place, start=1):
+        spot = f"{where}: placement {n} ({placement.component})"
+        if placement.component in _LITERAL_COMPONENTS:
+            continue
+        for text in _strings(placement.body):
+            found = LINK.search(text)
+            if found is not None and placement.component in _UNLINKABLE_COMPONENTS:
+                raise SpecError(
+                    f"{spot}: {found.group(0)!r} — a chart's labels are drawn by the chart, "
+                    f"not set as runs, so a link has nowhere to go. Put it in the slide's "
+                    f"own text beside the chart"
+                )
+            _refuse_bad_links(text, where=spot)
+
+
+def _refuse_bad_links(text: str | None, *, where: str) -> None:
+    for match in LINK.finditer(text or ""):
+        problem = web_address_problem(match["address"])
+        if problem is not None:
+            raise SpecError(
+                f"{where}: the link {match.group(0)!r} — {problem}. Put a backslash before "
+                f"the bracket to show it as text"
+            )
+
+
+def _strings(value: Any):
+    """Every string inside a component body, however deep."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
 
 
 def _chrome(doc: dict, *, where: str) -> dict[str, Any]:

@@ -67,6 +67,70 @@ def installed_families(
     return frozenset(families)
 
 
+_CJK_LANGS = ("ja", "ko", "zh-cn", "zh-tw")
+
+
+def cjk_postscript_names(
+    *, fc_list: str | None = None, timeout: int | None = None
+) -> frozenset[str] | None:
+    """The PostScript names of every installed font covering Chinese, Japanese or Korean.
+
+    None when fontconfig cannot be asked.
+    """
+    names: set[str] = set()
+    for lang in _CJK_LANGS:
+        found = _fc_list([f":lang={lang}", "postscriptname"], fc_list=fc_list, timeout=timeout)
+        if found is None:
+            return None
+        names.update(
+            line.partition("postscriptname=")[2].strip()
+            for line in found.splitlines()
+            if "postscriptname=" in line
+        )
+    return frozenset(n for n in names if n)
+
+
+def _fc_list(args: list[str], *, fc_list: str | None, timeout: int | None) -> str | None:
+    binary = env_str(fc_list, "DECKWRIGHT_FC_LIST", default=_FC_LIST_DEFAULT)
+    timeout_s: int = resolve_int(
+        timeout, "DECKWRIGHT_FC_LIST_TIMEOUT_S", default=_TIMEOUT_S_DEFAULT
+    )
+    try:
+        return subprocess.run(
+            [binary, *args],
+            capture_output=True,
+            check=True,
+            timeout=timeout_s,
+            encoding="utf-8",
+            errors="replace",
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def postscript_names(
+    *, fc_list: str | None = None, timeout: int | None = None
+) -> dict[str, frozenset[str]] | None:
+    """Each installed family, casefolded, with the PostScript names a PDF embeds it under.
+
+    A PDF names ``游ゴシック`` as ``YuGothic-Medium``, so a family name alone cannot be found
+    in one. None when fontconfig cannot be asked.
+    """
+    found = _fc_list([":", "family", "postscriptname"], fc_list=fc_list, timeout=timeout)
+    if found is None:
+        return None
+    names: dict[str, set[str]] = {}
+    for line in found.splitlines():
+        families, _, rest = line.partition(":")
+        postscript = rest.partition("postscriptname=")[2].strip()
+        if not postscript:
+            continue
+        for family in families.split(","):
+            if family.strip():
+                names.setdefault(family.strip().casefold(), set()).add(postscript)
+    return {family: frozenset(ps) for family, ps in names.items()}
+
+
 def missing_faces(theme: Theme, installed: frozenset[str] | None) -> tuple[str, ...]:
     """The faces ``theme`` names that ``installed`` lacks. Empty when ``installed`` is None."""
     if installed is None:
