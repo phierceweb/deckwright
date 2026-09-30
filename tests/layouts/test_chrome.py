@@ -178,6 +178,14 @@ def test_an_unknown_chrome_key_lists_the_ones_that_exist():
         chrome_field({"colour": "red"}, name="title")
 
 
+def test_an_unknown_key_in_a_chrome_at_is_named_with_the_field():
+    with pytest.raises(
+        LayoutError,
+        match=r"^chrome field 'title': unknown 'at' key 'col'; known keys: cols, rows, box$",
+    ):
+        chrome_field({"at": {"col": "full"}}, name="title")
+
+
 def test_a_chrome_anchor_outside_the_vocabulary_is_rejected():
     with pytest.raises(LayoutError, match="anchor must be one of top, middle, bottom"):
         chrome_field({"anchor": "baseline"}, name="title")

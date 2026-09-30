@@ -8,10 +8,19 @@ python-pptx models neither. Nothing else can check that output: LibreOffice
 converts schema-invalid timing to PDF without complaint, and a `deckwright qa`
 render sees only the final state of a slide.
 
-Nine files, the closure of `pml.xsd`'s `schemaLocation` imports. They are not
-packaged into the wheel, but they do ship in the sdist, which carries a
+Fourteen files: the closure of `pml.xsd`'s `schemaLocation` imports, and of
+`shared-math.xsd`'s, which validates the Office Math an `equation:` writes. They
+are not packaged into the wheel, but they do ship in the sdist, which carries a
 runnable suite — `tests/test_ooxml_schema.py` fails rather than skips when the
 schema is absent, so the notice below travels with them.
+
+`wml.xsd` also names `../mce/mc.xsd`, for the one attribute `mc:Ignorable`. That
+file is not vendored: the test supplies a declaration of that attribute itself.
+
+`xml.xsd` is the W3C schema for the `xml:` namespace, as distributed with
+ISO/IEC 29500-4. Copyright © World Wide Web Consortium; see
+https://www.w3.org/copyright/document-license-2023/ and
+http://www.w3.org/XML/1998/namespace.html.
 
 Published by Ecma International as part of ECMA-376 (also ISO/IEC 29500),
 available at no charge from

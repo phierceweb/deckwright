@@ -22,7 +22,8 @@ from deckwright.compile.record import Provenance
 from deckwright.compile.manifest import ManifestRecorder
 from deckwright.compile.prune import prune_unused_layouts
 from deckwright.paths import scratch
-from deckwright.errors import SpecError
+from deckwright.utils.provenance import BUILD_PREFIX
+from deckwright.errors import SpecError, ThemeError
 from deckwright.layouts.compose import render_slide
 from deckwright.layouts.registry import SlideCtx
 from deckwright.layouts.resolve import pick_compose_layout
@@ -48,6 +49,7 @@ def build_deck(
     spec_path: str | Path,
     *,
     theme_path: str | Path | None = None,
+    theme: Theme | None = None,
     out: str | Path | None = None,
     keep_layouts: bool = False,
 ) -> BuildResult:
@@ -58,6 +60,9 @@ def build_deck(
         theme_path: Theme file. Defaults to the spec's ``theme:`` name resolved
             through :func:`deckwright.theme.load.resolve_theme` — the theme directory
             (``DECKWRIGHT_THEME_DIR``), then the packaged built-ins.
+        theme: The theme ``theme_path`` loads, already loaded — for a caller building
+            many decks on one theme. Used as given; ``theme_path`` is still required,
+            because the manifest records the file ``qa`` reloads.
         out: Output ``.pptx``. Overrides the spec's ``out:``.
         keep_layouts: Keep the template's unused slide layouts and masters, and the
             media only they reach. Off by default — they are pruned.
@@ -67,12 +72,19 @@ def build_deck(
 
     Raises:
         SpecError: the spec is malformed, or no output path was given.
-        ThemeError: the theme or its template is missing or malformed.
+        ThemeError: the theme or its template is missing or malformed, or ``theme``
+            was given without ``theme_path``.
         LayoutError: a placement names a component that cannot draw what it was given.
     """
+    if theme is not None and theme_path is None:
+        raise ThemeError(
+            "build_deck was given a loaded theme but no theme_path — the manifest records "
+            "the theme file qa reloads, so pass the path the theme was loaded from"
+        )
     spec = parse_deck(spec_path)
     # load_theme first: it owns the message for a name or path that resolves to nothing.
-    theme = load_theme(theme_path or spec.theme)
+    if theme is None:
+        theme = load_theme(theme_path or spec.theme)
     theme_file = (Path(theme_path) if theme_path else resolve_theme(spec.theme)).resolve()
 
     dest = Path(out) if out else spec.out
@@ -133,15 +145,18 @@ def build_deck(
         prune_unused_layouts(prs)
     register_notes_master(prs)
 
+    spec_hash = _digest(spec.source.read_bytes())
+    build_id = _digest(spec_hash.encode(), theme.hash.encode(), _version().encode())
+    # A copy saved under another name finds its manifest by this; see readback._manifest_for.
+    prs.core_properties.identifier = f"{BUILD_PREFIX}{build_id}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     prs.save(buf)
     payload = buf.getvalue()
-    spec_hash = _digest(spec.source.read_bytes())
     _keep_source(spec.source, dest)
     atomic_write_bytes(dest, payload)
     manifest.provenance = Provenance(
-        build_id=_digest(spec_hash.encode(), theme.hash.encode(), _version().encode()),
+        build_id=build_id,
         deckwright=_version(),
         spec=str(spec.source),
         spec_hash=spec_hash,

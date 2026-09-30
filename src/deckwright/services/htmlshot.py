@@ -9,10 +9,8 @@ import base64
 import hashlib
 import os
 import re
-import shutil
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 
 from PIL import Image, ImageChops
@@ -20,12 +18,17 @@ from pptx.util import Inches
 
 from pf_core.exceptions import ConfigurationError
 from pf_core.log import get_logger
-from pf_core.utils.env import resolve_bool, resolve_int
+from pf_core.utils.env import resolve_int
 
 from deckwright.errors import MissingToolError, RenderError
+from deckwright.services.chrome import (
+    await_screenshot,
+    chrome_cmd,
+    resolve_chrome,
+    terminate,
+)
 from deckwright.services.render import install_hint
 from deckwright.utils.a11y import describe
-from deckwright.utils.env import env_str
 
 logger = get_logger(__name__)
 
@@ -33,12 +36,6 @@ _SCALE_DEFAULT = 2
 _CANVAS_H_DEFAULT = 4000  # tall render canvas; the card is autocropped out of the whitespace
 _CANVAS_H_ENV_VAR = "DECKWRIGHT_SHOT_CANVAS_H"
 _TIMEOUT_S_DEFAULT = 60
-_NO_SANDBOX_ENV_VAR = "DECKWRIGHT_CHROME_NO_SANDBOX"
-# Chrome refuses to sandbox itself as root, and some hardened kernels deny the
-# unprivileged user namespace it needs. Both say so on stderr.
-_SANDBOX_TELL = re.compile(
-    r"no usable sandbox|--no-sandbox|sandbox.{0,40}(?:fail|denied)", re.I | re.S
-)
 # How far a channel must sit from white to count as ink.
 _INK_THRESHOLD = 8
 
@@ -76,111 +73,29 @@ def _with_csp(html: str) -> str:
     return CSP_META + html
 
 
-# Probed in order when DECKWRIGHT_CHROME is unset. Bare names go through PATH; the
-# rest are the macOS app-bundle binaries.
-_CHROME_CANDIDATES = (
-    "google-chrome",
-    "google-chrome-stable",
-    "chromium",
-    "chromium-browser",
-    "chrome",
-    "chrome-headless-shell",
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-)
-
-
-def _resolve_chrome(chrome: str | None) -> str:
-    """Return an explicit/env browser path, else the first candidate that exists."""
-    resolved = env_str(chrome, "DECKWRIGHT_CHROME", default="").strip()
-    if resolved:
-        return resolved
-    for cand in _CHROME_CANDIDATES:
-        if "/" in cand:
-            if os.path.exists(cand):
-                return cand
-        elif shutil.which(cand):
-            return cand
-    raise MissingToolError(
-        f"no Chrome/Chromium binary found — needed by shot and any 'document:' slide; "
-        f"{install_hint('chrome')}, or set DECKWRIGHT_CHROME to the path of an installed one"
-    )
-
-
-def _no_sandbox() -> bool:
-    """Whether to hand Chrome ``--no-sandbox``.
-
-    A card's HTML can carry script, so the sandbox is a real boundary and stays on by
-    default. Running as root it cannot work at all, and there the flag is the only way
-    the browser starts.
-    """
-    if resolve_bool(None, _NO_SANDBOX_ENV_VAR, default=False):
-        return True
-    geteuid = getattr(os, "geteuid", None)
-    return geteuid is not None and geteuid() == 0
-
-
-def _sandbox_advice(stderr_tail: str) -> str:
-    """A pointer to the escape hatch, when the browser died for want of a sandbox."""
-    if not _SANDBOX_TELL.search(stderr_tail):
-        return ""
-    return (
-        f" — the browser could not start its sandbox. Set {_NO_SANDBOX_ENV_VAR}=1 to "
-        f"run it unsandboxed, which is safe only where the rendered HTML is as "
-        f"trusted as a script you would run"
-    )
-
-
-def _chrome_cmd(
-    chrome: str,
-    file_url: str,
-    out_path: str,
-    *,
-    width: int,
-    height: int,
-    scale: int,
-    user_data_dir: str,
-) -> list[str]:
-    """Build the headless-Chrome screenshot argv. ``--dump-dom`` writes the laid-out
-    DOM (carrying the height probe) to stdout in the same run as the screenshot."""
-    return [
-        chrome,
-        "--headless=new",
-        "--disable-gpu",
-        *(["--no-sandbox"] if _no_sandbox() else []),
-        "--no-first-run",
-        "--no-default-browser-check",
-        # Stop full Chrome from waking GoogleUpdater / crashpad / GCM on launch.
-        "--disable-background-networking",
-        "--disable-component-update",
-        "--disable-breakpad",
-        "--disable-sync",
-        "--no-pings",
-        "--hide-scrollbars",
-        "--disable-extensions",
-        "--disable-dev-shm-usage",
-        f"--user-data-dir={user_data_dir}",
-        f"--force-device-scale-factor={scale}",
-        f"--window-size={width},{height}",
-        f"--screenshot={out_path}",
-        "--dump-dom",
-        file_url,
-    ]
-
-
 def _probe_height(dom: str) -> int | None:
     """Document height (CSS px) the probe published, or None if it never ran."""
     match = _HEIGHT_RE.search(dom)
     return int(match.group(1)) if match else None
 
 
+def _ink_mask(img: Image.Image, threshold: int) -> Image.Image:
+    """Where the image has content: its alpha where any of it is clear, else what differs
+    from white."""
+    if "A" in img.getbands():
+        alpha = img.getchannel("A")
+        lowest = alpha.getextrema()[0]
+        if isinstance(lowest, (int, float)) and lowest < 255:
+            return alpha.point(lambda a: 255 if a > 0 else 0)
+    rgb = img.convert("RGB")
+    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, (255, 255, 255)))
+    return diff.convert("L").point(lambda p: 255 if p > threshold else 0)
+
+
 def _edge_rows_inked(png: Path) -> tuple[bool, bool]:
     """Whether the render's first and last pixel rows carry ink."""
     with Image.open(png) as img:
-        rgb = img.convert("RGB")
-        diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, (255, 255, 255)))
-        mask = diff.convert("L").point(lambda p: 255 if p > _INK_THRESHOLD else 0)
+        mask = _ink_mask(img, _INK_THRESHOLD)
     width, height = mask.size
     return (
         bool(mask.crop((0, 0, width, 1)).getbbox()),
@@ -221,11 +136,8 @@ def _check_not_clipped(dom: str, *, canvas_height: int, out_path: Path) -> None:
 
 
 def _autocrop(img: Image.Image, *, threshold: int = _INK_THRESHOLD, pad: int = 0) -> Image.Image:
-    """Crop ``img`` to the bounding box of everything that differs from white."""
-    rgb = img.convert("RGB")
-    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, (255, 255, 255)))
-    mask = diff.convert("L").point(lambda p: 255 if p > threshold else 0)
-    bbox = mask.getbbox()
+    """Crop ``img`` to the bounding box of its content; see :func:`_ink_mask`."""
+    bbox = _ink_mask(img, threshold).getbbox()
     if not bbox:
         return img
     if pad:
@@ -239,61 +151,6 @@ def _autocrop(img: Image.Image, *, threshold: int = _INK_THRESHOLD, pad: int = 0
     return img.crop(bbox)
 
 
-def _tail(path: Path, n: int = 1500) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")[-n:]
-    except OSError:
-        return ""
-
-
-def _terminate(proc: subprocess.Popen) -> None:
-    """SIGTERM the browser (SIGKILL if it ignores us); reparented daemons are left alone."""
-    if proc.poll() is not None:
-        return
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
-def _await_screenshot(
-    proc: subprocess.Popen,
-    out_path: Path,
-    err_log: Path,
-    timeout_s: int,
-    *,
-    poll: float = 0.3,
-    stable_for: float = 0.6,
-) -> None:
-    """Block until ``out_path`` appears and its size settles (write finished), then return."""
-    deadline = time.monotonic() + timeout_s
-    stable_since = None
-    last_size = -1
-    while time.monotonic() < deadline:
-        size = out_path.stat().st_size if out_path.exists() else -1
-        if size > 0 and size == last_size:
-            if stable_since is None:
-                stable_since = time.monotonic()
-            if time.monotonic() - stable_since >= stable_for:
-                return
-        else:
-            stable_since = None
-        last_size = size
-        if proc.poll() is not None and size <= 0:
-            tail = _tail(err_log)
-            raise RenderError(
-                "Chrome exited without a screenshot" + _sandbox_advice(tail),
-                context={"stderr_tail": tail},
-            )
-        time.sleep(poll)
-    tail = _tail(err_log)
-    raise RenderError(
-        "headless Chrome timed out" + _sandbox_advice(tail),
-        context={"timeout_s": timeout_s, "stderr_tail": tail},
-    )
-
-
 def render_html_to_png(
     html: str,
     out_path,
@@ -305,6 +162,7 @@ def render_html_to_png(
     autocrop: bool = True,
     pad: int = 20,
     timeout: int | None = None,
+    transparent: bool = False,
 ) -> str:
     """Render an HTML document to a PNG via headless Chrome, cropped to content.
 
@@ -318,6 +176,8 @@ def render_html_to_png(
             whitespace. Falls back to ``$DECKWRIGHT_SHOT_CANVAS_H`` then 4000.
         autocrop: Trim the surrounding whitespace to the card's bounding box.
         pad: Whitespace margin (px) kept around the crop.
+        transparent: Leave the page clear where the document paints nothing, so a card's
+            corners and shadow blend on any slide. The crop then follows the alpha.
         timeout: Seconds before the browser is killed. Falls back to
             ``$DECKWRIGHT_SHOT_TIMEOUT_S`` then 60.
 
@@ -341,14 +201,14 @@ def render_html_to_png(
         raise ConfigurationError(
             f"{_CANVAS_H_ENV_VAR} must be a positive number of CSS px, got {canvas_h}"
         )
-    chrome_bin = _resolve_chrome(chrome)
+    chrome_bin = resolve_chrome(chrome)
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         src = Path(td) / "card.html"
         src.write_text(_with_csp(html) + _HEIGHT_PROBE, encoding="utf-8")
         err_log = Path(td) / "chrome.stderr"
         dom_log = Path(td) / "chrome.dom"
-        cmd = _chrome_cmd(
+        cmd = chrome_cmd(
             chrome_bin,
             src.as_uri(),
             str(out_path),
@@ -356,6 +216,7 @@ def render_html_to_png(
             height=canvas_h,
             scale=scale,
             user_data_dir=str(Path(td) / "profile"),
+            transparent=transparent,
         )
         logger.info(
             "html_shot_start", chrome=chrome_bin, width=width, scale=scale, out=str(out_path)
@@ -373,9 +234,9 @@ def render_html_to_png(
                     f"an installed one"
                 ) from e
             try:
-                _await_screenshot(proc, out_path, err_log, timeout_s)
+                await_screenshot(proc, out_path, err_log, timeout_s)
             finally:
-                _terminate(proc)
+                terminate(proc)
         dom = dom_log.read_text(encoding="utf-8", errors="replace")
 
     if not out_path.exists() or out_path.stat().st_size == 0:

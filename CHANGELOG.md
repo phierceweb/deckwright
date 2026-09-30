@@ -3,6 +3,131 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.5.0 — 2026-09-30
+
+- On pf-core 0.24.
+
+### Spec
+
+- An unquoted `yes`, `no`, `on` or `off` in copy — a table cell, bullet, chart category or
+  title — prints as written. Fields that take `true` or `false` read those words by the
+  truth they spell. **`banding`, `wrap`, a cell's `emphasis` and a `versus` side's
+  `highlight` refuse a value that is not a boolean**, where a quoted `'no'` turned them on.
+- Optional copy written `no` or `off` — a bullets heading, a stat label or caption, a
+  callout or flow body, a `versus` note, an image's `over` text — is set instead of dropped.
+- A key YAML reads as a date, a boolean or a number, written beside a misspelt key, is
+  refused with the unknown-key message, naming the key as YAML read it, in a spec and a
+  theme alike.
+
+### Theme and conform
+
+- A theme with a non-finite chart number; a NUL, over-long name or symlink loop in
+  `template:` or `icons:`; `nan%` or `inf%` in `scale:`; a type size at or below zero,
+  `line_weight_pt: 0` included; a `reference_height` too small to divide by; or a face that
+  is not one name is a `ThemeError` naming the key and its value.
+- `conform` skips an accent that stands off the page it derived by neither 3:1 contrast nor
+  35 ΔE, as it skips unedited stock accents, and its report names each accent skipped.
+  **Re-adopting a template whose accent matches its page changes that theme's accents.**
+- `conform` loads its theme and flattens a template's master picture once per run instead of
+  once per exercise.
+- `conform` reports each pair of accents it binds that sit closer than 35 ΔE.
+- A theme that binds its own `page` and no `line` gets a line derived from that page. **On a
+  dark or coloured page, rules, table rules and edges drawn in the default line change
+  colour**: a rule is drawn in `muted`, as it is on a light page.
+
+### Components
+
+- `equation:` sets one display equation from a LaTeX subset, written as PowerPoint stores an
+  equation: Office Math in an `mc:AlternateContent` Choice, and a Fallback of one line of
+  UnicodeMath, which readers without Office Math and every check read.
+- A `document:` card's corners and shadow blend on a dark or coloured slide, where they sat
+  on a white matte.
+- A `document:` card shows the pictures its markdown names from the markdown's own folder:
+  `![alt](path)`, an `<img>` or `srcset`, an SVG `<image>`, a `<video>` poster, or a CSS
+  `url()`. One named from anywhere else is refused.
+- A `document:` card draws a markdown table as ruled, padded cells.
+- **A `bullets` list is measured item by item as its items wrap, with the space after each
+  item, and a list whose tallest column would run past its placement is refused**, naming
+  the bullets and the lines they wrap to.
+- `swatches` reads `columns:`: 1 to 8 chips per row, clamped to the number of roles. Any
+  other value is refused. A row after the first starts below the labels of the row above.
+- `diverge` paints each direction in the first accent, then the label ink, that stands off
+  the ground behind its bars.
+
+### Charts
+
+- `highlight: true` shows on a pie or doughnut: the marked wedge keeps the first accent and
+  the rest fade that same accent toward the chart's ground, at two alternating depths, each
+  still standing off the ground itself. On a chart with several series the marked row keeps
+  each series' colour and the other rows fade. A highlight needs no second accent.
+- No two touching pie or doughnut wedges share a colour, the last and first included. Where
+  the accents run short, a wedge takes a tint or shade of an accent.
+- A `ChartSpec` built in code with a highlight its kind cannot show is refused.
+- A pie's data labels are pinned to `ctr`, so a small wedge's label no longer lands outside
+  the pie in the ink chosen for the wedge it named.
+
+### Motion
+
+- A click-to-reveal trigger is written in PowerPoint's own form: its sequence advances on a
+  click of the trigger alone, not on the slide's next click.
+- A slide takes `transition: morph`, written as PowerPoint's Morph transition with a fade as
+  its fallback, and a placement takes `morph: <name>`, which names its shapes alike on each
+  slide that carries the name, for Morph to pair.
+
+### Render and QA
+
+- `render` rasterises each page to a whole number of pixels, so a dark slide no longer shows a
+  light line down its right edge.
+- `qa` reports `series-colour` when two series in one chart share a fill.
+- `qa` reports `morph-unpaired`: a `morph:` name with no namesake on the slide before, or a
+  morph slide that names nothing.
+- `qa` reports `link-contrast`: the template's link colour, which Keynote draws, against each
+  linked shape's ground.
+- `render` links each typeface the deck names that fontconfig has installed under that name
+  into LibreOffice's profile, so those faces, and CJK text, render in their own type.
+- `render` writes a stamp beside its output, and `qa` reuses a render whose stamp matches the
+  deck on disk instead of converting the deck again.
+- `qa`'s `text-fit` measures `bullets` columns and counts paragraph spacing; the manifest
+  records `space_after_pt`.
+- `qa`'s `shape-id` and `shape-name` count ids per `mc:AlternateContent` branch. `extract`
+  reads a wrapped shape from its Fallback, and a build's paragraph builds judge a wrapped
+  shape by its Choice.
+- `qa`'s package checks resolve a relationship target that names its part from the package
+  root.
+
+### Reading decks
+
+- `diff` reads a copy saved under another name against its build, when the copy sits beside
+  the manifest: a built deck carries its build id.
+- `diff` no longer reports a table's cells or a chart's parts gone from an untouched deck, and
+  reports a slide deleted, pasted in, duplicated or moved as one line.
+- `diff` reports a shape `restyled` or `relabelled`, and a slide `retimed`: its build's clicks,
+  revealed shapes or triggers changed, or its transition did.
+- The manifest records the transition each slide arrives on.
+- The manifest records both lines of a `swatches` label, the role and its hex, so `diff` no
+  longer reports every chip retyped.
+- `extract` drafts a deck deckwright built as the placements that built it — card, bullets,
+  prose, table, chart, image, rule and panel — each at the box its manifest recorded, with
+  its `id:`, `morph:`, `reveals:` and a plate's `pair:`, and the slide's `animate:` and
+  `transition: morph`. Another component comes back as bullets of its words, or as an
+  image when it holds only a picture, and the draft says so; so does a reveal a spec
+  cannot state, which is left out.
+- `extract` drafts a chart from any deck as a `chart:` block with its kind and data, and a
+  filled shape holding a heading and a line, or a text box lying on one, as a `card:`.
+- `extract` drafts a picture as an `image:` with its alt text or decorative flag, a photo in
+  a picture placeholder included, and writes its file to a `<draft>.media` folder beside
+  the draft. An existing folder is refused without `--force`, and replaced with it. A
+  picture that would push a slide's words off it is named instead.
+- A slide holding more than the grid bands names each table row, chart and picture left
+  over; a slide read back by placement names what was added to it by hand.
+- `extract --as md` lists each picture's alt text, a card's words, and a chart's data.
+
+### Development
+
+- `bin/test` runs the suite in parallel when pytest-xdist is installed; `bin/test -n0` runs
+  it serially.
+- `lxml` and `rich` are declared dependencies, and `pytest-xdist` is a dev dependency.
+
 ## v0.4.0 — 2026-09-14
 
 ### Accessibility

@@ -23,6 +23,7 @@ from deckwright.conform.exercise import EXERCISE
 from deckwright.conform.rebind import rebound_inverse, scheme_of
 from deckwright.errors import LayoutError, MissingToolError, RenderError, SpecError, ThemeError
 from deckwright.paths import scratch
+from deckwright.theme import Theme, load_theme
 
 logger = get_logger(__name__)
 
@@ -100,6 +101,18 @@ def _copy_sidecar(
         else:
             note = f"{change} — re-adopting rebinds it"
     return _write_theme_file(theme, template, outdir), note
+
+
+def _load(theme_path: Path) -> tuple[Theme | None, str | None]:
+    """The theme every exercise builds on, read once — or why none of them can build."""
+    try:
+        return load_theme(theme_path), None
+    except _EXPECTED as e:
+        return None, _why(e)
+
+
+def _why(e: Exception) -> str:
+    return str(e).replace("\n", " ")[:180]
 
 
 def _write_theme(template: Path, outdir: Path, *, prefer: str | None = None) -> Path:
@@ -182,6 +195,7 @@ def conform(
     theme_name = written["name"]
 
     kit = assemble.assets(work)
+    loaded, unloadable = _load(theme_path)
 
     kept: list[dict[str, Any]] = []
     for name, slide in (exercises or EXERCISE).items():
@@ -191,12 +205,14 @@ def conform(
             assemble.fill(assemble.spec([slide], theme=theme_name, out=out.name), kit),
             encoding="utf-8",
         )
+        # Left where it fell: a FAIL line is worth more beside the spec that produced it.
+        if unloadable is not None:
+            result.failed.append((name, unloadable))
+            continue
         try:
-            build_deck(spec_path, theme_path=theme_path, out=out)
+            build_deck(spec_path, theme_path=theme_path, theme=loaded, out=out)
         except _EXPECTED as e:
-            # Left where it fell: a FAIL line is worth more beside the spec that
-            # produced it.
-            result.failed.append((name, str(e).replace("\n", " ")[:180]))
+            result.failed.append((name, _why(e)))
             continue
         result.passed.append(name)
         kept.append(slide)
@@ -212,7 +228,7 @@ def conform(
             assemble.fill(assemble.spec(kept, theme=theme_name, out=deck.name), kit),
             encoding="utf-8",
         )
-        build_deck(whole, theme_path=theme_path, out=deck)
+        build_deck(whole, theme_path=theme_path, theme=loaded, out=deck)
         result.deck = deck
 
     if adoption is not None:

@@ -35,6 +35,7 @@ or body and no `alt:` of its own.
 - [`card` — a rounded plate with a heading, a line of copy and an icon](#card--a-rounded-plate-with-a-heading-a-line-of-copy-and-an-icon)
 - [`flow` — a run of steps, joined in order](#flow--a-run-of-steps-joined-in-order)
 - [`connector` — a line joining two placements](#connector--a-line-joining-two-placements)
+- [`equation` — one display equation](#equation--one-display-equation)
 - [`rule` — a divider](#rule--a-divider)
 - [`nav` — the deck's sections, with the one you are in marked](#nav--the-decks-sections-with-the-one-you-are-in-marked)
 - [`icon` — a vector mark](#icon--a-vector-mark)
@@ -57,7 +58,7 @@ column is what you get when you do.
 |---|---|---|---|
 | `items` | **yes** | — | The bullet strings. Non-empty list. |
 | `columns` | no | `1` | Split the items across this many columns, filling left to right. Capped at the number of items. |
-| `heading` | no | — | A small orange heading above the first column. |
+| `heading` | no | — | A heading above the first column, in the `head` rung, coloured with the theme's `accent-1`. |
 
 ```yaml
 section: Spec
@@ -79,6 +80,12 @@ place:
 ```
 
 One reveal group per bullet when the list is one column, so `one_at_a_time` stages it a line per click; one group per column when it has several. The heading arrives with the first bullet.
+
+Each item is measured wrapped to its own column, less the indent its bullet takes, with
+the space after every item counted. A list whose tallest column would run past the
+placement is refused rather than drawn, naming the bullets and the lines they wrap to —
+so a long item costs as many lines of depth as it sets on, and a second column narrows
+every item in it.
 
 ### `callouts` — a mark beside a heading and a line of copy
 
@@ -152,7 +159,7 @@ rather than one grey rectangle.
 | `widths` | no | an even split | Relative column widths. `[3, 2, 2, 1]` and `[0.375, 0.25, 0.25, 0.125]` give the same table. |
 | `head_pair` | no | `surface` | The palette pair the header band is painted in; its ink is that pair's foreground. |
 | `body_pair` | no | — | A pair for the body cells. Left out, they are unfilled and the slide's own surface shows through — which is what makes one declaration read on `page` and on `inverse`. |
-| `banding` | no | `false` | Fill every other body row. The alternate colour is the body's own surface nudged away from its ink, so it works on a light table and a dark one. |
+| `banding` | no | `false` | Fill every other body row. The alternate colour is the body's own surface nudged toward its ink, so it works on a light table and a dark one. |
 | `rules` | no | `rows` | What the hairlines mark — see the table below. |
 | `color` | no | `line` | A palette **role** for the rules. |
 | `weight` | no | `1.0` | Rule weight as a multiple of the theme's line weight. A hairline is about `0.3`. |
@@ -331,7 +338,7 @@ white page is not a chip.
 |---|---|---|---|
 | `roles` | no | every role the theme declares | Which roles to show, in order. |
 | `caption` | no | — | A note beneath the chips. |
-| `columns` | no | as many as fit, to 8 | How many chips per row. |
+| `columns` | no | `8` | How many chips per row, from 1 to 8. More than there are roles gives each role an equal share of the row. |
 
 ```yaml
 title: Every role, and the hex it resolved to
@@ -510,7 +517,7 @@ placement moves the join and nothing in the spec repeats a coordinate.
 |---|---|---|---|
 | `from` | **yes** | — | A placement `id:`, or `[x, y]` as fractions of the canvas. |
 | `to` | **yes** | — | The same. |
-| `kind` | no | `straight` | `straight`, `elbow` or `curved`. One native connector either way — PowerPoint routes the bend. |
+| `kind` | no | `straight` | `straight`, `elbow` or `curved`. `straight` and `curved` are native connectors; `elbow` is drawn as a freeform polyline through explicit bend points, routed the same way regardless of renderer. |
 | `arrow` | no | `none` | `none`, `end` (the `to` end) or `both`. |
 | `color` | no | `accent-1` | A palette **role**, not a pair. |
 | `weight` | no | `1.0` | Stroke weight as a multiple of the theme's line weight. |
@@ -564,6 +571,49 @@ place:
       paragraphs:
       - The night network is not a luxury service.
       - Cutting it saves four percent and strands the late shift.
+```
+
+### `equation` — one display equation
+
+One equation on a line of its own, from a small subset of LaTeX. It is written as Office
+Math, the form PowerPoint keeps an equation in, with a fallback copy of the same shape
+holding the equation as one line of plain text in UnicodeMath:
+`x = (−b ± √(b² − 4ac))/(2a)`. A reader without Office Math takes the fallback, as
+LibreOffice does, and so do `render`, `qa`, `extract` and `diff`. That line is what the build
+measures, so a fit check never trusts maths it cannot see.
+
+| Field | Required | Default | What it does |
+|---|---|---|---|
+| `tex` | **yes** | — | The equation, in the subset below. Single-quote it: in double quotes YAML reads `\f`, `\t`, `\n`, `\b` and `\r` as escapes, so `\frac` arrives as a form feed. |
+| `rung` | no | `lead` | The type rung both the maths and its line are set at. |
+| `alt` | no | the line | What a screen reader says. Left out, it reads the UnicodeMath line. |
+| `decorative` | no | `false` | `true` marks the equation for a screen reader to skip. Refused beside `alt`. |
+
+**The subset.** `^` and `_` with one token or a `{group}`; `\frac{}{}`; `\sqrt{}` and
+`\sqrt[n]{}`; `\sum`, `\prod`, `\int` with optional limits, and `\lim_{}`; the Greek letters
+`\alpha` to `\omega` and `\Gamma \Delta \Theta \Lambda \Xi \Pi \Sigma \Phi \Psi \Omega`;
+`\cdot \times \pm \mp \leq \geq \neq \approx \infty \to \partial \nabla`; `\left` and
+`\right` with `( ) [ ] \{ \} |` or `.`; `\text{}`; letters, digits and
+`+ - = < > , . ! / | ( ) [ ]`. Anything else — `\begin`, `\over`, `&`, a macro — is refused
+by name. A large operator applies to everything after it up to the next `=`, `<`, `>`, `≤`,
+`≥`, `≠`, `≈` or `→`.
+
+**It never wraps.** An equation wider than its placement on one line is refused. Its box is
+as tall as the rows its Office Math stacks — a fraction is two, limits under a sum add one —
+so the space a stacked fraction needs is kept even where the line shows.
+
+The maths is written as PowerPoint stores an equation: the shape inside
+`mc:AlternateContent`, Office Math in the Choice and the line in the Fallback. PowerPoint
+opening it without a repair prompt, and setting it as maths, is awaiting its first check.
+
+```yaml
+title: The quadratic formula
+place:
+  - at: {cols: full, rows: {from: 0, to: 4}}
+    anchor: middle
+    align: center
+    equation:
+      tex: 'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}'
 ```
 
 ### `rule` — a divider
@@ -740,6 +790,15 @@ dark.
 
 Renders the file itself into a macOS-style window card and places it as a picture. Showing the real document beats retyping it: it cannot drift from the source.
 
+Pictures the markdown names are embedded in the card when they sit in the markdown's own
+folder or below it: `![alt](path)`, and in HTML however it is quoted, an `<img>`'s `src`,
+each `srcset` candidate of an `<img>` or a `<picture>`'s `<source>`, an inline SVG
+`<image>`'s `href`, a `<video>`'s `poster`, and each CSS `url()` in a `style` attribute or
+a `<style>` block. A name is read as a browser reads it, so `my%20pic.png` is the file
+`my pic.png`. One that sits anywhere else is refused by name, since the markdown behind a
+card is often not yours; a web address is left for the browser to fetch, and so is a CSS
+`url()` naming a font.
+
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `source` | **yes** | — | Path to a markdown file. Resolved **beside the deck spec** first, then as given — absolute, or relative to the directory you run the command from. |
@@ -863,7 +922,7 @@ from the label, so the render loop cannot verify the one thing the slide is abou
 |---|---|---|---|
 | `items` | **yes** | — | Non-empty list of mappings, one row each. |
 | `items[].label` | **yes** | — | The row's name, set flush to the rule. |
-| `items[].value` | **yes** | — | The signed number. Positive draws right in the first accent, negative left in the second. |
+| `items[].value` | **yes** | — | The signed number. Positive draws right, negative left, each in an accent that stands off what the bars sit on (see below). |
 | `items[].note` | no | — | A quiet aside — the before-and-after counts behind the percentage. It is placed in the half the row's own bar does not use, so it never collides with the bar however long it runs. |
 | `unit` | no | — | A suffix on every reading — `%`, `pt`, `x`. The sign is always written, so a bare number reads as a count and a `%` as a change. |
 | `peak` | no | the largest magnitude present | The magnitude the longest bar stands for. **Pin it when two blocks share a slide**, or each scales to its own longest bar and two equal values draw unequal. |
@@ -893,6 +952,15 @@ place:
 Both blocks name the same `peak`, so a bar in the dark half is comparable with one in
 the light half. `align` is refused — the labels are set against the rule, and centring
 them would pull every one off the axis it belongs to.
+
+The bar colours are chosen against what is behind the bars: the page, the block's own
+`pair`, or a backdrop photograph. The candidates are the accents in order, then the
+labels' ink. Rightward bars take the first candidate that stands off that ground by 3:1
+or by 35 ΔE, the same rule as `qa`'s `fill-ground` check. Leftward bars take the first
+that stands off both the ground and the rightward colour, so the two directions differ
+wherever the theme allows; when none does, they share the rightward colour. On most
+themes that is the first and second accent. On a theme whose page is the colour of an
+accent, the bars skip that accent instead of vanishing into the page.
 
 One reveal group per row: the label, the bar, its value and its note arrive together.
 

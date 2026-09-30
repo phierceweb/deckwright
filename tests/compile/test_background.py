@@ -100,6 +100,28 @@ def test_a_transparent_master_background_is_composited_onto_the_deck_colour(
     assert flat.getpixel((2, 2)) == (200, 30, 40)  # the artwork itself survives
 
 
+def test_a_master_picture_reopened_by_the_next_build_is_flattened_once(
+    tmp_path, synthetic_template, monkeypatch
+):
+    """Each build reopens the template, so the picture arrives as equal bytes in a new object.
+    The marker and colour are this test's own: a picture another test flattened is already cached."""
+    path = _with_picture_background(tmp_path, synthetic_template, _alpha_hole((7, 77, 177)))
+    first, second = Presentation(str(path)), Presentation(str(path))
+    encodes = []
+    save = Image.Image.save
+    monkeypatch.setattr(
+        Image.Image, "save", lambda im, *a, **k: encodes.append(1) or save(im, *a, **k)
+    )
+
+    assert flatten_master_background(first, (3, 33, 99)) is True
+    assert flatten_master_background(second, (3, 33, 99)) is True
+
+    assert len(encodes) == 1
+    flat = Image.open(io.BytesIO(_background_blob(second))).convert("RGB")
+    assert flat.getpixel((0, 0)) == (3, 33, 99)
+    assert flat.getpixel((2, 2)) == (7, 77, 177)
+
+
 def test_an_opaque_master_background_is_left_untouched(tmp_path, synthetic_template):
     path = _with_picture_background(tmp_path, synthetic_template, _png("RGB", (1, 2, 3)))
     prs = Presentation(str(path))

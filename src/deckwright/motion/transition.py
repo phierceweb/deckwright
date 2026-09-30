@@ -15,11 +15,17 @@ silently on import:
 
 from __future__ import annotations
 
+from lxml import etree
 from pptx.oxml import parse_xml
 
 from deckwright.errors import LayoutError
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+_P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main"
+
+# Not one of the base schema's effects: an extension behind a fallback. See `morph_xml`.
+MORPH = "morph"
 
 _EDGES = ("l", "u", "r", "d")
 _CORNERS = ("lu", "ru", "ld", "rd")
@@ -83,6 +89,42 @@ def transition_xml(kind: str, *, direction: str = "", speed: str = "fast") -> st
     return f'<p:transition xmlns:p="{_P}" spd="{speed}"><p:{kind}{attr}/></p:transition>'
 
 
+def morph_xml(speed: str) -> str:
+    """PowerPoint's own morph: a ``p159`` Choice and a fade Fallback, where ``p:transition`` goes.
+
+    Morph pairs shapes that carry one name on both slides; a reader without ``p159`` fades.
+
+    Raises:
+        LayoutError: unknown speed.
+    """
+    if speed not in SPEEDS:
+        raise LayoutError(f"transition speed must be one of {', '.join(SPEEDS)}, got {speed!r}")
+    return (
+        f'<mc:AlternateContent xmlns:mc="{_MC}" xmlns:p="{_P}">'
+        f'<mc:Choice xmlns:p159="{_P159}" Requires="p159">'
+        f'<p:transition spd="{speed}"><p159:morph option="byObject"/></p:transition></mc:Choice>'
+        f'<mc:Fallback><p:transition spd="{speed}"><p:fade/></p:transition></mc:Fallback>'
+        f"</mc:AlternateContent>"
+    )
+
+
+def _carried(slide_element):
+    """The slide's ``p:transition``, read through a markup-compatibility wrapper's Choice."""
+    direct = slide_element.find(f"{{{_P}}}transition")
+    if direct is not None:
+        return direct
+    return slide_element.find(f"{{{_MC}}}AlternateContent/{{{_MC}}}Choice/{{{_P}}}transition")
+
+
+def read_kind(slide_element) -> str:
+    """The transition kind a slide carries, ``"none"`` when it carries none."""
+    node = _carried(slide_element)
+    if node is None:
+        return "none"
+    kinds = [etree.QName(child).localname for child in node]
+    return next((k for k in kinds if k not in ("sndAc", "extLst")), "none")
+
+
 def add_transition(slide, kind: str, *, direction: str = "", speed: str = "fast") -> None:
     """Give ``slide`` the transition the show uses to arrive at it.
 
@@ -92,7 +134,10 @@ def add_transition(slide, kind: str, *, direction: str = "", speed: str = "fast"
     Raises:
         LayoutError: the arguments are invalid, or the slide already has a transition.
     """
-    if slide._element.find(f"{{{_P}}}transition") is not None:
+    if _carried(slide._element) is not None:
         raise LayoutError("this slide already carries a transition")
-    xml = transition_xml(kind, direction=direction, speed=speed)
+    if kind == MORPH:
+        xml = morph_xml(speed)
+    else:
+        xml = transition_xml(kind, direction=direction, speed=speed)
     slide._element.insert_element_before(parse_xml(xml), "p:timing", "p:extLst")

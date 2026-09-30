@@ -121,3 +121,117 @@ def test_a_thin_pie_is_exempt(tmp_path):
     """The parts sum to the whole, so a slice count is the composition being described."""
     deck = _charted(tmp_path, XL_CHART_TYPE.PIE, (36, 64))
     assert [f for f in check_charts(deck) if f.check == "chart-datapoints"] == []
+
+
+def test_an_unreadable_deck_is_not_this_checks_finding(tmp_path):
+    """`package` reports it; a second finding for the same fault is noise."""
+    bad = tmp_path / "bad.pptx"
+    bad.write_bytes(b"not a zip")
+    assert check_charts(bad) == []
+
+
+def test_a_series_is_as_long_as_its_cache_says_or_its_points_number():
+    from lxml import etree
+
+    from deckwright.qa.charts import _series_length
+
+    c = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+    cached = '<c:val><c:numRef><c:numCache><c:ptCount val="{}"/></c:numCache></c:numRef></c:val>'
+    points = '<c:val><c:numLit><c:pt idx="0"/><c:pt idx="1"/></c:numLit></c:val>'
+    lengths = [
+        _series_length(etree.fromstring(f'<c:ser xmlns:c="{c}">{body}</c:ser>'))
+        for body in ("", cached.format("many"), cached.format("7"), points)
+    ]
+    assert lengths == [0, 0, 7, 2]
+
+
+def test_a_malformed_chart_part_is_skipped(tmp_path):
+    import zipfile
+
+    from pptx.enum.chart import XL_CHART_TYPE as kinds
+
+    deck = _charted(tmp_path, kinds.BAR_CLUSTERED, (1, -2))
+    broken = tmp_path / "broken.pptx"
+    with zipfile.ZipFile(deck) as src, zipfile.ZipFile(broken, "w") as dst:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if item.filename.startswith("ppt/charts/chart"):
+                data = b"<c:chartSpace"
+            dst.writestr(item, data)
+    assert [f.check for f in check_charts(deck)] != []
+    assert check_charts(broken) == []
+
+
+def _five_series(tmp_path, theme_file):
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "five.deck.yaml"
+    rows = "".join(
+        f"        - {{category: {c}, values: {{s1: 1, s2: 2, s3: 3, s4: 4, s5: 5}}}}\n"
+        for c in "abcd"
+    )
+    spec.write_text(
+        "theme: testtheme\ntitle: T\nout: out/Five.pptx\n---\ntitle: Five\n"
+        "place:\n  - at: {cols: full}\n    chart:\n      kind: column\n      data:\n" + rows
+    )
+    return build_deck(spec, theme_path=theme_file).deck
+
+
+def _series_findings(deck):
+    return [f for f in check_charts(deck) if f.check == "series-colour"]
+
+
+def test_five_series_on_four_accents_report_the_fill_two_of_them_share(tmp_path, theme_file):
+    """The palette cycles once the accents run out, so the fifth series is the first again."""
+    found = _series_findings(_five_series(tmp_path, theme_file))
+    assert [(f.slide, f.severity) for f in found] == [(1, Severity.WARN)]
+    assert found[0].detail.startswith("series s1 and s5 share the fill ")
+    assert "the theme's 4 accent(s) ran out" in found[0].detail
+
+
+def test_four_series_on_four_accents_report_nothing(tmp_path, theme_file):
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "four.deck.yaml"
+    rows = "".join(
+        f"        - {{category: {c}, values: {{s1: 1, s2: 2, s3: 3, s4: 4}}}}\n" for c in "abcd"
+    )
+    spec.write_text(
+        "theme: testtheme\ntitle: T\nout: out/Four.pptx\n---\ntitle: Four\n"
+        "place:\n  - at: {cols: full}\n    chart:\n      kind: column\n      data:\n" + rows
+    )
+    assert _series_findings(build_deck(spec, theme_path=theme_file).deck) == []
+
+
+def test_a_fill_given_as_a_scheme_reference_is_judged_by_the_colour_it_resolves_to(
+    tmp_path, theme_file
+):
+    """A chart edited by hand names `accent1` rather than a hex; one the theme cannot resolve
+    is passed over rather than guessed at."""
+    import zipfile
+
+    from lxml import etree
+
+    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    c = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+    deck = _five_series(tmp_path, theme_file)
+    edited = tmp_path / "scheme.pptx"
+    with zipfile.ZipFile(deck) as src, zipfile.ZipFile(edited, "w") as dst:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if item.filename.startswith("ppt/charts/chart"):
+                root = etree.fromstring(data)
+                for ser, ref in zip(
+                    root.iter(f"{{{c}}}ser"),
+                    ("accent1", "accent1", "nope", "nope", "nope"),
+                    strict=True,
+                ):
+                    fill = ser.find(f"{{{c}}}spPr/{{{a}}}solidFill")
+                    for child in list(fill):
+                        fill.remove(child)
+                    etree.SubElement(fill, f"{{{a}}}schemeClr", val=ref)
+                data = etree.tostring(root)
+            dst.writestr(item, data)
+    found = _series_findings(edited)
+    assert len(found) == 1
+    assert found[0].detail.startswith("series s1 and s2 share the fill ")

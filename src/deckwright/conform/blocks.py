@@ -29,6 +29,18 @@ def block_slides() -> dict[str, dict[str, Any]]:
             "subtitle": "The columns every placement resolves against",
             "place": [{"at": {"cols": "full"}, "grid": {}}],
         },
+        "grid-rows": {
+            "kicker": "THEME",
+            "title": "The grid's rows",
+            "subtitle": "The bands a placement's rows: resolve against",
+            "place": [{"at": {"cols": "full"}, "grid": {"show": "rows"}}],
+        },
+        "grid-both": {
+            "kicker": "THEME",
+            "title": "Columns and rows together",
+            "subtitle": "Every cell a placement can name",
+            "place": [{"at": {"cols": "full"}, "grid": {"show": "both"}}],
+        },
         "prose": {
             "kicker": "COPY",
             "title": "Paragraphs at a readable measure",

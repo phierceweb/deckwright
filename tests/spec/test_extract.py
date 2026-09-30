@@ -102,11 +102,10 @@ def test_harvest_reads_a_table_as_rows_of_cells(foreign_deck):
     assert second.tables == ((("Region", "Growth"), ("EMEA", "4%")),)
 
 
-def test_harvest_names_what_it_could_not_convert(deck_with_a_picture):
-    """A picture is not lost silently — the author is told it was there."""
-    dropped = harvest(deck_with_a_picture)[0].dropped
-    assert len(dropped) == 1
-    assert "picture" in dropped[0].lower()
+def test_a_picture_is_not_lost_but_carried_as_the_picture_it_is(deck_with_a_picture):
+    content = harvest(deck_with_a_picture)[0]
+    assert content.dropped == ()
+    assert [p.name for p in content.pictures] == ["slide1-1.png"]
 
 
 def test_harvest_reads_blocks_in_reading_order_not_shape_order(tmp_path):
@@ -194,10 +193,54 @@ def test_a_missing_output_directory_is_created(tmp_path, foreign_deck):
     assert dest.is_file()
 
 
-def test_the_command_says_how_many_shapes_it_could_not_convert(deck_with_a_picture):
+def test_the_command_writes_each_picture_beside_the_draft_and_will_not_replace_them_unasked(
+    deck_with_a_picture,
+):
+    draft = deck_with_a_picture.with_name(deck_with_a_picture.stem + ".deck.yaml")
+    folder = draft.with_name(deck_with_a_picture.stem + ".media")
     result = runner.invoke(app, ["extract", str(deck_with_a_picture)])
     assert result.exit_code == 0, result.output
-    assert "1 shape(s) could not be converted" in result.output
+    assert f"1 picture(s) -> {folder}" in result.stdout
+    assert [p.name for p in folder.iterdir()] == ["slide1-1.png"]
+    assert f"src: {folder.name}/slide1-1.png" in draft.read_text(encoding="utf-8")
+
+    draft.unlink()
+    again = runner.invoke(app, ["extract", str(deck_with_a_picture)])
+    assert again.exit_code != 0 and not draft.exists()
+    assert f"{folder} already exists — pass --force to replace it" in str(again.exception)
+
+    stray = folder / "stale.png"
+    stray.write_bytes(b"x")
+    forced = runner.invoke(app, ["extract", str(deck_with_a_picture), "--force"])
+    assert forced.exit_code == 0, forced.output
+    assert [p.name for p in folder.iterdir()] == ["slide1-1.png"]
+
+
+@pytest.mark.parametrize("occupant", ["file", "link", "dangling link"])
+def test_force_never_deletes_a_file_or_a_link_where_the_media_folder_goes(
+    tmp_path, deck_with_a_picture, occupant
+):
+    """`--force` replaces a media folder; a file there is someone's, and a link's target is
+    somewhere else entirely. Refused before the draft is written, so no draft names pictures
+    that were never written."""
+    draft = deck_with_a_picture.with_name(deck_with_a_picture.stem + ".deck.yaml")
+    folder = draft.with_name(deck_with_a_picture.stem + ".media")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "keep.png").write_bytes(b"x")
+    if occupant == "file":
+        folder.write_text("notes")
+    else:
+        target = elsewhere if occupant == "link" else tmp_path / "gone"
+        folder.symlink_to(target, target_is_directory=True)
+
+    forced = runner.invoke(app, ["extract", str(deck_with_a_picture), "--force"])
+
+    assert isinstance(forced.exception, SpecError)
+    assert f"{folder} is a file or a link, not a media folder" in str(forced.exception)
+    assert not draft.exists()
+    assert (elsewhere / "keep.png").is_file()
+    assert folder.read_text() == "notes" if occupant == "file" else folder.is_symlink()
 
 
 def test_repeated_losses_collapse_into_one_comment(tmp_path, deck_of_unlabelled_art):
@@ -431,7 +474,10 @@ def _round_trip(tmp_path, generations: int) -> list[tuple[str, ...]]:
     read: list[tuple[str, ...]] = []
     for generation in range(1, generations + 1):
         content = harvest(build_deck(spec).deck)
-        read.append(tuple(line for slide in content for block in slide.blocks for line in block))
+        read.append(
+            tuple(line for slide in content for block in slide.blocks for line in block)
+            + tuple(word for slide in content for item in slide.placed for word in item.words)
+        )
         spec = tmp_path / f"g{generation}.deck.yaml"
         spec.write_text(
             render_spec(
@@ -491,21 +537,65 @@ def test_an_element_the_shape_tree_cannot_build_is_named_rather_than_aborting(tm
     assert harvest(path)[0].dropped == ("p:contentPart — an element python-pptx cannot read",)
 
 
-def test_an_element_the_shape_tree_never_enumerates_is_named_too(tmp_path):
-    """PowerPoint wraps a 3D model or a newer-namespace effect in ``mc:AlternateContent``,
-    which is not one of python-pptx's shape tags — so the slide read as empty."""
+_MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
+def _alternate_content(choice=None, fallback=None):
+    """An ``mc:AlternateContent`` holding ``choice`` in an a14 Choice and ``fallback`` as
+    its Fallback, leaving out whichever is ``None``."""
+    alternate = parse_xml(f'<mc:AlternateContent xmlns:mc="{_MC}"/>')
+    for branch, element in (("Choice", choice), ("Fallback", fallback)):
+        if element is None:
+            continue
+        requires = ' Requires="a14"' if branch == "Choice" else ""
+        wrapper = parse_xml(
+            f'<mc:{branch} xmlns:mc="{_MC}"'
+            f' xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"{requires}/>'
+        )
+        wrapper.append(element)
+        alternate.append(wrapper)
+    return alternate
+
+
+def _into_alternate_content(shape) -> None:
+    """Move ``shape`` into an ``mc:AlternateContent`` as PowerPoint stores an equation: a
+    copy whose words only a reader of a14 sees as the Choice, the original as the Fallback."""
+    element = shape._element
+    choice = copy.deepcopy(element)
+    for text in choice.iter(qn("a:t")):
+        text.text = "only a reader of a14 sees this"
+    parent = element.getparent()
+    at = parent.index(element)
+    parent.insert(at, _alternate_content(choice=choice, fallback=element))
+
+
+def test_markup_compatibility_is_read_from_its_fallback(tmp_path):
+    """python-pptx does not enumerate ``mc:AlternateContent``, where PowerPoint stores an
+    equation or a 3D model, so the slide read as empty."""
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    slide.shapes._spTree.append(
-        parse_xml(
-            "<mc:AlternateContent"
-            ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"/>'
-        )
-    )
+    box = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1))
+    box.text_frame.text = "the fallback's words"
+    _into_alternate_content(box)
     path = tmp_path / "alternate.pptx"
     prs.save(path)
 
-    assert harvest(path)[0].dropped == ("mc:AlternateContent — an element python-pptx cannot read",)
+    slide_content = harvest(path)[0]
+    assert slide_content.blocks == (("the fallback's words",),)
+    assert slide_content.dropped == ()
+
+
+def test_an_unreadable_element_in_the_chosen_branch_is_still_named(tmp_path):
+    """PowerPoint stores ink as a ``p:contentPart`` Choice; with no Fallback to read,
+    the Choice is what is left, and it is named rather than vanishing."""
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    ink = parse_xml(f'<p:contentPart {nsdecls("p", "r")} r:id="rId9"/>')
+    slide.shapes._spTree.append(_alternate_content(choice=ink))
+    path = tmp_path / "alternate-ink.pptx"
+    prs.save(path)
+
+    assert harvest(path)[0].dropped == ("p:contentPart — an element python-pptx cannot read",)
 
 
 def test_a_group_that_yields_nothing_is_named_rather_than_vanishing(tmp_path):
@@ -744,18 +834,23 @@ def test_an_unreadable_element_inside_a_group_is_named_and_its_siblings_still_co
     assert slide.blocks == (("before",), ("after",))
 
 
-def test_an_alternate_content_wrapper_inside_a_group_is_named_too(tmp_path):
-    """The wrapper PowerPoint writes for a 3D model or a newer-namespace effect."""
-    path = _group_holding(
-        tmp_path,
-        "<mc:AlternateContent"
-        ' xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"/>',
-        "grouped-alternate.pptx",
-    )
+def test_markup_compatibility_inside_a_group_is_read_from_its_fallback(tmp_path):
+    """A group builds its children through its own factory, which meets the Fallback's
+    shape inside the wrapper rather than directly under the group."""
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    group = slide.shapes.add_group_shape()
+    for text, top in (("before", 1), ("the fallback's words", 2), ("after", 3)):
+        group.shapes.add_textbox(
+            Inches(1), Inches(top), Inches(4), Inches(0.4)
+        ).text_frame.text = text
+    _into_alternate_content(group.shapes[1])
+    path = tmp_path / "grouped-alternate.pptx"
+    prs.save(path)
 
-    slide = harvest(path)[0]
-    assert slide.dropped == ("mc:AlternateContent — an element python-pptx cannot read",)
-    assert slide.blocks == (("before",), ("after",))
+    slide_content = harvest(path)[0]
+    assert slide_content.dropped == ()
+    assert slide_content.blocks == (("before",), ("the fallback's words",), ("after",))
 
 
 def _solid(shape, rgb: str):
@@ -1216,13 +1311,11 @@ def test_harvest_carries_a_figures_alt_text_and_skips_a_file_name(tmp_path):
 
     content = harvest(path)[0]
 
-    assert content.alt == ("picture 'Summit': The team, at the summit",)
-    assert "# alt text on picture 'Summit': The team, at the summit" in render_spec(
-        [content], title="Deck"
-    )
-    assert "*alt text on picture 'Summit': The team, at the summit*" in render_markdown(
-        [content], title="Deck"
-    )
+    assert [p.alt for p in content.pictures] == ["The team, at the summit", None]
+    assert "alt: The team, at the summit" in render_spec([content], title="Deck")
+    transcript = render_markdown([content], title="Deck")
+    assert "*picture: The team, at the summit*" in transcript
+    assert "*picture, with no alt text*" in transcript
 
 
 def test_harvest_writes_a_hyperlinked_run_back_as_link_markup(tmp_path):
@@ -1283,3 +1376,10 @@ def test_harvest_carries_a_drawn_shapes_alt_text_too(tmp_path):
     assert harvest(tmp_path / "i.pptx")[0].alt == (
         "freeform 's1.p1.icon#1': Hit the quarterly target",
     )
+
+
+def test_a_morph_named_bullets_shape_loses_the_marker_deckwright_wrote(tmp_path):
+    """A morph placement's shapes are `m.<name>.<component>#k`, with no slide number."""
+    path = _named_deck(tmp_path, {"m.notes.bullets#1": "•  a body line"})
+    (placed,) = harvest(path)[0].placed
+    assert (placed.morph, placed.body) == ("notes", {"bullets": {"items": ["a body line"]}})

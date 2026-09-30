@@ -49,19 +49,21 @@ painted surface, never the thing that makes the surface dark.
 ## What a theme file may contain
 
 Thirteen top-level keys, and an unknown one is a `ThemeError` naming every known key —
-a theme is not a place where a typo is silently ignored. Everything is optional except
+a theme is not a place where a typo is silently ignored. Wherever an unknown key is
+refused, one YAML read as something other than text — `on:` as a boolean, `2021-01-01:` as
+a date — is named as YAML read it, with a note to quote it. Everything is optional except
 `name`; a file with only a name is the built-in system under another label.
 
 | Key | What it does |
 |---|---|
 | `name` | How a deck's `theme:` refers to it. |
-| `template` | The brand `.pptx` this theme specializes into, relative to the theme file. Without one the built-in system stands alone: `bind:` then resolves literal colours only, and `marks:` is refused as having nowhere to look. |
+| `template` | The brand `.pptx` this theme specializes into, relative to the theme file. Without one the built-in system stands alone: `bind:` then resolves literal colours only, and `marks:` is refused as having nowhere to look. A path holding a NUL, a name longer than the filesystem allows, or a symlink loop is a `ThemeError` naming the key; `icons` is checked the same way. |
 | `compose_layout` | Names the layout generated slides compose on, for a template whose ambiguity ranking cannot resolve. The escape hatch, never a requirement — the ranking itself lives in `layouts/resolve.py`. |
 | `drop_template_slides` | Delete the template's own slides after loading it. Almost always `true` for a brand template, whose slides are examples rather than content. |
 | `bind` | Maps semantic roles onto the template's `clrScheme` slots, or onto literal `RRGGBB` values. Literals need no template. |
 | `scale` | Margins, `columns`, `rows` and gutter. `rows` is the divisor a placement's `rows:` indexes — 12 by default, and stated here so an author can read the number they are indexing. |
 | `type` | `face`, `heading_face`, `mono`, `ea`, `reference_height`, `min_pt`, `line_weight_pt`, and per-rung `ramp` overrides written in `pt`. |
-| `chart` | The chart renderer's aesthetic knobs — gap width, gradients, shadows, markers, gridlines, label position. See [`charts.md`](charts.md). |
+| `chart` | The chart renderer's aesthetic knobs — gap width, gradients, shadows, markers, gridlines, label position. Every number is finite: `.inf` and `.nan` are refused by key. See [`charts.md`](charts.md). |
 | `chrome` | Where each chrome line sits and how it is set. |
 | `icons` | A directory of `.svg` glyphs searched before the shipped set. |
 | `marks` | Art laid over a painted backdrop. A mark's name *is* the background it decorates, so `marks.inverse` is the only one there is. Its `media:` resolves the same way a deck's image does — beside the template, then out of the template's own `ppt/media/` — and may not climb out of those with `..`; an absolute path is taken as written. |
@@ -104,9 +106,14 @@ what was really painted, including the photograph a pair of nominal colours cann
 | `accent-3` | auto ink on `accent-3` | 6.03:1 |
 | `accent-4` | auto ink on `accent-4` | 7.42:1 |
 
-`line` carries no pair — it is a stroke, never a text colour. An accent pair's
+`line` carries no pair — it is a stroke, never a text colour. A theme that binds its own
+`page` and no `line` gets the page moved 12% toward its ink, the step the built-in line takes
+from white, so a dark page gets a dark hairline. A drawn rule still has to clear 3:1 against
+its slide and gives way to `muted` where the line does not, on a dark page as on a light one. An accent pair's
 foreground is `AUTO_INK`: whichever of `ink` and `page` reads better on it. An
-accent none of them clears falls back to black or white, so a pair always resolves.
+accent none of them clears falls back to whichever of the theme's other declared roles —
+`inverse`, `surface-ink`, `inverse-ink`, `surface` — reads best, so a pair always resolves
+from the theme's own declared colours, never an invented black or white.
 
 **An accent is a fill colour, and becomes text only where it is measured.** A slide's
 live pair is the one its `background:` names, and `SlideCtx.fg()`/`dim()`/`paper()`
@@ -136,7 +143,9 @@ under a later placement laid over it with `bleed: true`. A disc covers only its 
 square; text in the corners of its frame is also measured against what the disc was laid on.
 `text_ink(box, size_pt=…, muted=…)` and `accent_at(box, size_pt=…)` return the ink and the
 colour it really sits on, and that pair is what the manifest records. A component painting a
-fill nothing readable sits on gets a `ThemeError` naming the fill, not a warning.
+fill nothing readable sits on gets a warning (`fill_ink_below_aa`) naming the fill, not a
+`ThemeError` — the build still completes, and `qa`'s contrast check is what judges it
+against what was really painted.
 
 A pair names **roles**, not hex: `DEFAULT_PAIRS` holds `("ink", "page")`, and
 `build_palette` resolves it. Rebinding a role therefore moves every pair citing it,
@@ -151,10 +160,12 @@ it cannot remove one: an accent nothing binds — or one bound to a slot still h
 Microsoft's shipped value, which is ignored — keeps its built-in hex. Series colours
 cycle whatever that leaves, which is four roles on a template that binds none.
 
-The consequence worth knowing is that a chart's `highlight:` is `accent-2`. Derive a
-theme from a template that yields only `accent-1` and the highlighted point is painted
-`0F6E63` — deckwright's own colour, sitting in a chart otherwise drawn in the brand's.
-Bind every accent you want a chart to cycle, or read the highlight as a system colour.
+The consequence worth knowing is that a chart past the brand's own accents takes
+deckwright's. Derive a theme from a template that yields only `accent-1` and a chart's
+second series, or a pie's second wedge, is painted `0F6E63` — deckwright's own colour,
+beside one drawn in the brand's. Bind every accent you want a chart to cycle. A
+`highlight:` reads only `accent-1`: the rest of the chart recedes instead of taking a
+second accent.
 
 ### What the template already paints
 
@@ -245,7 +256,10 @@ which a width-based rule gets wrong by 33%. So the ramp still scales with the ca
 only what an author writes changed, because "14pt body" is the thing they mean and
 `2.1333` is not.
 
-`min_pt` and `line_weight_pt` are read the same way.
+`min_pt` and `line_weight_pt` are read the same way. Every size in `type:` is above zero,
+and must stay a finite number of points once divided by `reference_height`.
+`reference_height` itself is a finite number above zero, large enough that 1pt over it
+does not overflow — refused on its own, with or without a `ramp:` to divide.
 
 `DEFAULT_RAMP` is modular — `2.13 * 1.25 ** step` — so the whole ramp moves with one
 number. `caption` takes a half step: a `kicker` is bold and set in caps, and a caption — the
@@ -277,6 +291,10 @@ A rung's `face:` names one of the theme's own faces by role — `face: body`, `f
 `face: mono` — or a literal typeface. The three aliases are the whole vocabulary; a value
 matching one only in case (`face: Mono`) is a literal, and warns as
 `theme_ramp_face_alias_case` because no machine has a typeface by that name.
+
+Every face key — `type.face`, `heading_face`, `mono`, each `type.ea` entry and a rung's
+`face:` — takes one name as text. A list or a number is refused rather than loaded as its
+printed form, because a run in a `.pptx` names exactly one face.
 
 A figure-heavy deck can give `stat` — and `caption`, for axis-style labels — the mono face.
 Numerals then align in a column and read as measurements rather than display type. This is a
@@ -432,6 +450,9 @@ Doubling the canvas doubles every inch — a change of slide size is a no-op.
 
 A theme YAML's `scale:` block is an override, key by key: omit `gutter` and the
 built-in gutter applies, omit the block entirely and the whole built-in grid does.
+Margins, `gutter` and `body_top` are written as percents of the canvas (`4.5%`); `nan%`,
+`inf%` and a percent too large to be a number are refused with every other value that is
+not a percent.
 
 ## Chrome: the theme's title treatment
 
@@ -493,7 +514,7 @@ and a deck cannot drift off-brand one hardcoded timing at a time.
 |---|---|
 | `stagger_ms` | Offsets each shape after the first *within one click*, so what that click reveals cascades. `0` (the default) keeps it simultaneous. |
 | `advance` | `on_click` (default) spends a click per reveal group. `after_previous` chains them onto **one** click. |
-| `beat_ms` | The pause between groups under `after_previous`. Default `400`. |
+| `beat_ms` | The pause under `after_previous` after one group finishes before the next starts, so groups start the entrance's duration plus `beat_ms` apart — 500 + 400 ms for a `fade` at the default. Default `400`. |
 | `roles` | Binds each semantic motion role to an entrance kind. See [Motion roles](#motion-roles). |
 | `transition` | The deck's default slide transition — a mapping of `kind`, optional `dir`, and `speed`. See [The deck's transition](#the-decks-transition). |
 
@@ -507,7 +528,8 @@ motion:
 
 `animate: one_at_a_time` normally spends a click per group — four stat tiles, four
 clicks. Under `after_previous` the first click starts the sequence and the rest follow
-themselves, `beat_ms` apart. The slide still builds in order; you just stop tapping.
+themselves, each starting `beat_ms` after the one before has finished. The slide still
+builds in order; you just stop tapping.
 
 The spec is unchanged either way — how many beats an argument has is the deck's
 business, whether you advance them by hand is the brand's.

@@ -208,7 +208,8 @@ def check_text_fit(manifest: dict[str, Any], theme: Theme) -> list[Finding]:
 
     A multi-line record without per-line sizes is skipped rather than guessed at:
     measuring a body paragraph at its heading's size over-reports badly, so a component
-    owes a ``line_pt`` before this check can see it.
+    owes a ``line_pt`` before this check can see it. Recorded ``space_after_pt`` counts
+    between paragraphs; the space after the last one sets no ink.
     """
     findings: list[Finding] = []
     for slide in slides(manifest):
@@ -229,6 +230,9 @@ def check_text_fit(manifest: dict[str, Any], theme: Theme) -> list[Finding]:
                 / 72
                 for line, pt in zip(lines, sizes, strict=True)
             )
+            spacing = shape.get("space_after_pt") or []
+            if len(spacing) == len(lines):
+                needed += sum(spacing[:-1]) / 72
             if needed > height + _FIT_SLACK:
                 findings.append(
                     Finding(

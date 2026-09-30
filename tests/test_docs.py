@@ -65,7 +65,10 @@ def test_the_quoted_registry_listings_match_the_registry():
     so only an exact-string check catches a list that is present but short."""
     shipped = ", ".join(sorted(_shipped()))
     text = _doc("errors.md")
-    for lead in ("known components: ", "goto, "):
+    from deckwright.spec._place import PLACEMENT_FIELDS
+
+    # The second row lists the placement fields first; the registry follows the last of them.
+    for lead in ("known components: ", f"{PLACEMENT_FIELDS[-1]}, "):
         quoted = re.findall(rf"{lead}([a-z, ]+)`", text)
         assert quoted, f"no errors.md row quotes the registry after {lead!r}"
         assert quoted == [shipped] * len(quoted), (
@@ -273,7 +276,8 @@ def test_every_table_cell_key_is_documented():
 
 
 def test_every_cli_command_has_a_section():
-    cli = (pathlib.Path(__file__).resolve().parents[1] / "src/deckwright/cli.py").read_text()
+    cli_dir = pathlib.Path(__file__).resolve().parents[1] / "src/deckwright/cli"
+    cli = "\n".join(path.read_text() for path in cli_dir.rglob("*.py"))
     commands = re.findall(r"@app\.command\(\)\ndef (\w+)", cli)
     assert _missing(commands, _doc("cli.md"), "## `{}`") == []
 
@@ -291,7 +295,7 @@ def test_every_qa_check_is_named_in_the_qa_reference():
 def test_every_cli_flag_has_a_mention_in_the_cli_reference():
     """The command gate above passes a command whose flags are all undocumented — a
     reader then knows `qa` exists and not that `--fail-on` is how they gate CI on it."""
-    cli = (ROOT / "src/deckwright/cli.py").read_text()
+    cli = "\n".join(path.read_text() for path in (ROOT / "src/deckwright/cli").rglob("*.py"))
     flags = set(re.findall(r'"(--[a-z][a-z-]*)"', cli))
     assert flags, "no flags found at all — the declaration shape changed"
     assert _missing(flags, _doc("cli.md")) == []
@@ -473,6 +477,10 @@ def test_every_count_the_docs_state_is_the_real_one(path):
     if not path.is_file():
         pytest.skip(f"{path.name} is not in an sdist — it is repository documentation")
     text = path.read_text()
+    if path.name == "CHANGELOG.md":
+        # A released entry states what was true of its release; only what is unreleased
+        # speaks for the code as it stands.
+        text = text.split("\n## v", 1)[0]
     wrong = []
     for pattern, actual in _STATED_COUNTS:
         for match in re.finditer(pattern, text, re.I):

@@ -36,7 +36,7 @@ panels. Everything else, including the full unit-test suite, runs without them.
 These checks run in CI and as pre-commit hooks — run them locally first:
 
 ```bash
-bin/test    # pytest
+bin/test    # pytest; a whole-suite run uses every core (docs/testing.md)
 bin/lint    # ruff (lint + format) + mypy + structural gate + import layering + framework-first
 ```
 

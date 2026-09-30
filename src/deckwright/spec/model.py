@@ -51,6 +51,7 @@ class Placement:
     id: str | None = None
     reveals: str | None = None
     goto: str | None = None  # a slide id, or a relative jump in GOTO_JUMPS
+    morph: str | None = None  # shared with its namesake on the next slide, for Morph to pair
     bleed: bool = False
     align: str = "left"
     anchor: str = "top"

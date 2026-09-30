@@ -17,9 +17,23 @@ def text_slides() -> dict[str, dict[str, Any]]:
                         "items": [
                             "The first point",
                             "The second point, [with a link](https://example.com/point)",
-                            "The third point",
+                            "The third point runs long on purpose, so that every template "
+                            "sets it on more than one line of its column and the list is "
+                            "sized by the lines it wraps to rather than by its bullets",
                         ]
                     },
+                }
+            ],
+        },
+        "equation": {
+            "title": "An equation",
+            "subtitle": "Office Math, with one line of text as its fallback",
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": {"from": 0, "to": 5}},
+                    "anchor": "middle",
+                    "align": "center",
+                    "equation": {"tex": r"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"},
                 }
             ],
         },

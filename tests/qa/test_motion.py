@@ -173,10 +173,16 @@ def test_a_trigger_hidden_by_its_own_target_can_never_fire(revealing, tmp_path):
     def ring(xml):
         head, _, timing = xml.partition("<p:timing")
         hidden = re.findall(r'nodeType="clickEffect".*?<p:spTgt spid="(\d+)"/>', timing, re.S)
-        rewritten = re.sub(
-            r'(<p:cond evt="onClick" delay="0"><p:tgtEl><p:spTgt spid=")\d+(")',
-            lambda m, it=iter(hidden): m.group(1) + next(it) + m.group(2),
-            "<p:timing" + timing,
+        root, *seqs = ("<p:timing" + timing).split("<p:seq ")
+        # A sequence listens on its start and next conditions alike; both point at its target.
+        rewritten = root + "".join(
+            "<p:seq "
+            + re.sub(
+                r'(<p:cond evt="onClick" delay="0"><p:tgtEl><p:spTgt spid=")\d+(")',
+                lambda m, spid=spid: m.group(1) + spid + m.group(2),
+                seq,
+            )
+            for seq, spid in zip(seqs, hidden, strict=True)
         )
         return head + rewritten
 
@@ -210,3 +216,21 @@ def test_a_target_the_main_build_also_reveals_is_already_on_screen(revealing, tm
     assert all("already on screen" in f.detail for f in warned)
     # The plate and its words are both revealed, so every warning names the same target.
     assert len({f.detail.split(" is revealed")[0] for f in warned}) == 1
+
+
+def test_the_timing_readers_pass_over_what_is_not_a_sequence_they_know():
+    """A `p:seq` with no time node, and one that is neither the main sequence nor a trigger."""
+    from lxml import etree
+
+    from deckwright.motion.read import clicks, sequences
+
+    ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
+    root = etree.fromstring(
+        f'<p:timing xmlns:p="{ns}"><p:seq/>'
+        '<p:seq><p:cTn nodeType="afterGroup"><p:childTnLst><p:par>'
+        '<p:cTn presetClass="entr" nodeType="clickEffect"><p:childTnLst><p:set><p:cBhvr>'
+        '<p:tgtEl><p:spTgt spid="7"/></p:tgtEl></p:cBhvr></p:set></p:childTnLst></p:cTn>'
+        "</p:par></p:childTnLst></p:cTn></p:seq></p:timing>"
+    )
+    assert sequences(root) == ([], set())
+    assert clicks(root) == 0

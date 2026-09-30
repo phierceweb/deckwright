@@ -30,11 +30,11 @@ _MIN_EDGE_RATIO = 1.2
 
 @component("swatches")
 def swatches(ctx: SlideCtx) -> BodyResult:
-    """One chip per role, wrapped across the placement, with an optional caption."""
+    """One chip per role, ``columns`` to a row, with an optional caption."""
     known_fields(ctx, _FIELDS)
     roles = _roles(ctx)
     rect = ctx.body_rect
-    columns = min(len(roles), _MAX_COLUMNS)
+    columns = min(len(roles), _columns(ctx))
     gutter = ctx.grid.gutter
     chip_w = (rect.width - gutter * (columns - 1)) / columns
     chip_h = ctx.theme.scale.y(_CHIP_H_RUNG)
@@ -59,7 +59,7 @@ def swatches(ctx: SlideCtx) -> BodyResult:
     for index, role in enumerate(roles):
         row, column = divmod(index, columns)
         left = rect.left + column * (chip_w + gutter)
-        top = rect.top + row * (chip_h + label_h + gutter)
+        top = rect.top + row * (chip_h + _LABEL_GAP + label_h + gutter)
         hex_value = ctx.theme.palette.role(role)
         # A chip the colour of the paper is no chip at all — the roles most worth
         # showing (page, surface, an inverse ink) are exactly the ones that vanish.
@@ -82,7 +82,7 @@ def swatches(ctx: SlideCtx) -> BodyResult:
             font=ctx.theme.face,
         )
         para(frame, hex_value, caption_style.size, ctx.dim(), space_after=0, font=ctx.theme.mono)
-        ctx.manifest.record(frame._parent, text=role)
+        ctx.manifest.record(frame._parent, text=f"{role} {hex_value}", lines=[role, hex_value])
         groups.append([(chip.shape_id, "surface"), (frame._parent.shape_id, "text")])
 
     if caption:
@@ -97,6 +97,24 @@ def swatches(ctx: SlideCtx) -> BodyResult:
         ctx.manifest.record(note._parent, text=caption)
         groups.append([(note._parent.shape_id, "text")])
     return BodyResult(groups=groups, height=extent)
+
+
+def _columns(ctx: SlideCtx) -> int:
+    """Chips per row as written, or the most a row takes when it is left out."""
+    raw = ctx.body.get("columns")
+    if raw is None:
+        return _MAX_COLUMNS
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise LayoutError(
+            f"slide {ctx.spec.index} (component 'swatches'): 'columns' is how many chips "
+            f"sit in a row, so it must be a whole number, got {raw!r}"
+        )
+    if not 1 <= raw <= _MAX_COLUMNS:
+        raise LayoutError(
+            f"slide {ctx.spec.index} (component 'swatches'): 'columns' is {raw}; it must "
+            f"be between 1 and {_MAX_COLUMNS}"
+        )
+    return raw
 
 
 def _caption_h(ctx: SlideCtx, caption: str, width_in: float) -> float:

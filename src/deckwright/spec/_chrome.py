@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from dataclasses import field as attribute
+from typing import Any
 from statistics import median
 
 from pptx.enum.shapes import PP_PLACEHOLDER
@@ -41,6 +43,7 @@ class _Text:
     largest: float
     field: str | None = None
     rank: int = _BODY
+    source: Any = attribute(default=None, compare=False)  # the shape the words were read from
 
 
 def _placeholder_type(shape) -> PP_PLACEHOLDER | None:

@@ -48,6 +48,7 @@ Hence [Verification](#verification), which is the most important section here.
 | `chartbuild` | `<p:timing>` | A native chart's own build, by category or series. |
 | `interactive` | `<p:timing>` | Click-a-shape-to-reveal-another, off the main sequence. |
 | `transition` | `<p:transition>` | How the show arrives at a slide. |
+| `read` | — | Reads a timing tree back: what each sequence reveals, which shape triggers it, and how many clicks the main sequence spends. `qa` and `diff` share it. |
 
 `layouts/motion.py` is the layer above: it reads `ctx.spec` and `ctx.theme.motion` and
 decides which of the above to call. Components never call any of them.
@@ -94,8 +95,8 @@ the theme, so a deck moves the same way throughout and one edit changes every sl
 |---|---|---|---|
 | `animate: together` | slide | 1 for the slide | Every reveal group flattened into one build. |
 | `animate: one_at_a_time` | slide | 1 per group | What a group *is* belongs to the component — a bullet column, a callout row, a stat tile. |
-| `motion.advance: after_previous` | **theme** | 1 for the slide | The first group waits for a click; the rest are `afterEffect` nodes `beat_ms` apart. Deck-wide by design — it is not a slide field. |
-| `reveals:` | slide | 0 | An `interactiveSeq` fires on clicking a named shape, in any order, and never advances the slide. A trigger placement contributes one `interactiveSeq` per shape it drew, so any part of it is clickable. Chain them — click one to reveal the next — but a ring is refused at build: every placement in it would be waiting on something itself hidden. |
+| `motion.advance: after_previous` | **theme** | 1 for the slide | The first group waits for a click; the rest are `afterEffect` nodes, each starting `beat_ms` after the one before finishes. Deck-wide by design — it is not a slide field. |
+| `reveals:` | slide | 0 | An `interactiveSeq` fires on clicking a named shape, in any order, and never advances the slide; a click anywhere else on the slide advances it as usual. A trigger placement contributes one `interactiveSeq` per shape it drew, so any part of it is clickable. Chain them — click one to reveal the next — but a ring is refused at build: every placement in it would be waiting on something itself hidden. |
 
 `stagger_ms` offsets shapes *within* one click, so it reads very differently in the
 first two rows: across the whole slide under `together`, inside a single group under
@@ -114,6 +115,8 @@ contents are constrained in a way that is easy to get wrong:
 - **`<p:bldP>` is only legal for text-bearing shapes.** `[MS-OI29500]` §19.5.16(c)
   requires its `spid` to name an `sp` holding a `t` element with textual data. Pictures,
   connectors, chart frames and text-free icons animate perfectly well, but get no entry.
+  A shape stored in `mc:AlternateContent` is judged by its Choice, the branch PowerPoint
+  reads: words only its Fallback holds earn no entry.
 - **An empty `<p:bldLst/>` is invalid.** `CT_BuildList` requires a child. So when every
   animated shape on a slide is text-free — a slide of images or icons — the build list
   is omitted entirely.
@@ -156,10 +159,15 @@ trip cannot show the corruption. Both writers insert rather than append.
 most summaries say), and the rest take edges. One shared direction list produces a file
 that is invalid the moment it meets `strips`. The table is [`theme.md`](theme.md#the-decks-transition).
 
-Only the base 21 are written. The 2010-era extension set — ripple, glitter, prestige,
-morph — is deliberately absent: `mc:AlternateContent` does not validate against
-`pml.xsd`, most of them do not survive a LibreOffice round trip even in their fallback,
-and morph additionally needs cross-slide shape identity that deckwright does not have.
+The base 21 are written as plain `<p:transition>` elements. Of the extension set, **morph**
+is written too, the way PowerPoint writes it: `mc:AlternateContent` holding a `p159:morph`
+Choice and a fade Fallback, in `<p:transition>`'s place. A slide asks for it with
+`transition: morph`. A placement carrying the same `morph:` name as one on the slide before
+has its shapes named `m.<name>.<component>#k`, with no slide number, because PowerPoint pairs
+shapes by name. A reader without Morph takes the Fallback's fade, as LibreOffice does. The
+wrapper does not validate against `pml.xsd` as a whole, so each branch is validated
+on its own. The rest of the 2010-era set — ripple, glitter, prestige — stays unwritten: most
+do not survive a LibreOffice round trip even in their fallback.
 
 ## Verification
 
@@ -176,13 +184,22 @@ What LibreOffice actively *hides*: wrong element order (it repairs it), schema
 invalidity (deliberately invalid probes convert to PDF without complaint), `bldP` loss
 on round trip, `advClick`, and several direction inversions.
 
-Confirmed at playback in real PowerPoint: `add_click_build`, `add_click_sequence`, and
-`add_chart_build` including `bldStep`. **Keynote does not play a chart build** — the
+Confirmed at playback in real PowerPoint (PowerPoint for Mac 16): `add_click_build`,
+`add_click_sequence` and `add_chart_build` including `bldStep`; the text-bearing `bldP`
+filter, which opens without a repair prompt with every build playing; slide transitions;
+`after_previous`, whose groups start the entrance's duration plus `beat_ms` apart, since
+the beat is the pause after the previous group finishes; the `wiperight` entrance, which
+draws left to right — PowerPoint's Effect Options reads it as *From Right*, and changing
+that option there may rewrite the direction; and `reveals:`, whose triggers fire in any
+order without spending a slide advance. **Keynote does not play a chart build** — the
 chart arrives whole; for a Keynote audience use `animate: together` or split the
 categories across slides.
 
-Not yet confirmed at playback: transitions, `after_previous`, the `wiperight` entrance,
-`reveals:`, and the text-bearing `bldP` filter.
+Awaiting the next PowerPoint check: that a `transition: morph` slide the build wrote glides
+its `morph:` placements as the hand-made probe did, and that a click away from a trigger
+advances the slide instead of stepping every trigger forward. The interactive sequence is written in
+PowerPoint's own shape, learned back from its save of a deckwright deck — `cancelBubble`,
+an `endSync`, a next-condition on the trigger's own click and no previous-condition.
 
 When something does repair, the recovery is the learn-back loop in
 [`pptx-deck-building.md`](pptx-deck-building.md): author the effect once in real

@@ -9,6 +9,7 @@ from __future__ import annotations
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import RevealItem, shape_id
 from deckwright.layouts.registry import SlideCtx
+from deckwright.motion.transition import MORPH
 from deckwright.motion import (
     add_click_build,
     add_click_reveals,
@@ -187,16 +188,20 @@ def apply_transition(ctx: SlideCtx) -> None:
         LayoutError: the slide named anything other than ``none``.
     """
     asked = ctx.spec.transition
-    if asked is not None and asked != "none":
+    if asked is not None and asked not in ("none", MORPH):
         raise LayoutError(
             f"slide {ctx.spec.index}: transition {asked!r} — a slide may only say "
-            f"'none', for a deliberate hard cut. Which transition a deck uses is the "
-            f"theme's ('motion.transition'), so that every deck on the brand moves "
-            f"the same way."
+            f"'none', for a deliberate hard cut, or 'morph', to glide what it shares with "
+            f"the slide before. Which transition a deck uses is the theme's "
+            f"('motion.transition'), so that every deck on the brand moves the same way."
         )
-    if asked == "none":
-        return
     want = ctx.theme.motion.transition
-    if want.kind == "none":
+    if asked == MORPH:
+        add_transition(ctx.slide, MORPH, speed=want.speed)
+        ctx.manifest.record_transition(MORPH)
+        return
+    if asked == "none" or want.kind == "none":
+        ctx.manifest.record_transition("none")
         return
     add_transition(ctx.slide, want.kind, direction=want.direction, speed=want.speed)
+    ctx.manifest.record_transition(want.kind)

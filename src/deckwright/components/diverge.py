@@ -12,9 +12,11 @@ from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.theme.model import Rect
+from deckwright.utils.color import stands_off
 from deckwright.utils.shapes import para, rect, textbox
 
 from deckwright.components._shape import known_fields, known_item_fields
+from deckwright.components._shared import bounded
 
 _FIELDS = ("items", "peak", "unit", "label_width", "pair")
 _ITEM_FIELDS = frozenset({"label", "value", "note"})
@@ -31,22 +33,22 @@ _BAR_MAX = 0.32
 _NOTE_W = 2.4
 
 
-def _label_width(ctx: SlideCtx) -> float:
-    raw = ctx.body.get("label_width", _LABEL_WIDTH_DEFAULT)
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        raise LayoutError(
-            f"slide {ctx.spec.index} (component 'diverge'): 'label_width' is a fraction "
-            f"of the placement's width, got {raw!r}"
-        ) from None
-    low, high = _LABEL_WIDTH_RANGE
-    if not low <= value <= high:
-        raise LayoutError(
-            f"slide {ctx.spec.index} (component 'diverge'): 'label_width' is a fraction "
-            f"of the placement's width, {low} to {high}; got {value:g}"
-        )
-    return value
+def _bar_fills(ctx: SlideCtx, bars: list[tuple[Rect, bool]], *, ink: str) -> tuple[str, str]:
+    """The toward and away fills, each standing off the ground of every bar it paints.
+
+    Accents are tried in order, then ``ink``. Away also prefers a colour that stands off
+    toward, so the two directions differ wherever the palette can make them.
+    """
+    palette = ctx.theme.palette
+    options = list(dict.fromkeys([*(palette.role(n) for n in palette.accents), ink]))
+
+    def first(boxes: list[Rect], other: str | None) -> str:
+        clear = [c for c in options if all(stands_off(c, ctx.behind(b, ink=c)) for b in boxes)]
+        apart = [c for c in clear if other is None or stands_off(c, other)]
+        return (apart or clear or [ink])[0]
+
+    toward = first([box for box, up in bars if up], None)
+    return toward, first([box for box, up in bars if not up], toward)
 
 
 def _items(ctx: SlideCtx) -> list[dict]:
@@ -107,7 +109,13 @@ def diverge(ctx: SlideCtx) -> BodyResult:
         )
     known_fields(ctx, _FIELDS)
     items = _items(ctx)
-    label_w = _label_width(ctx)
+    label_w = bounded(
+        ctx,
+        "label_width",
+        default=_LABEL_WIDTH_DEFAULT,
+        bounds=_LABEL_WIDTH_RANGE,
+        what="is a fraction of the placement's width",
+    )
     peak = _peak(ctx, items)
     r = ctx.body_rect
 
@@ -131,13 +139,20 @@ def diverge(ctx: SlideCtx) -> BodyResult:
     centre = axis_x + span / 2
     unit = str(ctx.body.get("unit", ""))
     body, caption = ctx.style("body"), ctx.style("caption")
-    toward, away = ctx.color("accent-1"), ctx.color("accent-2")
+    values = [float(item["value"]) for item in items]
+    boxes = [
+        Rect(centre if v > 0 else centre - w, r.top + i * lane + lane / 2 - bar_h / 2, w, bar_h)
+        for i, v in enumerate(values)
+        for w in [abs(v) / peak * reach]
+    ]
+    toward, away = _bar_fills(
+        ctx, [(box, v > 0) for box, v in zip(boxes, values, strict=True)], ink=ink_hex
+    )
     groups: list[list[RevealItem]] = []
 
-    for index, item in enumerate(items):
-        value = float(item["value"])
+    for index, (item, value, box) in enumerate(zip(items, values, boxes, strict=True)):
         mid = r.top + index * lane + lane / 2
-        width = abs(value) / peak * reach
+        left, width = box.left, box.width
         ids: list[RevealItem] = []
 
         label = textbox(
@@ -163,13 +178,10 @@ def diverge(ctx: SlideCtx) -> BodyResult:
         )
         ids.append((label._parent.shape_id, "text"))
 
-        left = centre if value > 0 else centre - width
-        bar = rect(ctx.slide, left, mid - bar_h / 2, width, bar_h, toward if value > 0 else away)
-        fill = str(toward if value > 0 else away)
-        ctx.manifest.record(
-            bar, fill=fill, ground=ctx.behind(Rect(left, mid - bar_h / 2, width, bar_h), ink=fill)
-        )
-        ctx.painted.append((Rect(left, mid - bar_h / 2, width, bar_h), fill))
+        fill = toward if value > 0 else away
+        bar = rect(ctx.slide, left, box.top, width, bar_h, ctx.rgb(fill))
+        ctx.manifest.record(bar, fill=fill, ground=ctx.behind(box, ink=fill))
+        ctx.painted.append((box, fill))
         ids.append((bar.shape_id, "surface"))
 
         reading = f"{'+' if value > 0 else '−'}{abs(value):g}{unit}"

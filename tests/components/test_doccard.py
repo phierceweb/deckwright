@@ -327,3 +327,55 @@ def test_a_start_past_the_end_of_the_file_is_refused(
     monkeypatch.setattr("deckwright.components.doccard._render", fake_render)
     with pytest.raises(LayoutError, match="has only 10 line"):
         get_component("document")(_ctx(ctx_factory, numbered, lines="11-20"))
+
+
+def test_a_document_card_is_rendered_on_a_clear_canvas(tmp_path, ctx_factory, monkeypatch):
+    """Its corners and shadow blend on any slide; on white they travelled as a matte."""
+    from deckwright.components import doccard
+
+    asked = {}
+
+    def fake(html, path, *, width, scale, **kwargs):
+        asked.update(kwargs, body=html)
+        from PIL import Image
+
+        Image.new("RGBA", (width, 200), (255, 255, 255, 255)).save(path)
+        return path
+
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr("deckwright.services.htmlshot.render_html_to_png", fake)
+    source = tmp_path / "doc.md"
+    source.write_text("# Title\n\nWords.\n")
+    ctx = ctx_factory({"document": {"source": str(source)}}, base=tmp_path)
+    doccard.document(ctx)
+    assert asked["transparent"] is True
+    assert "body { margin: 0; background: transparent;" in asked["body"]
+
+
+@pytest.mark.parametrize(
+    "name, body, match",
+    [
+        ("gone.png", None, r"image not found: gone\.png \(named in .*doc\.md\)"),
+        (
+            "notes.txt",
+            "words",
+            r"notes\.txt \(named in .*doc\.md\) is not an image a card can embed",
+        ),
+        (
+            "../up.png",
+            None,
+            r"\.\./up\.png \(named in .*doc\.md\) is outside the source's own directory",
+        ),
+    ],
+)
+def test_a_picture_the_card_cannot_embed_is_refused_by_name(
+    tmp_path, ctx_factory, fake_render, monkeypatch, name, body, match
+):
+    monkeypatch.setattr("deckwright.components.doccard._render", fake_render)
+    if body is not None:
+        (tmp_path / name).write_text(body)
+    source = tmp_path / "doc.md"
+    source.write_text(f"# T\n\n![a]({name})\n")
+    ctx = ctx_factory({"document": {"source": str(source)}}, base=tmp_path)
+    with pytest.raises(LayoutError, match=match):
+        get_component("document")(ctx)

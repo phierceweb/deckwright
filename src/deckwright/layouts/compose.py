@@ -206,6 +206,9 @@ def _origin(ctx: SlideCtx, placement: Placement, index: int) -> str:
     An ``id:`` fixes the name across edits; without one the index shifts when a
     placement is inserted above it, and every name below the insert moves with it.
     """
+    if placement.morph:
+        # No slide number: PowerPoint pairs a shape with its namesake on the next slide.
+        return f"m.{placement.morph}.{placement.component}"
     return f"s{ctx.spec.index}.{placement.id or f'p{index}'}.{placement.component}"
 
 

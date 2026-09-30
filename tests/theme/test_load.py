@@ -399,7 +399,9 @@ def test_a_mark_named_after_a_painted_backdrop_is_kept(tmp_path, synthetic_templ
 def test_a_mark_naming_no_painted_backdrop_is_rejected(tmp_path, synthetic_template):
     """A mark nothing lays down is the silent drop this loader exists to reject."""
     body = BASE + "    marks:\n      wordmark: {media: logo.png, left: 10.55, top: 6.35}\n"
-    with pytest.raises(ThemeError, match=r"mark 'wordmark' names no painted backdrop"):
+    with pytest.raises(
+        ThemeError, match=r"unknown mark 'wordmark'; a mark is named for the painted"
+    ):
         load_theme(_write(tmp_path, synthetic_template, body))
 
 

@@ -14,6 +14,7 @@ from deckwright.errors import LayoutError
 from deckwright.icons.draw import place_icon
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import boolean, has_text
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rrect, textbox
 from deckwright.utils.links import plain
@@ -76,7 +77,7 @@ def _side_floor(
     Width only: whether the stack then fits the band is `qa`'s `text-fit` check.
     """
     rows = [(str(side["value"]), value_pt), (str(side["label"]), label_pt)]
-    if side.get("note"):
+    if has_text(side.get("note")):
         rows.append((str(side["note"]), note_pt))
     widest = max(
         (
@@ -120,7 +121,13 @@ def _side(ctx: SlideCtx, key: str) -> dict:
             f"a 'label' — a versus is two named magnitudes"
         )
     known_item_fields(ctx, raw, _SIDE_FIELDS, noun=key)
-    return raw
+    highlight = boolean(raw.get("highlight", False))
+    if not isinstance(highlight, bool):
+        raise LayoutError(
+            f"slide {ctx.spec.index} (component 'versus'): {key!r} 'highlight' must be "
+            f"true or false, got {highlight!r}"
+        )
+    return {**raw, "highlight": highlight}
 
 
 @component("versus")
@@ -203,7 +210,7 @@ def versus(ctx: SlideCtx) -> BodyResult:
             space_after=0,
             font=ctx.theme.face,
         )
-        if side.get("note"):
+        if has_text(side.get("note")):
             para(
                 tf,
                 str(side["note"]),
@@ -215,7 +222,7 @@ def versus(ctx: SlideCtx) -> BodyResult:
             )
         recorded = [str(side["value"]), str(side["label"])]
         sizes = [stat.size * _VALUE_SCALE, body.size]
-        if side.get("note"):
+        if has_text(side.get("note")):
             recorded.append(str(side["note"]))
             sizes.append(caption.size)
         ctx.manifest.record(

@@ -133,6 +133,25 @@ def coerce_int(ctx: SlideCtx, key: str, value: Any, default: int) -> int:
         ) from e
 
 
+def bounded(
+    ctx: SlideCtx, key: str, *, default: float, bounds: tuple[float, float], what: str
+) -> float:
+    """A numeric field held to ``bounds``, inclusive; ``what`` says what the number measures.
+
+    Raises ``LayoutError`` naming the slide, the component, the range and the value.
+    """
+    where = f"slide {ctx.spec.index} (component {ctx.component!r}{_part(ctx)})"
+    raw = ctx.body.get(key, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise LayoutError(f"{where}: {key!r} {what}, got {raw!r}") from None
+    low, high = bounds
+    if not low <= value <= high:
+        raise LayoutError(f"{where}: {key!r} {what}, {low} to {high}; got {value:g}")
+    return value
+
+
 def mark_colour(ctx: SlideCtx, box: Rect) -> str:
     """The colour a non-text mark is painted where it lands.
 

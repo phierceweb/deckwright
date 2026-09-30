@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import re
+from functools import lru_cache
 
 from PIL import Image
 
@@ -38,6 +39,8 @@ def flatten_master_background(prs, rgb: tuple[int, int, int]) -> bool:
     return changed
 
 
+# Every build of a deck, and every exercise of a conform run, reopens the same master picture.
+@lru_cache(maxsize=8)
 def _flatten(blob: bytes, rgb: tuple[int, int, int]) -> bytes | None:
     """Return ``blob`` composited onto ``rgb``, or None if it has no alpha to flatten."""
     try:

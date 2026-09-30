@@ -143,3 +143,72 @@ def test_two_shapes_sharing_a_name_are_flagged(deck, tmp_path):
 
 def test_distinct_shape_names_are_clean(deck):
     assert [f for f in check_package(deck) if f.check == "shape-name"] == []
+
+
+_MC = b"http://schemas.openxmlformats.org/markup-compatibility/2006"
+_A14 = b"http://schemas.microsoft.com/office/drawing/2010/main"
+
+
+def _alternate(fallback=lambda sp: sp, choice=lambda sp: sp):
+    """A transform moving the slide's text box into an ``mc:AlternateContent`` as PowerPoint
+    stores an equation: a copy in each branch, sharing the box's id and name."""
+
+    def wrap(xml: bytes) -> bytes:
+        match = re.search(rb"<p:sp>.*?</p:sp>", xml)
+        assert match is not None
+        sp = match.group(0)
+        return xml.replace(
+            sp,
+            b'<mc:AlternateContent xmlns:mc="' + _MC + b'">'
+            b'<mc:Choice xmlns:a14="' + _A14 + b'" Requires="a14">' + choice(sp) + b"</mc:Choice>"
+            b"<mc:Fallback>" + fallback(sp) + b"</mc:Fallback></mc:AlternateContent>",
+        )
+
+    return wrap
+
+
+def test_a_choice_and_its_fallback_may_share_an_id_and_a_name(deck, tmp_path):
+    """No reader draws both branches, so the pair PowerPoint writes is not a duplicate."""
+    wrapped = corrupt(deck, tmp_path / "alternate.pptx", _alternate())
+    with zipfile.ZipFile(wrapped) as z:
+        assert z.read("ppt/slides/slide1.xml").count(b'<p:cNvPr id="2" name="TextBox 1"/>') == 2
+
+    assert check_package(wrapped) == []
+
+
+@pytest.mark.parametrize(
+    "transform, detail",
+    [
+        pytest.param(
+            _alternate(fallback=lambda sp: sp.replace(b'id="2"', b'id="3"')),
+            "shape id 3 is used by both 'TextBox 1' and 'Picture 2'",
+            id="a-fallback-and-a-shape-beside-the-wrapper",
+        ),
+        pytest.param(
+            _alternate(choice=lambda sp: sp + sp.replace(b'name="TextBox 1"', b'name="Copy"')),
+            "shape id 2 is used by both 'TextBox 1' and 'Copy'",
+            id="two-shapes-inside-one-choice",
+        ),
+    ],
+)
+def test_a_duplicate_id_a_reader_can_see_is_still_an_error(deck, tmp_path, transform, detail):
+    bad = corrupt(deck, tmp_path / "dup-branch.pptx", transform)
+    findings = [f for f in check_package(bad) if f.check == "shape-id"]
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+    assert findings[0].detail.startswith(detail)
+
+
+def test_a_relationship_target_named_from_the_package_root_resolves(deck, tmp_path):
+    """OPC lets a target name its part from the package root, so a picture named that way
+    is there, not missing."""
+    rooted = corrupt(
+        deck,
+        tmp_path / "rooted.pptx",
+        lambda d: d.replace(b'Target="../media/image1.png"', b'Target="/ppt/media/image1.png"'),
+        part="ppt/slides/_rels/slide1.xml.rels",
+    )
+    with zipfile.ZipFile(rooted) as z:
+        assert b'Target="/ppt/media/image1.png"' in z.read("ppt/slides/_rels/slide1.xml.rels")
+
+    assert check_package(rooted) == []

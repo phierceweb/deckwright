@@ -7,6 +7,7 @@ Config (env, read at call time, so ``.env`` changes take effect between runs):
 
 from __future__ import annotations
 
+import errno
 import filecmp
 import shlex
 from importlib import resources
@@ -52,6 +53,13 @@ def _builtin_dir() -> Path:
 
 def theme_file(ref: str | Path) -> Path:
     """An existing file for a theme name or a theme path, or a ThemeError saying which."""
+    try:
+        return _theme_file(ref)
+    except OSError as e:
+        raise ThemeError(f"theme {str(ref)!r} cannot be looked up: {e.strerror or e}") from None
+
+
+def _theme_file(ref: str | Path) -> Path:
     path = Path(ref)
     if path.suffix.lower() in _TEMPLATE_SUFFIXES:
         raise ThemeError(_template_route(path))
@@ -73,6 +81,37 @@ def theme_file(ref: str | Path) -> Path:
         f"(packaged: {packaged}). Onboard a brand template with "
         f"'deckwright conform <brand>.pptx --adopt {ref}', or pass a path to a theme file"
     )
+
+
+def beside(theme: Path, value: str, *, key: str) -> Path:
+    """``value``, a path the theme file names relative to itself, resolved.
+
+    Raises:
+        ThemeError: the path holds a NUL, a name longer than the filesystem allows, or
+            a symlink loop. Whether anything is there is the caller's question.
+    """
+    path = theme.parent / value
+    try:
+        path = path.resolve()
+        path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    except (RuntimeError, ValueError, OSError) as e:
+        raise ThemeError(
+            f"theme {theme}: {key} {value!r} {_unusable(e)}; it names a path beside the theme"
+        ) from None
+    return path
+
+
+def _unusable(e: Exception) -> str:
+    if isinstance(e, ValueError):
+        return "holds a NUL character"
+    errno_ = getattr(e, "errno", None)
+    if isinstance(e, RuntimeError) or errno_ == errno.ELOOP:
+        return "runs into a symlink loop"
+    if errno_ == errno.ENAMETOOLONG:
+        return "has a name longer than the filesystem allows"
+    return f"cannot be looked up: {getattr(e, 'strerror', None) or e}"
 
 
 def _template_route(ref: Path) -> str:
@@ -128,6 +167,11 @@ def _adopted_as(template: Path) -> list[str]:
         except (OSError, UnicodeDecodeError, yaml.YAMLError):
             continue
         bound = data.get("template") if isinstance(data, dict) else None
-        if bound and (theme.parent / str(bound)).resolve() == template.resolve():
-            names.append(theme.name.removesuffix(".theme.yaml"))
+        if not bound:
+            continue
+        try:
+            if beside(theme, str(bound), key="template") == template.resolve():
+                names.append(theme.name.removesuffix(".theme.yaml"))
+        except ThemeError:
+            continue
     return names

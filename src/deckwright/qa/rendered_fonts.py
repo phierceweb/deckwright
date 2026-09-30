@@ -24,6 +24,7 @@ from pf_core.utils.env import resolve_int
 from deckwright.qa.model import Finding, Severity
 from deckwright.theme.fonts import cjk_postscript_names, postscript_names
 from deckwright.utils._cjk import carries_cjk
+from deckwright.utils.mce import unread
 from deckwright.utils.env import env_str
 from deckwright.utils.xml import fromstring as parse_xml
 
@@ -75,7 +76,10 @@ def parse_pdffonts(stdout: str) -> list[tuple[str, str]]:
 
 
 def deck_faces(deck: Path) -> set[str]:
-    """Every typeface a slide run names as its latin or CJK face."""
+    """Every typeface a slide run the render draws names as its latin or CJK face.
+
+    A run in a branch the renderer passes over — an equation's maths — is not drawn.
+    """
     faces: set[str] = set()
     with zipfile.ZipFile(deck) as archive:
         for part in archive.namelist():
@@ -84,6 +88,8 @@ def deck_faces(deck: Path) -> set[str]:
             root = parse_xml(archive.read(part))
             for tag in ("latin", "ea"):
                 for font in root.iter(f"{{{_A}}}{tag}"):
+                    if unread(font):
+                        continue
                     face = str(font.get("typeface") or "")
                     if face and not face.startswith(("+mj-", "+mn-")):
                         faces.add(face)

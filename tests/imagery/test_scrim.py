@@ -104,3 +104,48 @@ def test_a_bare_true_means_solve_the_opacity_from_the_pixels():
 
 def test_the_word_auto_means_the_same():
     assert scrim_spec({"opacity": "auto"}, default_pair="inverse", where="slide 1").opacity is None
+
+
+@pytest.mark.parametrize(
+    "cfg, match",
+    [
+        ({"gradient": "sideways"}, r"scrim gradient must be one of .*, got 'sideways'"),
+        ({"opacity": "dark"}, r"scrim opacity is a fraction 0\.\.1 or 'auto', got 'dark'"),
+        ({"opacity": 1.5}, r"scrim opacity is a fraction 0\.\.1 or 'auto', got 1\.5"),
+    ],
+)
+def test_a_scrim_the_build_cannot_draw_is_refused_by_name(cfg, match):
+    with pytest.raises(LayoutError, match=match):
+        scrim_spec(cfg, default_pair="inverse", where="slide 1")
+
+
+_WHITE = ((255, 255, 255),)
+
+
+def test_an_auto_scrim_where_the_gradient_is_fully_clear_is_refused(theme):
+    from deckwright.imagery.scrim import resolve
+
+    spec = scrim_spec({"gradient": "bottom"}, default_pair="inverse", where="slide 1")
+    with pytest.raises(LayoutError, match=r"an auto scrim cannot be solved here"):
+        resolve(
+            spec, palette=theme.palette, sampled=_WHITE, required=4.5, fraction=0.0, where="slide 1"
+        )
+
+
+def test_a_gradient_that_would_need_more_than_full_opacity_is_refused(theme):
+    """White ink over a white picture needs a near-opaque scrim; at a tenth of the gradient's
+    strength that is several times what a fill can be."""
+    from deckwright.imagery.scrim import resolve
+
+    spec = scrim_spec({"gradient": "bottom"}, default_pair="inverse", where="slide 1")
+    with pytest.raises(LayoutError, match=r"cannot make this legible .* peak opacity"):
+        resolve(
+            spec, palette=theme.palette, sampled=_WHITE, required=4.5, fraction=0.1, where="slide 1"
+        )
+
+
+def test_checked_measures_the_ground_an_explicit_scrim_leaves():
+    from deckwright.imagery.scrim import checked
+
+    bg, ratio = checked(Scrim("000000", "FFFFFF", 0.5, "none"), sampled=_WHITE, required=4.5)
+    assert (bg, round(ratio, 2)) == ("808080", 3.95)

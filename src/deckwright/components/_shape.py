@@ -16,8 +16,9 @@ from pptx.util import Inches, Pt
 
 from deckwright.charts._effects import apply_shadow
 from deckwright.errors import LayoutError
-from deckwright.utils.keys import unknown_field
+from deckwright.utils.keys import refuse_unknown
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import boolean
 from deckwright.theme.model import Rect
 from deckwright.theme.palette import Pair
 from deckwright.utils.color import AA_LARGE, contrast_ratio
@@ -41,9 +42,7 @@ _XML_CHAR = re.compile("[\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 def known_fields(ctx: SlideCtx, fields: tuple[str, ...]) -> None:
     """Reject an unknown component field, naming the ones this primitive reads."""
-    unknown = sorted(set(ctx.body) - set(fields))
-    if unknown:
-        raise LayoutError(unknown_field(unknown[0], fields, where=_where(ctx)))
+    refuse_unknown(ctx.body, fields, error=LayoutError, where=_where(ctx))
 
 
 def known_item_fields(
@@ -60,9 +59,6 @@ def known_item_fields(
     key is silently dropped — commonest cause being an unquoted comma in a label, which
     YAML has already split into two keys.
     """
-    unknown = sorted(set(item) - fields)
-    if not unknown:
-        return
     # An entry in a list is "item 3"; a mapping the component names outright — a versus
     # side, say — is just 'left', and numbering it reads as nonsense.
     if index is None:
@@ -70,14 +66,13 @@ def known_item_fields(
     else:
         where = f"{noun} {index}"
         subject = f"{'an' if noun[0] in 'aeiou' else 'a'} {noun}"
-    raise LayoutError(
-        unknown_field(
-            unknown[0],
-            sorted(fields),
-            where=_where(ctx),
-            lead=f"{where} has the unknown field",
-            label=f"{subject} reads",
-        )
+    refuse_unknown(
+        item,
+        sorted(fields),
+        error=LayoutError,
+        where=_where(ctx),
+        lead=f"{where} has the unknown field",
+        label=f"{subject} reads",
     )
 
 
@@ -153,8 +148,8 @@ def number(ctx: SlideCtx, key: str, *, default: float) -> float:
 
 
 def flag(ctx: SlideCtx, key: str) -> bool:
-    """A boolean component field; anything but a real bool is refused."""
-    value = ctx.body.get(key, False)
+    """A boolean component field; anything but true, false, yes, no, on or off is refused."""
+    value = boolean(ctx.body.get(key, False))
     if not isinstance(value, bool):
         raise LayoutError(f"{_where(ctx)}: {key!r} must be true or false, got {value!r}")
     return value

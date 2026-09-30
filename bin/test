@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 # Run the test suite via the project venv. Args pass through to pytest.
+#
+# With pytest-xdist installed, a whole-suite run spreads across every core, each brand
+# template's tests on one worker. Selected tests (a path, -k, --lf) run in one process,
+# and -n, -p, --dist, --pdb, --trace or --collect-only is left to pytest as given;
+# -n0 runs the whole suite serially.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+parallel=1
+for arg in "$@"; do
+  case "$arg" in
+    -n | -n* | --numprocesses* | -p | -p* | --dist* | --pdb | --trace | --co | --collect-only | \
+      -k | -k* | --lf | --last-failed)
+      parallel=0 ;;
+    -*) ;;
+    *) if [[ -e "${arg%%::*}" ]]; then parallel=0; fi ;;
+  esac
+done
+if [[ $parallel == 1 ]] && "$ROOT/bin/py" -c "import xdist" 2>/dev/null; then
+  set -- -n auto --dist loadgroup "$@"
+fi
 exec "$ROOT/bin/py" -m pytest "$@"

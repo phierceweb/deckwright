@@ -59,7 +59,9 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `bad.deck.yaml: deck config: unknown field 'section'; did you mean 'sections'?` | The deck document's chapter list is plural. `section:` is a *slide* field. |
 | `bad.deck.yaml: deck config: sections: the link '[One](ftp://x.io)' — 'ftp://x.io' is not a web address — a link opens http://, https:// or mailto:, and anything else is run or opened as a local file. Put a backslash before the bracket to show it as text` | A section name is copy a `nav` sets, so its links are checked like any other. Fix the address, or escape the bracket. |
 | `bad.deck.yaml: deck config: unknown field 'author'; known fields: theme, title, sections, extends, out, lang` | The deck document takes exactly those six. |
+| `bad.deck.yaml: deck config: unknown field 2021-01-01; known fields: theme, title, sections, extends, out, lang — YAML reads 2021-01-01 as a date; quote the key` | YAML turned the key into a date before deckwright saw it, so the message names it as YAML read it. A date, a boolean or `~` in a key position is almost always a stray line; delete it, or quote it if it was meant as text. |
 | `bad.deck.yaml: invalid YAML — while scanning a quoted scalar …` | A quoting or indentation mistake. The message names the line and column. |
+| `bad.deck.yaml: invalid YAML — 'maybe' is not a boolean …` | A `!!bool` tag on a word YAML cannot read as true or false. Drop the tag, or write `true`, `false`, `yes`, `no`, `on` or `off`. |
 | `extension module not found: /path/to/my_components.py` | `extends:` is resolved beside the deck spec, and the message names the full path it tried. |
 | `failed to import extension module my_components.py: body component 'card' is already registered` | The custom component's `@component("…")` name collides with one that ships. Rename yours. |
 
@@ -69,6 +71,7 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 |---|---|
 | `bad.deck.yaml: slide 1: unknown field 'subtile'; did you mean 'subtitle'?` | A typo. Take the suggestion. |
 | `bad.deck.yaml: slide 1: unknown field 'footer'; known fields: title, kicker, subtitle, notes, section, animate, transition, background, place, chrome, id, lang` | A slide takes exactly those twelve. Content goes in a placement. |
+| `bad.deck.yaml: slide 1: unknown field true; known fields: title, kicker, subtitle, notes, section, animate, transition, background, place, chrome, id, lang — YAML reads an unquoted yes, on or true as the boolean true; quote the key` | A theme reads an unquoted `yes`, `on` or `true` as `true`, and `no`, `off` or `false` as `false`, in a key as in a value; a spec keeps `yes`, `no`, `on` and `off` as written, so there only `true` and `false` arrive as booleans. Every unknown-key message, in a spec or a theme, names such a key as YAML read it — `true`, `false`, `null`, a date or a number — and ends with this note. |
 | `bad.deck.yaml: slide 1: 'background' must name a colour pair ('page', 'inverse', 'accent-1', …) or be a mapping with 'image:', got ['dark']` | A background is one pair name or an image mapping, never a list. |
 | `no colour pair 'dark'; declared pairs: accent-1, accent-2, accent-3, accent-4, inverse, page, page-muted, surface` | The name is not a pair this theme declares. The message lists the ones that are, which depends on how many accents the theme binds. |
 | `bad.deck.yaml: slide 1 (component 'bullets'): item 2 is a dict, not a line of text — a bullet holding a comma or a colon needs quoting, or YAML reads it as a mapping` | `- One thing, then another` is a YAML *mapping*, not a string. Quote it: `- "One thing, then another"`. |
@@ -105,7 +108,10 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `this slide already carries a transition` | Internal: two `add_transition` calls on one slide. A spec cannot cause this — a slide takes the theme's transition once. |
 | `slide 1 (card): 'reveals: answer' names no placement on this slide; ids here: question` | `reveals:` names another placement's `id:` on the same slide. Give the trigger an `id:`. |
 | `slide 1: 'reveals:' and 'animate: one_at_a_time' cannot share a slide…` | A slide carries one animation timeline. Interactive reveals and a click build are different kinds — drop one. |
-| `slide 1: transition 'push' — a slide may only say 'none', for a deliberate hard cut…` | Which transition a deck uses is the theme's `motion.transition`. A slide may only refuse it. |
+| `slide 1: transition 'push' — a slide may only say 'none', for a deliberate hard cut, or 'morph'…` | Which transition a deck uses is the theme's `motion.transition`. A slide may refuse it, or ask to morph. |
+| `d.deck.yaml: slide 1: placement 1: 'morph' on a chart — deckwright pairs no chart across slides; morph a card, panel, image or icon` | `morph:` names a card, panel, image or icon so Morph can pair it with its namesake; a chart is never given the name. Drop `morph:` from the chart. |
+| `d.deck.yaml: slide 1: placement 2: 'morph: hero' is already placement 1 — a name pairs one placement with its namesake on the next slide` | Two placements on one slide share a `morph:` name. Give each its own. |
+| `d.deck.yaml: slide 2: placement 1: 'morph: hero' is a card on slide 1 and a panel here — PowerPoint pairs shapes in the order they were drawn, so the two must be the same component` | The namesakes on consecutive slides are different components. Use the same component on both, or a different name. |
 | `theme t.yaml: transition 'strips' has no direction 'l'; it accepts: lu, ru, ld, rd` | Each effect has its own direction vocabulary. `strips` takes corners only. |
 | `theme t.yaml: transition 'fade' takes no direction, got 'l'` | Ten of the twenty-one effects take no `dir:` at all. |
 | `theme t.yaml: unknown transition 'ripple'; known transitions: blinds, checker, …` | Only the 21 base-schema effects. The 2010-era extension set (ripple, glitter, morph…) is not written. |
@@ -117,10 +123,10 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 |---|---|
 | `bad.deck.yaml: slide 1: 'place' must be a list, got dict` | `place:` is a list of placements — each entry starts with `- at:`. |
 | `bad.deck.yaml: slide 1: placement 1: missing required field 'at'` | Every placement says where it goes. `at: {cols: [0, 12]}` is the full width. |
-| `bad.deck.yaml: slide 1: placement 1: no component — a placement needs exactly one component key; known components: bullets, callouts, card, chart, code, connector, diverge, document, ellipse, fanout, flow, grid, icon, image, nav, panel, prose, rule, stats, swatches, table, versus` | Add one of those keys beside the `at:`. |
+| `bad.deck.yaml: slide 1: placement 1: no component — a placement needs exactly one component key; known components: bullets, callouts, card, chart, code, connector, diverge, document, ellipse, equation, fanout, flow, grid, icon, image, nav, panel, prose, rule, stats, swatches, table, versus` | Add one of those keys beside the `at:`. |
 | `bad.deck.yaml: slide 1: placement 1: more than one component — found 'bullets' and 'stats'; give each its own placement` | Split them into two entries under `place:`. |
 | `bad.deck.yaml: slide 1: placement 1: unknown field 'bulets'; did you mean 'bullets'?` | A typo. Take the suggestion. |
-| `bad.deck.yaml: slide 1: placement 1: unknown field 'footer'; known fields: at, id, bleed, align, anchor, reveals, goto, bullets, callouts, card, chart, code, connector, diverge, document, ellipse, fanout, flow, grid, icon, image, nav, panel, prose, rule, stats, swatches, table, versus` | A placement takes `at`, `id`, `bleed`, `align`, `anchor`, `reveals`, `goto`, and one component key. |
+| `bad.deck.yaml: slide 1: placement 1: unknown field 'footer'; known fields: at, id, bleed, align, anchor, reveals, goto, morph, bullets, callouts, card, chart, code, connector, diverge, document, ellipse, equation, fanout, flow, grid, icon, image, nav, panel, prose, rule, stats, swatches, table, versus` | A placement takes `at`, `id`, `bleed`, `align`, `anchor`, `reveals`, `goto`, and one component key. |
 | `bad.deck.yaml: slide 1: placement 1: 'align' must be one of left, center, right, got 'justify'` | Those are the three. `justify` is not offered. |
 | `bad.deck.yaml: slide 1: placement 1: 'anchor' must be one of top, middle, bottom, got 'baseline'` | Those are the three. |
 | `bad.deck.yaml: slide 1: placement 1: component 'bullets' must be a mapping, got str` | Components take a block. `bullets:` then `items:`, not `bullets: a`. |
@@ -134,14 +140,14 @@ The old component names are gone too: `bullet-column` is `bullets`, `callout-lis
 | `bad.deck.yaml: slide 1: placement 1: 'split' divides a column band, so its 'at' takes 'cols' and 'rows', not 'box'` | Narrow the band with `cols:`, or place a `box:` on its own. |
 | `bad.deck.yaml: slide 1: placement 1: 'at.cols' start 6 must be less than end 6` | The span is half-open, so the end is one past the last column. |
 | `bad.deck.yaml: slide 1: placement 1: 'at': box is keyed, not a list — write {x: 0%, y: 0%, w: 100%, h: 100%}, in percents of the canvas` | A box names its four sides and states them in percents. |
-| `bad.deck.yaml: slide 1: placement 1: 'at': box.x is a percent of the canvas, got 0.5 — write '50%' for half of it` | A bare number is refused rather than guessed at: `0.5` and `0.5in` look alike and only one is meant. |
+| `bad.deck.yaml: slide 1: placement 1: 'at': box.x is a percent of the canvas, got 0.5 — write '50%' for half of it` | A bare number is refused rather than guessed at: `0.5` and `0.5in` look alike and only one is meant. `nan%`, `inf%` and a percent too large to be a number give the same message. |
 | `bad.deck.yaml: slide 1: placement 2: duplicate id 'x'` | An `id:` names one rectangle on the slide. Rename one of them. |
 | `bad.deck.yaml: slide 1: placement 1: 'goto: apendix' names no slide. Slide ids in this deck: appendix, intro; or jump with first, previous, next, last` | Give the target slide an `id:`, fix the spelling, or use a relative jump. |
 | `bad.deck.yaml: slide 1: placement 1: 'goto: here' is the slide it is on, so the click goes nowhere` | Point it at another slide. |
 | `bad.deck.yaml: slide 1: placement 1: 'goto: next' is on 'button', which another placement's 'reveals:' makes a trigger — one click cannot both reveal and leave the slide. Put the goto on a placement of its own` | A click on a trigger runs its reveal; the jump belongs on a different placement. |
 | `bad.deck.yaml: slide 1: placement 1 (card): the link '[here](htps://x.io)' — 'htps://x.io' is not a web address — a link opens http://, https:// or mailto:, and anything else is run or opened as a local file. Put a backslash before the bracket to show it as text` | Fix the address, or escape the bracket if the brackets are copy. |
 | `bad.deck.yaml: slide 1: placement 1 (chart): '[Q1](https://x.io)' — a chart's labels are drawn by the chart, not set as runs, so a link has nowhere to go. Put it in the slide's own text beside the chart` | Move the link into a title, a card or prose beside the chart. |
-| `bad.deck.yaml: slide 1: placement 1: 'bleed' must be true or false, got 'yes'` | Unquoted `true`/`false`. YAML reads `'yes'` as a string. |
+| `bad.deck.yaml: slide 1: placement 1: 'bleed' must be true or false, got 'yes'` | In quotes, `'yes'` is text. Write it unquoted — `yes`, `no`, `on`, `off`, `true` or `false`. |
 
 ## The chrome block
 
@@ -204,7 +210,6 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'chart'): 'y_min' must be a number, got 'zero'` | Use a number. |
 | `slide 1 (component 'chart'): must be a mapping, got str` | `chart:` takes a block, not a bare value. You wrote `chart: column` instead of `chart:` then `kind: column`. |
 | `slide 1 (component 'chart'): chart kind 'line' cannot show 'highlight' — its data points have no fill of their own. Kinds that can: …` | The only `highlight` error whose fix is the *kind*, not the row. Switch to a bar/column, pie/doughnut or bubble kind, or drop `highlight:` and make the point with the title or `animate:`. The kinds that take one are listed under [the chart block](authoring.md#the-chart-block). |
-| `theme 'brand' declares 1 accent role(s); 'highlight' marks a point with the second accent, so a palette with fewer cannot show one` | Internal: a `bind:` layers over the built-in roles, which always carry four accents, so no theme file can reach this. It guards a palette assembled in code. |
 
 ## Components
 
@@ -234,9 +239,24 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'card'): 'radius' is a fraction of the plate's short side, 0..0.5 (0.5 is a stadium); got 0.75` | Radius is a fraction, not inches. |
 | `slide 1 (component 'table'): row 2 cell 1 has no key 'bold'; a cell reads: text, across, down, align, valign, emphasis, pair` | Bold is `emphasis: true`. The cell-key table in [`components.md`](components.md) says what each of the seven does. |
 | `slide 1 (component 'table'): row 2 is a list, not a cell — a row holding a comma needs quoting, or YAML reads it as one` | An unquoted comma inside a cell made YAML read the cell as a list. Quote that cell. |
+| `slide 1 (component 'table'): 'banding' must be true or false, got 'no'` | In quotes, `'no'` is text, and text would turn banding on. Write it unquoted: `banding: no`. Same message for `code`'s `wrap:`. |
+| `slide 1 (component 'table'): row 2 cell 1 'emphasis' must be true or false, got 'no'` | The same, on a cell. Write `emphasis: no` unquoted, or drop the key. |
 | `slide 1 (component 'bullets'): field 'columns' must be an int, got 'two'` | Use a number. |
 | `slide 1 (component 'document'): 'source' is required` | Point at a markdown file. |
+| `slide 1 (component 'equation'): 'tex' is required — the equation, written in the LaTeX subset docs/components.md lists` | Give the equation as `tex:`. |
+| `slide 1 (component 'equation'): 'tex' contains the control character '\x0c' — a double-quoted YAML string reads \f, \t, \n, \b and \r as escapes, so \frac arrives as a form feed and \theta as a tab: single-quote the tex, or write it as a plain or folded (>) scalar` | `tex: "\frac{a}{b}"` reached the build as a form feed and `rac{a}{b}`. Write `tex: '\frac{a}{b}'`. |
+| `slide 1 (component 'equation'): 'tex' uses \begin, which is not supported — supported: ^ _ \frac \sqrt \sum \prod \int \lim \left \right \text, Greek letters, …` | The command is outside the subset. The message lists what is in it; [`components.md`](components.md#equation--one-display-equation) has the same list. A character outside it reads `uses '&'`. |
+| `slide 1 (component 'equation'): 'tex' raises x twice — group it: x^{2^3}` | Two superscripts on one base. Group the second into the first, as the message writes it. A double subscript reads `lowers`. |
+| `slide 1 (component 'equation'): 'tex' opens a '{' it never closes` | A `{` with no matching `}`. A stray `}` reads `closes a '}' it never opened`. |
+| `slide 1 (component 'equation'): 'tex' gives \frac one argument; it takes two, {numerator}{denominator}` | Give `\frac` both parts. `\sqrt` with nothing after it reads `gives \sqrt nothing to take the root of`. |
+| `slide 1 (component 'equation'): 'tex' opens \left( with no \right to close it` | Every `\left` needs a `\right`; use `\right.` for an invisible one. A `\right` with no `\left` reads `closes \right) with no \left to open it`, and a delimiter outside `( ) [ ] \{ \} \| .` is named. |
+| `slide 1 (component 'equation'): 'rung' 'huge' is not a type rung this theme has; it has body, caption, display, head, hero, kicker, lead, stat, subtitle, title` | Name one of the theme's rungs. |
+| `slide 1 (component 'equation'): the equation needs 42.36in on one line but the placement is 11.73in wide — an equation does not wrap: widen the placement, set it at a smaller 'rung', or split it in two` | An equation is measured as its one-line form and never wraps. |
+| `slide 1 (component 'equation'): the equation stacks 4 rows, 3.96in tall at 'hero', but the placement is 0.45in — give it more rows, or a smaller 'rung'` | A fraction stacks its parts, and limits under a sum add a row. Give the placement more `rows:`. |
 | `slide 1 (component 'document'): source not found: examples/nope.md — looked beside the deck spec and in /path/you/ran/from` | Looked for beside the deck spec first, then as given. The message names both places. |
+| `slide 1 (component 'document'): image not found: diagram.png (named in docs/design.md) — a card embeds the pictures its source names, read from the source's own directory` | The markdown names a picture that is not there. Put it beside the markdown, or fix the name. |
+| `slide 1 (component 'document'): image ../logo.png (named in docs/design.md) is outside the source's own directory — a card embeds only pictures that ship beside its source; copy it there` | A card reads pictures from the markdown's own folder and below, never above it or elsewhere on the machine. Copy the picture into that folder. A web address is left for the browser. |
+| `slide 1 (component 'document'): notes.txt (named in docs/design.md) is not an image a card can embed — name a png, jpeg, gif, svg or webp` | An `<img>` or `![]()` names a file that is not a picture. |
 | `slide 1 (component 'document'): 'side' must be one of left, right, full, got 'middle'` | Use one of the three. |
 | `slide 1 (component 'document'): 'lines' must look like '12-40' — one-based and inclusive, got '12'` | A range needs both ends. Write `lines: '12-40'`; quote it so YAML keeps it a string. |
 | `slide 1 (component 'document'): 'lines' must start at 1 or more and end at or after its start, got '5-2'` | Lines are numbered from 1, and the range reads low to high. |
@@ -266,6 +286,7 @@ Shape errors above come from the parser, before any inch exists. These come from
 | `slide 1 (component 'versus'): 'left' needs a 'value' and a 'label' — a versus is two named magnitudes` | Each side names itself and carries a number. |
 | `slide 1 (component 'versus'): 'left' has the unknown field 'colour'; a side reads: highlight, label, note, value` | A side carries those four. Colour comes from `highlight:` and the theme. |
 | `slide 1 (component 'versus'): both sides set 'highlight' — it marks the one the slide is arguing for, so only one side takes it` | Drop one. Marking both says nothing. |
+| `slide 1 (component 'versus'): 'left' 'highlight' must be true or false, got 'no'` | In quotes, `'no'` is text, and text would paint the side. Write `highlight: yes` or `highlight: no` unquoted. |
 | `slide 1 (component 'versus'): the two sides need 2.06in and 2.06in to set their own type but the placement leaves 2.73in for both — widen the placement, or shorten the longest value or label` | Each plate has to hold the longest word of its value, label and note without breaking it; the two floors and the glyph between them need the room. |
 | `slide 1 (component 'diverge'): 'items' must be a non-empty list` | Add `items:` with at least one row. Also what you get for a misspelled `items`. |
 | `slide 1 (component 'diverge'): item 1 needs a 'label' and a 'value'` | Every row names itself and carries the signed number its bar draws. |
@@ -317,6 +338,8 @@ Nothing in the spec fixes that. The frames above the last line name the file and
 | `slide 1 (component 'code'): 'size' 8.0pt is below the theme's 10.5pt minimum` | The theme sets the floor; raise the size or lower `type.min_pt` in the theme. |
 | `slide 1 (component 'swatches'): 14 roles in 8 columns need 3.40in but the body rect is only 2.60in — show fewer roles or split the slide` | Name a subset in `roles:`, or give the placement more rows. |
 | `slide 1 (component 'swatches'): 'roles' is a list of palette role names; omit it to show every role the theme declares` | Either give a list, or drop the key. |
+| `slide 1 (component 'swatches'): 'columns' is how many chips sit in a row, so it must be a whole number, got '4'` | Write the number unquoted: `columns: 4`. |
+| `slide 1 (component 'swatches'): 'columns' is 9; it must be between 1 and 8` | Use 8 or fewer, or drop the key for eight to a row. |
 | `slide 1 (component 'swatches'): no palette role(s) brand-blue; declared roles: accent-1, accent-2, …` | Roles are the theme's semantic names, not brand words. The message lists the ones that exist. |
 | `slide 1 (component 'grid'): the placement is 0.40in tall, too short to draw a grid in` | Give it more rows — a grid needs depth to read as one. |
 | `slide 1 (component 'callouts'): a 'heading' needs 0.42in and the placement is only 0.30in tall` | Drop the heading, or give the placement more rows. |
@@ -340,16 +363,26 @@ whether your path or your theme is at fault.
 | `Brand.pptx is a template, not a theme, and it is already adopted — build with 'theme: brand'` | A theme in the theme directory already binds this template, or an identical copy of it. Name that theme; adopting again would make a second, untuned one. |
 | `Brand.pptx is a template, not a theme, and templates/ already holds a different Brand.pptx, adopted as 'brand', which moving this one in would overwrite — rename this one before onboarding it from templates/` | The `.pptx` lives outside the theme directory, and a different file already has its name there. Rename the new one (say `Brand 2026.pptx`), move it in, and onboard it under its own theme name; or keep building with the theme already adopted. |
 | ``Brand.pptx names a template, not a theme, and there is no file at Brand.pptx or in templates/ — put it in templates/, onboard it once with `deckwright conform templates/Brand.pptx --adopt brand`, then build with 'theme: brand'`` | The `.pptx` is neither at that path nor in the theme directory. Drag it into `templates/` and run the command. |
+| `build_deck was given a loaded theme but no theme_path — the manifest records the theme file qa reloads, so pass the path the theme was loaded from` | Python only: `build_deck(spec, theme=…)` also needs `theme_path=` naming the file that theme was loaded from. See [`compile.md`](compile.md#calling-it-from-python). |
 | `acme.theme.yaml is not a text theme file: templates/acme.theme.yaml` | The file is binary, or saved in an encoding other than UTF-8. A theme is UTF-8 YAML; re-save it, or point `theme:` at the right file. |
 | `theme 'tidewater' binds 'accent-1' to 'accent1', which reads as a template slot name, but the theme names no 'template:' — give a literal RRGGBB, or name a template to bind its slots` | A slot name needs a template's `clrScheme` to resolve against. Write the colour itself (`accent-1: E4572E`), or give the theme a `template:`. |
+| `theme 'scale': top is a percent of the canvas, got 'nan%' — write '50%' for half of it` | Every margin, the gutter, `body_top` and a `reserve:` polygon's `x`/`y` are finite percents of the canvas. |
 | `theme 'scale': rows is a whole number of rows, got 'twelve'` | The `scale:` block's `rows:` and `columns:` are counts — write the number. `columns:` gives the same message under its own name, and `.inf` (`got inf`) is refused with everything else that is not a count. |
 | `type ramp entry 'title': pt is a point size, got 'huge'` | A ramp entry's `pt:` is a number of points at the theme's `type.reference_height`. |
 | `theme templates/acme.theme.yaml: type is a mapping of settings, got 5` | A block was written as a scalar or a list. `scale`, `bind`, `marks`, `chart`, `motion`, `type.ramp` and the `scale:` block's own `margin` all give this message under their own name. |
 | `theme templates/acme.theme.yaml: type.reference_height is a canvas height in inches, got 'tall'` | `type.reference_height` is the canvas height in inches the ramp's point sizes are written for. |
 | `theme templates/acme.theme.yaml: type.reference_height is 0.0; it is the canvas height the ramp's point sizes are written for, so it must be above zero` | Give it a positive number (7.5 by default), or drop the key and keep the default. Every size in `type:` is a ratio to it, so zero has no meaning even with no `ramp:` at all. |
+| `theme templates/acme.theme.yaml: type.reference_height is 5e-324, too small to divide by — 1pt over it is past any finite point size; it is the canvas height in inches the ramp's point sizes are written for` | Every size in `type:` is divided by `reference_height`, and one this small overflows even a 1pt size, so it is refused with or without a `ramp:`. Give the canvas height the sizes were written for — 7.5 by default — or drop the key. |
 | `theme templates/acme.theme.yaml: type.min_pt is a point size, got 'small'` | `type.min_pt` and `type.line_weight_pt` are numbers of points at the theme's `reference_height`; `line_weight_pt` gives the same message under its own name. |
+| `theme templates/acme.theme.yaml: type.min_pt is a point size above zero, got -10.0` | `min_pt` is the floor `qa`'s `min-font` check holds text to, so zero or below would switch that check off. `line_weight_pt`, and a ramp entry's `pt` (as `type ramp entry 'title': pt is a point size above zero`), give the same message. |
+| `type ramp entry 'title': pt 34.0 over type.reference_height 1e-307 is past any finite point size; reference_height is the canvas height in inches the sizes are written for` | The size divided by `reference_height` overflows — a tiny `reference_height`, a huge `pt`, or both. Give the canvas height the sizes were written for (7.5 by default) and the size at it. `min_pt` and `line_weight_pt` give the same message under their own names. |
+| `theme templates/acme.theme.yaml: type.face is one typeface name, like 'Helvetica', got ['Helvetica', 'Arial']` | A face is one name, written as text. `heading_face`, `mono` and a ramp entry's `face:` give the same message; a fallback list has nowhere to go, because a `.pptx` run names a single face. |
 | `theme templates/acme.theme.yaml: type.ea.ja is ''; it names the typeface ja text is set in, like 'Hiragino Sans'` | Each `type.ea` entry is a face name. A fontScheme reference such as `+mn-ea` is refused too; leave the script out to take the template's own face for it. |
 | `theme templates/acme.theme.yaml: motion stagger_ms is a whole number of milliseconds, got 'soon'` | `motion.stagger_ms` and `motion.beat_ms` are counts of milliseconds; `beat_ms` gives the same message under its own name. |
+| `theme templates/acme.theme.yaml: template 'brand\x00.pptx' holds a NUL character; it names a path beside the theme` | `template:` and `icons:` are paths relative to the theme file. The same message says `has a name longer than the filesystem allows` or `runs into a symlink loop` for those two faults, `cannot be looked up: Permission denied` for a directory on the way nobody may search, and names `icons` when that is the key. Fix the path; a loop means a symlink on the way points back at itself. |
+| `theme 'xxxx…' cannot be looked up: File name too long` | The deck's `theme:` (or `--theme`) is longer than a filename can be. Name the theme, or the path to its file. |
+| `theme templates/acme.theme.yaml: chart.gap_width must be an int, got inf` | `chart:` numbers are finite. `.inf` and `.nan` are YAML floats; the float keys (`gradient_angle`, the shadow values) say `must be a finite number` instead. |
+| `theme templates/acme.theme.yaml: unknown mark 'wordmark'; a mark is named for the painted backdrop it decorates, and nothing would ever lay down any other — known marks: inverse` | A mark's name is the background it decorates, and only `inverse` paints one. Rename the mark `inverse`, or drop it. |
 | `template brand.pptx is not a readable .pptx: PackageNotFoundError: Package not found at 'brand.pptx'` | The theme's `template:` is corrupt, truncated, or another application's format under a `.pptx` name. The message names the path and what python-pptx made of it. |
 | `deck Deck v3.pptx is not a readable .pptx: PackageNotFoundError: Package not found at 'Deck v3.pptx'` | The same refusal from `inspect`, about the deck you handed it rather than a template. `qa` reports an unreadable deck as a `package` finding instead. |
 
@@ -360,6 +393,7 @@ These fire at build time with the real measurements, so the number in the messag
 | Message | Fix |
 |---|---|
 | `slide 1 (component 'bullets'): 30 bullets in the longest column need 10.08in but only 5.30in is available — split the slide, add a column, or shorten the list` | Do one of the three things it suggests. |
+| `slide 1 (component 'bullets'): 4 bullets wrap to 8 lines in the tallest column and need 2.58in but only 2.25in is available — split the slide, shorten the longest items, or give the placement more room` | Each item is as deep as the lines it wraps to in its column. Cut the longest items, move some to another slide, or widen the placement so fewer of them wrap. A second column narrows every item in it, so it rarely helps a list of long lines. |
 | `slide 1 (component 'callouts'): 6 items need 13.35in of height but the body rect is only 5.40in — split the slide or shorten the copy` | Rows are as deep as their own copy, so the ceiling is the total depth of the words, not a fixed item count. Cut a row, or cut the wordiest body. |
 | `slide 1 (component 'stats'): 5 items in 1 columns need 8.22in of height but the body rect is only 5.30in — split the slide or reduce the items` | Raise `columns:` (up to 4) or drop a tile. |
 | `slide 1 (component 'flow'): 6 steps and the 0.36in lanes between them need more than the 2.00in this placement runs across — drop a step or grow the placement` | Widen the `at:`, or switch to `direction: vertical`. |
@@ -377,12 +411,13 @@ The last two are the only messages here that arrive with a Python traceback abov
 
 ## External tools
 
-Five commands shell out — LibreOffice, Poppler's `pdftoppm` and `pdftotext`, a
-Chromium-family browser, and fontconfig's `fc-list`. The first four raise when the
-binary is absent, and each failure names the one it could not use, so the fix is always
-"install that one, or point the matching `DECKWRIGHT_*` variable at it"; which command
-needs which tool is in [`docs/cli.md`](cli.md#external-tools). `fc-list` has no message
-here — the `doctor` row and the `font-substituted` check that ask it go silent instead.
+Six commands shell out — LibreOffice, Poppler's `pdftoppm` and `pdftotext`, a
+Chromium-family browser, and fontconfig's `fc-list` and `fc-match`. The first four raise
+when the binary is absent, and each failure names the one it could not use, so the fix is
+always "install that one, or point the matching `DECKWRIGHT_*` variable at it"; which
+command needs which tool is in [`docs/cli.md`](cli.md#external-tools). fontconfig has no
+message here — `render` links no fonts into LibreOffice's profile, and the `doctor` row and
+the `font-substituted` check go silent instead.
 
 A tool that is **absent** and a tool that **ran and failed** are different errors. The
 first is about the machine and prints as one line; the second is a renderer fault and is
@@ -411,12 +446,15 @@ checked before the command reads or writes anything.
 
 | Message | Fix |
 |---|---|
+| `manifest not found: out/q4/Sent to client.manifest.json, and no manifest in out/q4 records build deckwright:b8330aed362cd6c6 — a deck can only be read back against the build that made it. Keep the copy beside its build, or pass --manifest.` | `deckwright diff` looks for the deck's own manifest, then for one beside it recording the build id the deck carries. Put the copy back in the build's directory, or name the manifest with `--manifest`. A deck built before the id was written names `(none recorded)`. |
 | `--as must be 'yaml' or 'md', got 'txt'` | `deckwright extract` writes a draft spec (`yaml`) or a transcript (`md`). Those are the two. |
 | `a deck needs a name, got '———'` | `deckwright new` slugs the name down to letters and digits for the deck's directory, and this one left nothing. Give it a name carrying at least one of those. |
 | `authoring/q4/q4.deck.yaml is the spec being compiled — writing the deck there would leave nothing to rebuild it from. Give --out a .pptx path` | `deckwright build --out` aimed at its own input. Rebuilding over an existing `.pptx` is fine and stays fine; a spec is the one destination nothing can rebuild. |
 | `out/q4/q4.yml is a YAML path, and a deck is never written to one — this is how --out lands on a spec. Give it a .pptx path` | The same refusal, widened: `--out` a character off the spec's name, or aimed at a directory of specs, reaches a spec without being the spec. |
 | `deck decks/Bord Update.pptx is not a readable .pptx: no file at that path` | `deckwright extract` names its default destination after the deck, so it checks the deck is there before deriving anything from the name. A typo, or a directory where a file was meant. |
 | `Board Update.deck.yaml already exists — pass --force to replace it` | `deckwright extract` will not write over what is at its destination, which on a second run of the same deck is the draft you have been editing. Give `--out` another path, or pass `--force` if the edits are expendable. `deckwright sample` refuses the same way about the template it writes. |
+| `decks/Board Update.media already exists — pass --force to replace it` | `deckwright extract` writes the pictures a draft places into a folder beside it, and will not mix them into a folder that is already there — it may hold pictures the earlier draft points at. Nothing has been written when it refuses. Pass `--force` to replace the folder along with the draft, or give `--out` another name, which names the folder too. |
+| `decks/Board Update.media is a file or a link, not a media folder — --force replaces a folder and nothing else: move it aside, or pass another --out` | Something other than a folder sits where the draft's pictures go. `--force` deletes and rewrites a media folder; it never deletes a file, or follows a link to delete what it points at. Nothing has been written when it refuses. |
 | `authoring/q4-review/q4-review.deck.yaml already exists — a scaffold never overwrites a deck you have written. Pick another name, or edit that one.` | `deckwright new` has no `--force`: a scaffold is one command to re-run, and the spec at that path is not. Pick another name, or edit the one that is there. |
 
 ## The glyph bundle

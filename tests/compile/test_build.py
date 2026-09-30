@@ -2,6 +2,7 @@ import hashlib
 import json
 import textwrap
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from deckwright.compile import build_deck
 from deckwright.compile.build import _drop_template_slides
 from deckwright.errors import LayoutError, SpecError, ThemeError
 from deckwright.theme.chartstyle import ChartStyle
-from deckwright.theme import Grid, Scale
+from deckwright.theme import Grid, Scale, load_theme
 from deckwright.theme.defaults import DEFAULT_PAIRS
 from deckwright.theme.model import Theme, TypeStyle
 from deckwright.theme.palette import build_palette
@@ -170,6 +171,22 @@ def test_manifest_records_slide_size_and_the_resolved_theme_path(project):
     assert data["canvas"] == {"w": 13.333, "h": 7.5, "unit": "in"}
     # Recorded relative to the manifest; what matters is that it resolves back.
     assert _resolved(data["theme_path"], result.manifest) == (project / "testtheme.yaml").resolve()
+
+
+def test_a_theme_handed_in_already_loaded_is_built_with_as_given(project):
+    """Nothing in the deck shows whether the file was read again, so the name is changed."""
+    loaded = replace(load_theme(project / "testtheme.yaml"), name="handed-in")
+    result = build_deck(
+        project / "d.deck.yaml", theme_path=project / "testtheme.yaml", theme=loaded
+    )
+    assert json.loads(result.manifest.read_text())["theme"] == "handed-in"
+
+
+def test_a_loaded_theme_without_the_file_it_came_from_is_refused(project):
+    """The manifest records the theme file `qa` reloads, which a loaded theme cannot name."""
+    loaded = load_theme(project / "testtheme.yaml")
+    with pytest.raises(ThemeError, match="no theme_path"):
+        build_deck(project / "d.deck.yaml", theme=loaded)
 
 
 def test_slide_content_reaches_the_deck(project):

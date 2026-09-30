@@ -99,3 +99,78 @@ def test_glyphs_find_caps_its_output_and_says_how_much_it_dropped():
     assert result.exit_code == 0
     assert len([ln for ln in result.stdout.splitlines() if ln and not ln.startswith("...")]) == 3
     assert "more — narrow the term" in result.stdout
+
+
+def test_glyphs_verify_reports_the_bundle_it_ships():
+    import re
+
+    result = CliRunner().invoke(app, ["glyphs", "verify"])
+    assert result.exit_code == 0, result.stdout
+    assert re.fullmatch(r"[\d,]+ glyphs, matching glyphs\.sum @ [0-9a-f]{12}\n", result.stdout)
+
+
+def test_glyphs_verify_prints_each_problem_and_exits_nonzero(monkeypatch):
+    from deckwright.icons import vendor
+
+    monkeypatch.setattr(vendor, "verify", lambda: ["one is wrong", "two is wrong"])
+    result = CliRunner().invoke(app, ["glyphs", "verify"])
+    assert result.exit_code == 1
+    assert result.stdout == "one is wrong\ntwo is wrong\n"
+
+
+def test_glyphs_sync_refuses_outside_a_source_checkout(tmp_path, monkeypatch):
+    from deckwright.icons import vendor
+
+    monkeypatch.setattr(vendor, "MATERIAL", tmp_path / "nowhere" / "material")
+    result = CliRunner().invoke(app, ["glyphs", "sync"])
+    assert result.exit_code != 0
+    assert "glyphs can only be synced from a source checkout" in str(result.exception)
+
+
+def test_glyphs_sync_says_what_moved_and_caps_each_list_at_eight(monkeypatch):
+    """The fetch is a network clone, so it is stood in for; the report is what is under test."""
+    from deckwright.icons import vendor
+
+    moved = {
+        "ref": "0123456789abcdef0123",
+        "kept": 4001,
+        "dropped": 12,
+        "added": [f"new_{i}" for i in range(9)],
+        "removed": [],
+        "changed": ["home"],
+    }
+    monkeypatch.setattr(vendor, "sync", lambda ref: moved)
+    result = CliRunner().invoke(app, ["glyphs", "sync", "--ref", "0123456789abcdef0123"])
+    assert result.exit_code == 0, result.stdout
+    assert result.stdout.splitlines() == [
+        "vendored 4,001 glyphs @ 0123456789ab (12 dropped — they need nonzero winding)",
+        "  added       9  new_0, new_1, new_2, new_3, new_4, new_5, new_6, new_7 …",
+        "  changed     1  home",
+    ]
+
+
+def test_glyphs_sync_that_moves_nothing_says_the_set_is_unchanged(monkeypatch):
+    from deckwright.icons import vendor
+
+    same = {
+        "ref": "0123456789ab",
+        "kept": 1,
+        "dropped": 0,
+        "added": [],
+        "removed": [],
+        "changed": [],
+    }
+    monkeypatch.setattr(vendor, "sync", lambda ref: same)
+    result = CliRunner().invoke(app, ["glyphs", "sync"])
+    assert result.stdout.splitlines()[-1] == "  the set is unchanged"
+
+
+def test_python_m_deckwright_cli_runs_the_app(capsys, monkeypatch):
+    import runpy
+
+    monkeypatch.setattr(sys, "argv", ["deckwright", "--version"])
+    try:
+        runpy.run_module("deckwright.cli", run_name="__main__", alter_sys=True)
+    except SystemExit as stop:
+        assert stop.code in (0, None)
+    assert capsys.readouterr().out.startswith("deckwright ")

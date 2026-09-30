@@ -164,6 +164,13 @@ text you wrote, never 7, 31, 90 or 969: it prints as typed and `crop: 16:9` is t
 aspect. A field that takes any number reads it as a decimal (`007` is 7) or refuses it by
 name; a whole-number field such as a column index refuses it.
 
+`yes`, `no`, `on` and `off` are words too, in any of YAML's spellings (`Yes`, `NO`, `Off`):
+a table cell, a bullet, a chart category or a slide title prints them as written, never
+`True` or `False`. A field that takes true or false — `banding`, `bleed`, `highlight`,
+`decorative` and the rest — reads `yes` and `on` as true and `no` and `off` as false.
+`true` and `false` stay booleans everywhere, so a cell that must print one is quoted:
+`'true'`. A quoted `'no'` in a true-or-false field is text, and the build refuses it by name.
+
 - **The first document is the deck document.** Theme, section names, output path.
 - **Every document after it is one slide,** in order.
 
@@ -225,7 +232,7 @@ There is no `layout:`. Every field below is optional; an absent field draws noth
 | `section` | Which chapter this slide belongs to. Must match a name in the deck's `sections`. |
 | `notes` | Speaker notes. Spoken, not shown. |
 | `animate` | How the slide's components reveal on click. See [animate](#animate). |
-| `transition` | Only ever `none` — a deliberate hard cut into this slide, refusing the theme's transition. See [transition](#transition). |
+| `transition` | `none` — a deliberate hard cut into this slide, refusing the theme's transition — or `morph`, to glide what this slide shares with the one before. See [transition](#transition). |
 | `place` | A list of placements. See below. |
 | `chrome` | Where the title, kicker and subtitle go, overriding the theme. See [Moving the chrome](#moving-the-chrome). |
 | `id` | A name for the slide, so a placement's `goto:` can jump to it. Unique in the deck. See [goto](#goto). |
@@ -408,7 +415,7 @@ each 12 by default. A name a grid cannot divide evenly — thirds on a 10-column
 theme — is an error telling you to state the span outright, rather than rounding
 two "thirds" to different widths on the same slide.
 
-Six optional keys sit beside `at:`: `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `goto:` makes a click on it jump to another slide (see [goto](#goto)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle.
+Seven optional keys sit beside `at:`: `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `goto:` makes a click on it jump to another slide (see [goto](#goto)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle. `morph:` names the placement for a [morph transition](#transition), which pairs it with its namesake on the next slide.
 
 **`id:` also names the shapes.** Every shape the build draws is named for the placement that drew it, in the manifest and in the `.pptx` — `s7.p2.card#1` for the second placement on slide 7, `s7.hero.card#1` where you wrote `id: hero`. PowerPoint keeps those names through a hand-edit, so they are what tie an edited deck back to this file. A number moves when a placement is inserted above it; an `id:` does not. See [what the manifest records](qa.md#what-the-manifest-records).
 
@@ -424,7 +431,7 @@ swallows the band, and settle a *hugging* one with `anchor:` or its slack piles 
 
 A `cols:` span without `rows:` fills the content band top to bottom. The 12 rows divide **that band**, not the canvas: a row never reaches above where the body starts or below the bottom margin.
 
-The compiler rejects a spec whose placements collide. Two placements that share a column, or one that falls outside the content band, is an error naming both — so a slide either lays out cleanly or fails, never overprints. `bleed: true` exempts a placement from those checks; that is how a full-canvas image is expressed. (A declared `bleed:` carries into QA too: it exempts those shapes from the `bounds` check, because leaving the canvas is the instruction. `reserved` still measures them unless the geometry is genuinely full-bleed — at the origin and at least slide-sized. See [`qa.md`](qa.md).)
+The compiler rejects a spec whose placements collide. Two placements that share a column, or one that falls outside its bounds — the content band for a `cols`/`rows` placement, the canvas for a `box:` — is an error naming both, so a slide either lays out cleanly or fails, never overprints. `bleed: true` exempts a placement from those checks; that is how a full-canvas image is expressed. (A declared `bleed:` carries into QA too: it exempts those shapes from the `bounds` check, because leaving the canvas is the instruction. `reserved` still measures them unless the geometry is genuinely full-bleed — at the origin and at least slide-sized. See [`qa.md`](qa.md).)
 
 A theme's `reserve:` regions are handled differently, because a brand logo corner would otherwise make `cols: full` an error on every slide. A `cols:`/`rows:` placement that reaches into a reserved region is **narrowed** to clear it, keeping a gutter's clearance — so a full-height placement gives up the columns the region reaches into, while one bounded by `rows:` above the region keeps the full width. A `box:` is never narrowed; you stated the geometry outright, so hitting a reserved region is an error naming the region.
 
@@ -448,6 +455,7 @@ list, so it stays on this page.
 | [`table`](components.md#table--a-real-editable-powerpoint-table) | A real, editable PowerPoint table: spans, banding, rules, per-column alignment. |
 | [`panel`](components.md#panel--a-filled-block-behind-other-content) | A filled colour block. It carries no text; a chrome line supplies that. |
 | [`code`](components.md#code--a-monospace-listing) | A listing on a themed plate — real text, no browser. |
+| [`equation`](components.md#equation--one-display-equation) | One display equation from a LaTeX subset, written as Office Math with one line of text as its fallback. |
 | [`prose`](components.md#prose--paragraphs-at-a-readable-measure) | Paragraphs at a capped, readable measure; `cite:` makes them a quotation. |
 | [`swatches`](components.md#swatches--the-themes-own-palette) | A chip per palette role, labelled with the hex it resolved to. |
 | [`grid`](components.md#grid--the-themes-own-geometry) | The theme's columns, and any region a placement must avoid. |
@@ -534,7 +542,7 @@ chart:
 | `category` | **yes** | The x-axis label, or the wedge name on a pie. |
 | `value` | one of the two | A single number, for a one-series chart. |
 | `values` | one of the two | A mapping of series name to number, for a multi-series chart. |
-| `highlight` | no | `true` marks this datapoint. On a **single series** every other point goes muted and the marked one keeps the accent — emphasis by isolation, so a second hue never reads as a second category. On a multi-series or line chart the marked point takes the second accent instead. `true` or `false` only — not a number. |
+| `highlight` | no | `true` marks this row: it keeps its colour and every other mark recedes, so nothing else on the plot shares its fill. How the rest recede is in the `highlight:` section below. `true` or `false` only — not a number. |
 
 **`value:` is the single-series shorthand.** Use it when there is only one number per category:
 
@@ -573,7 +581,7 @@ chart:
 |---|---|---|
 | `x` | **yes** | Horizontal position. |
 | `y` | **yes** | Vertical position. |
-| `highlight` | no | Accepted, but see the note below — it does not show on these kinds. |
+| `highlight` | no | Refused on these kinds — see the note below. |
 
 `category` on an xy row is an error, and so is `x`/`y` on a category row. The message names both the row and the kind.
 
@@ -595,11 +603,27 @@ chart:
 | `x` | **yes** | Horizontal position. |
 | `y` | **yes** | Vertical position. |
 | `size` | **yes** | The bubble's area. Must be greater than zero. |
-| `highlight` | no | `true` paints this bubble in the theme's **second accent**. |
+| `highlight` | no | `true` keeps this bubble in the first accent and mutes every other bubble. |
 
 ### `highlight:` — where it shows and where it doesn't
 
-`highlight: true` recolours one datapoint in the theme's **second accent** (the only accent, where a theme declares one). **At most one row per chart may set it**; two is an error naming both rows.
+`highlight: true` marks one row, and the chart makes that row the only mark in its colour. **At most one row per chart may set it**; two is an error naming both rows.
+
+| The chart | The marked row | Every other mark |
+|---|---|---|
+| One series: a bar, column or bubble kind | The first accent | The theme's `muted` role, or a fade of it if `muted` itself carries no readable label |
+| Several series, clustered or stacked | Each series' own colour | Its series colour, faded toward what the chart sits on |
+| A pie or doughnut | The first accent | Two fades of that same accent toward what the chart sits on, alternating |
+
+One series takes a single grey, because a second hue would read as a second category.
+Several series fade instead of going grey, so each keeps the hue its legend shows and a
+stacked column keeps its segments apart. A pie fades its own marked accent instead of a
+grey, because its wedges touch the page itself at the rim, not just each other — alternating
+two depths keeps that same rule for two wedges in a row. None of the three needs more than
+the first accent, and a pie never reads the theme's `muted` role at all. A fade a label
+cannot read on — `muted` unfaded, or a fade that lands on a mid-tone — is never used
+outright: it fades toward the ground until one does, and a pie's own fade additionally
+never gives up more ground contrast than standing off the ground itself requires.
 
 It only shows on kinds whose datapoint is a filled shape:
 
@@ -643,6 +667,11 @@ Twenty-two take category rows; five take xy rows; two take bubble rows.
 
 Pie, doughnut and their exploded variants have no axes, and label each wedge with its category name instead of relying on a legend.
 
+Their wedges take the theme's accents in turn, and no two touching wedges share a colour:
+when there are more wedges than accents, the last wedge skips the colour of the first. Where
+the accents hold too few distinct colours for that, a wedge takes a tint or shade of an
+accent that stands clearly apart from both its neighbours.
+
 ### XY rows
 
 | `kind:` | Reach for it when |
@@ -660,7 +689,7 @@ Scatter kinds carry no data labels — the numbers do not print beside the point
 | `kind:` | Reach for it when |
 |---|---|
 | `bubble` | Three numbers per point: two positions and a magnitude. |
-| `bubble-3d` | The same, drawn as a shaded sphere. |
+| `bubble-3d` | The same, written as a 3-D bubble chart. PowerPoint shades it as a sphere; LibreOffice and Keynote draw it flat, same as `bubble`. |
 
 ---
 
@@ -717,7 +746,7 @@ Every value above is confirmed at playback in real PowerPoint. **Keynote is the 
 
 ## transition
 
-`transition:` is a slide field with exactly one legal value: `none`.
+`transition:` is a slide field with two legal values: `none` and `morph`.
 
 ```yaml
 title: A new act begins
@@ -727,6 +756,23 @@ transition: none      # arrive on a hard cut, refusing the theme's transition
 **A transition belongs to the slide it arrives at** — it describes how the show moves
 *to* this slide from the one before it, not away from it. Reading it the other way puts
 every transition in a deck one slide out.
+
+**`morph` asks PowerPoint to glide what two slides share.** The slide's transition is written
+as PowerPoint's Morph, with a fade as its fallback for a reader without Morph. Give a
+placement `morph: <name>` on this slide and on the one before, and both are written with the
+same shape names, which is how Morph pairs one with the other. The two placements must be the
+same component, and a `chart` cannot take `morph:`. `qa` reports a name with no namesake on
+the slide before as `morph-unpaired`. The speed is the theme's. Playback in PowerPoint is
+awaiting its first check; see [`motion.md`](motion.md).
+
+```yaml
+title: The same card, larger
+transition: morph
+place:
+  - at: {cols: full}
+    morph: hero
+    card: {heading: Revenue, body: Up 12% on the year}
+```
 
 Which transition a deck uses is the theme's (`motion.transition` in
 [`theme.md`](theme.md#the-decks-transition)), for the same reason a deck never sets a
@@ -832,9 +878,10 @@ it as a local file. Titles, kickers and subtitles take links too.
 - **`code` shows markup as written.** A listing is literal, so Markdown in it stays Markdown.
 - **A chart takes no links.** Its labels are drawn by the chart rather than set as runs, and
   a link written in a chart block is refused.
-- **Keynote draws a link in the template's own hyperlink colour.** PowerPoint and
-  LibreOffice read the colour the build writes; Keynote ignores it and uses the template's
-  `hlink` slot, which nothing checks against the slide.
+- **Keynote draws a link in the template's own hyperlink colour.** PowerPoint (for Mac 16,
+  confirmed) and LibreOffice draw the line's own ink as the build writes it; Keynote
+  ignores it and uses the template's `hlink` slot, which `qa` checks against each linked
+  shape's ground as `link-contrast`.
 
 `extract` writes a linked run back as `[words](address)`, so a drafted spec keeps its links.
 

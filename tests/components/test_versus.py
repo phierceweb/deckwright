@@ -68,6 +68,13 @@ def test_highlighting_both_sides_is_refused(ctx_factory):
         get_component("versus")(ctx)
 
 
+def test_a_highlight_that_is_no_boolean_is_refused(ctx_factory):
+    """A quoted `"no"` is text, and every string is truthy: it would paint the side."""
+    ctx = ctx_factory({"versus": {"left": {**LEFT, "highlight": "no"}, "right": RIGHT}})
+    with pytest.raises(LayoutError, match=r"'left' 'highlight' must be true or false, got 'no'"):
+        get_component("versus")(ctx)
+
+
 def test_every_returned_id_is_a_real_shape(ctx_factory):
     ctx = _ctx(ctx_factory)
     groups = get_component("versus")(ctx).groups

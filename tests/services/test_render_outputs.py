@@ -93,3 +93,53 @@ def test_the_rasterizer_command_is_configurable(captured, tmp_path, monkeypatch)
     _render(tmp_path)
     rasterize = next(c for c in captured if "-jpeg" in c)
     assert rasterize[0] == "poppler-pdftoppm"
+
+
+def test_pages_are_rasterised_to_a_whole_number_of_pixels(tmp_path, captured, monkeypatch):
+    """13.333in at 110 dpi is 1466.63px. Left to round up, the last column is a third paper,
+    and on a dark slide that is a light line down the right edge."""
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    # The fake writes a page for every command it is handed, the font query included.
+    monkeypatch.chdir(tmp_path)
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    prs.slides.add_slide(prs.slide_layouts[6])
+    deck = tmp_path / "wide.pptx"
+    prs.save(str(deck))
+
+    render_mod.render_to_images(deck, tmp_path / "out", dpi=110)
+
+    raster = next(argv for argv in captured if argv[0].endswith("pdftoppm"))
+    assert raster[raster.index("-scale-to-x") + 1] == "1467"
+    assert raster[raster.index("-scale-to-y") + 1] == "825"
+
+
+def test_a_deck_whose_size_cannot_be_read_is_rasterised_by_resolution_alone(tmp_path, captured):
+    _render(tmp_path)
+    raster = next(argv for argv in captured if argv[0].endswith("pdftoppm"))
+    assert "-scale-to-x" not in raster
+    assert "-r" in raster
+
+
+def test_the_right_edge_of_a_dark_slide_is_the_slide(tmp_path, theme_file):
+    """The lead itself, through the real tools: the last pixel column is the page, not paper."""
+    import shutil
+
+    from PIL import Image
+
+    from deckwright.compile import build_deck
+
+    if not (shutil.which("soffice") and shutil.which("pdftoppm")):
+        pytest.skip("needs LibreOffice and pdftoppm")
+    spec = tmp_path / "d.deck.yaml"
+    spec.write_text(
+        "theme: testtheme\ntitle: T\nout: out/D.pptx\n---\ntitle: Dark\nbackground: inverse\n"
+    )
+    built = build_deck(spec, theme_path=theme_file)
+    (page,) = render_mod.render_to_images(built.deck, tmp_path / "r", fmt="png")
+    with Image.open(page) as img:
+        rgb = img.convert("RGB")
+        edge, inside = rgb.getpixel((rgb.width - 1, 400)), rgb.getpixel((rgb.width - 20, 400))
+    assert edge == inside == (0, 0, 0)

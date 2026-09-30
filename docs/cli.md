@@ -28,7 +28,7 @@ reference.
 - [`qa` — check a built deck](#qa--check-a-built-deck)
 - [`diff` — what a hand-edit changed](#diff--what-a-hand-edit-changed)
 - [`inspect` — inventory a deck's shapes](#inspect--inventory-a-decks-shapes)
-- [`extract` — words out of a deck deckwright did not build](#extract--words-out-of-a-deck-deckwright-did-not-build)
+- [`extract` — a draft spec out of any deck](#extract--a-draft-spec-out-of-any-deck)
 - [`conform` — onboard a brand template](#conform--onboard-a-brand-template)
 - [`shot` — screenshot an HTML file](#shot--screenshot-an-html-file)
 - [`sample` — a template to onboard against](#sample--a-template-to-onboard-against)
@@ -176,6 +176,21 @@ deck never leaves orphans from a longer one behind — anything else in the dire
 including `contact_sheet.png` and `qa.md`, is left alone. Each run gets its own
 LibreOffice profile, so concurrent renders do not silently no-op against a shared lock.
 
+**The render sets the deck's own typefaces.** Before converting, `render` reads every face
+the deck names — its theme's font scheme, and the runs, bullets and charts on its masters,
+layouts and slides — and links each installed font family with exactly that name into the
+LibreOffice profile, every style file of it, as `fc-list` lists them. A LibreOffice that
+cannot reach the system's fonts on its own, as on macOS, then sets Helvetica as Helvetica
+rather than a substitute. When the deck carries Chinese, Japanese or Korean text, the font
+`fc-match` picks for each of those languages is linked too, so that text is drawn instead of
+left blank. A face with no installed family of that name is never swapped for a lookalike:
+it renders as LibreOffice's own fallback, and `qa` reports it `font-substituted`. Without
+fontconfig nothing is linked and the render runs as before.
+
+Each render also writes `.build/render.json` in its output directory: the deck's SHA-256,
+the DPI and image format, and a digest of the PDF and every page image. `qa` reads it to
+reuse the render rather than convert the deck again.
+
 ## `qa` — check a built deck
 
 ```bash
@@ -193,6 +208,13 @@ one line per finding, and writes `qa.md` / `qa.json`.
 | `--no-render` | Skip the render-based overflow and contrast checks — much faster, much weaker. |
 | `--fail-on` | Exit 1 at this severity or worse: `error`, `warn` or `info`. |
 | `--outdir` / `-o` | Where `qa.md` / `qa.json` go. Default `<deck-dir>/render/<deck>`. |
+
+**`qa` reuses a matching render.** When its output directory already holds a render of the
+deck's exact bytes — left by `render` or an earlier `qa`, at the configured DPI or finer, with
+the PDF and every page image unchanged since — `qa` checks those instead of converting the
+deck again. `render` and `qa` default to the same directory, so `render` then `qa` converts
+once. Any edit to the deck, or a page image that is gone or changed, makes `qa` render
+afresh. The log's `qa_rendered` event says which happened (`reused=True` or `False`).
 
 With no LibreOffice on the machine the command fails rather than quietly checking less,
 and says to re-run it with `--no-render` — bounds, placement, reserved regions, type
@@ -213,6 +235,8 @@ bin/run diff "out/my-deck/My Deck v3.pptx" --out out/my-deck
 Deck v3.pptx was edited after its build from authoring/deck/deck.deck.yaml
   slide 1  moved    s1.chrome.title  0.8,0.375 11.733×1.05in → 1.55,0.375 11.733×1.05in
   slide 1  retyped  s1.chrome.title  'Smoke Test' → 'Smoke Test, revised'
+  slide 1  restyled s1.p1.card#2     size 18/13.5pt → 40/13.5pt; colour 1A1D21 → FF0000
+  slide 1  relabelled s1.p1.image#1  alt none → 'The harbour at dawn'
   slide 1  added    TextBox 3        not in the build — added by hand, so no placement made it
   slide 1  gone     s1.bg#1          the build drew this and the deck no longer has it
 ```
@@ -223,7 +247,7 @@ the spec rather than living only in the binary.
 
 | Flag | Effect |
 |---|---|
-| `--manifest` / `-m` | Default `<deck>.manifest.json`. |
+| `--manifest` / `-m` | Default `<deck>.manifest.json`, else the manifest beside the deck that records the deck's build id. |
 | `--out` / `-o` | Also write `readback.md` in this directory. |
 
 It works because shapes are named for the spec node that drew them and PowerPoint
@@ -232,11 +256,26 @@ keeps a shape name through an edit — see
 deck's side, since one shape can answer for several records: chrome's stacked lines
 are paragraphs in a single frame.
 
+A built deck carries its build id, so a copy saved under another name in the same
+directory is read against the right manifest with no flag.
+
+A slide is matched by the number in its shapes' names, not by where it sits. A deleted
+slide is one `slide-gone` line and every slide after it still matches its own records. A
+slide carrying no build-named shape is `slide-added`, and so is a duplicate, which says
+which slide it copies. A slide out of build order is `slide-moved`: as few slides are named
+as explain the order the deck is now in.
+
 A shape PowerPoint stores inside `mc:AlternateContent` — an equation, a 3D model — is
 read from its fallback, the branch a reader of none of the extension namespaces takes.
 
-**What it cannot see:** a colour, a font, a point size, or anything inside a table
-cell — cells were never shapes, so they carry no name. A deck whose bytes changed with
+`retimed` is a slide whose build no longer spends the clicks, reveals the shapes or
+listens on the triggers the manifest records, or whose transition changed kind. `restyled` compares a shape's runs as sets: a point size the build never set, or the
+recorded ink gone from every run. `relabelled` is the decorative mark set or cleared, or
+alternative text changed.
+
+**What it cannot see:** a typeface, a fill, one run recoloured while the rest keep the
+recorded ink, or which table cell changed — cells were never shapes, so they carry no
+name and answer through their frame. A deck whose bytes changed with
 no shape difference says so rather than reporting nothing.
 
 ## `inspect` — inventory a deck's shapes
@@ -270,7 +309,7 @@ A file that will not open as a `.pptx` — corrupt, truncated, or another Office
 format under a renamed extension — is refused with a message naming the path, not a
 traceback.
 
-## `extract` — words out of a deck deckwright did not build
+## `extract` — a draft spec out of any deck
 
 ```bash
 bin/run extract "decks/Board Update.pptx"
@@ -279,45 +318,122 @@ bin/run extract "decks/Board Update.pptx" --as md
 
 ```
 90 slide(s) -> decks/Board Update.deck.yaml
-56 shape(s) could not be converted — each is named in Board Update.deck.yaml
+12 picture(s) -> decks/Board Update.media
+41 shape(s) could not be converted — each is named in Board Update.deck.yaml
 ```
 
-Reads every slide's text in reading order and writes it as a draft `.deck.yaml` that
-builds, or as a Markdown transcript. Shapes that overlap vertically are one row and are
-read left to right, so a row of four cards comes back in the order a reader sees it
-rather than in the order of their top edges. This is the way in for a deck that came from
-somewhere else — a client's file, last quarter's version, a deck someone sent you.
+Reads every slide in reading order and writes it as a draft `.deck.yaml` that builds, or
+as a Markdown transcript. Shapes that overlap vertically are one row and are read left to
+right, so a row of four cards comes back in the order a reader sees it rather than in the
+order of their top edges. This is the way in for a deck that came from somewhere else — a
+client's file, last quarter's version, a deck someone sent you — and the way back into a
+deck deckwright built whose spec is gone.
 
 | Flag | Effect |
 |---|---|
 | `--out` / `-o` | Where to write. Default: beside the deck, as `<deck>.deck.yaml` or `<deck>.md`. |
 | `--as` | `yaml` for a draft spec, `md` for a transcript. Default `yaml`; any other value is refused. |
 | `--theme` / `-t` | Theme the draft names, and the grid it is drafted against. Default `base`. |
-| `--force` | Overwrite an existing file at that path. Without it, a destination that already exists is refused. |
+| `--force` | Overwrite an existing file at that path, and replace the draft's media folder. Without it, either one already existing is refused. |
 
 A draft is written once. The second `extract` of a deck — the client sent a new version,
 the file grew three slides — finds the spec you have been editing at the destination and
 refuses rather than replacing it; `--force` is how you say the edits are expendable. The
 refusal comes before the deck is read, as does an `--as` that is neither `yaml` nor `md`.
+The media folder is checked before anything is written, so its refusal leaves the draft
+unwritten too. `--force` replaces a folder there, with everything in it, and refuses a file
+or a link at that path.
+
+**The media folder** is `<draft>.media` beside the draft — `Board Update.media` for
+`Board Update.deck.yaml` — holding each picture the draft places, named for its slide:
+`slide4-2.png` for slide 4's second picture, `slide4-hero.png` for a deckwright placement
+with the id `hero`. The draft's `src:` points into it, so the draft builds where it was
+written. A picture the slide has no room for is written there too, and named in the
+draft. A transcript writes no files; each picture is a line, `*picture: <its alt text>*`.
+
+### A deck deckwright built
+
+Every shape `build` draws is named for the placement that drew it (`s3.q.card#2`), so a
+deck deckwright built comes back as its placements, not only its words.
+
+| Placement | Comes back as |
+|---|---|
+| `card` | its heading, its body and its `pair:` |
+| `bullets` | its heading, its items and `columns:` |
+| `prose` | its paragraphs and `cite:` |
+| `table` | its header and rows |
+| `chart` | its kind and data, read from the values the chart caches |
+| `image` | its picture, in the media folder; its `alt:` or `decorative:`; its `over:` lines |
+| `rule`, `panel` | themselves, a rule's orientation and a panel's `pair:` included |
+| any other | bullets of its words — or, holding only a picture like a `document:` does, an `image:` of it — with a comment saying so |
+
+Each is placed at `at: {box: …}`, in percent of the canvas. The box is the rectangle the
+build's manifest recorded, when that manifest is beside the deck — or, for a copy saved
+under another name, any manifest beside it recording the same build id — and otherwise the
+rectangle its shapes cover, rounded outward so words drawn tight in it still fit. An
+author's `id:` and a `morph:` name come back, as do a slide's `animate:` and
+`transition: morph`. A placement drawn as `p2` keeps that name after `p1` is deleted by
+hand, so a rebuild names its shapes as before. A `pair:` comes back when the plate's fill
+and ink are a pair the drafted theme declares; `surface`, the default, stays unwritten.
+
+A `reveals:` comes back where a spec can state it: the whole placement revealed, by one
+trigger that is itself drafted, in no ring. A trigger added in PowerPoint can say more —
+reveal only a card's words, reveal a card from a second shape, or reveal each of two
+cards from the other — and each of those is left out with a comment naming it, so the
+draft still builds.
+
+What the file does not hold is said in a comment on the slide: a component whose fields
+are not in it (`# s8.p1.stats: drafted as bullets: …`), a card's icon, and — over an
+image — each line's rung and the scrim's settings. An `icon:` placement's glyph is not in
+the file by name either, so the icon is named as the shape it drew. A slide's `chrome:`
+overrides — a title moved or set on another rung — do not come back: its chrome returns
+as words, in the theme's place for them. Anything added to such a slide by hand
+(words, a table, a card, a chart, a picture) is named under the "did not fit" comment
+rather than banded, since a band could overlap the placements. A placement grouped by hand
+is still read back. One pasted in PowerPoint keeps its original's name, so that name now
+covers two placements; both are read as any other deck's shapes are.
+
+### A deck from anywhere else
 
 Kickers, titles, subtitles, body text, tables and speaker notes convert, and a hyperlinked
-run comes back as `[words](address)`. A table of a
-single row — a label band, a one-row layout table — comes back as bullets, since it has no
-body rows to put under a header. A slide painted in one of the theme's own pair
-colours comes back with that `background:`. Size, position and every treatment do not
-convert: each slide comes back as chrome plus bullets in the content band. Every shape
-that held something and did not convert — a picture, a chart, a connector, a line,
-SmartArt, an unlabelled band or arrow — is named in a `# not converted:` comment on the
-slide it came from. Repeats collapse into one line, so twenty-nine freeform icons read as
+run comes back as `[words](address)`. So do three kinds of figure.
+
+- **A chart** comes back as a `chart:` block: its kind and its data, read from the values
+  the chart caches. An XY or bubble chart, one with an empty value or two series of one
+  name, and one whose cache does not cover its categories are named with the reason
+  instead.
+- **A card** is a filled shape holding one or two paragraphs, or a text box holding them
+  that lies on exactly one filled shape. Two lines are a heading and a body; one line is a
+  heading when bold, and body copy when not. A filled shape covering 40% of the slide or
+  more is a panel the slide's words sit on, not a card.
+- **A picture** comes back as an `image:` with its alt text, or `decorative: true` when
+  Office marks it decorative, and its file goes in the media folder — a photo filling a
+  layout's picture placeholder included. A picture covering the whole slide, and one the
+  deck links rather than embeds, are named instead. Words come first: when banding a
+  slide's pictures pushes some of its words off it, and leaving them out pushes fewer, the
+  pictures are named in the draft and their files still written.
+
+A table of a single row — a label band, a one-row layout table — comes back as bullets,
+since it has no body rows to put under a header. A slide painted in one of the theme's
+own pair colours comes back with that `background:`. Size, position and every treatment
+do not convert: each slide comes back as chrome plus placements banded in the content
+band. Every shape that held something and did not convert — a connector, a line, SmartArt,
+an unlabelled band or arrow — is named in a `# not converted:` comment on the slide it came
+from. Repeats collapse into one line, so twenty-nine freeform icons read as
 `# not converted: 29 × freeform`; the count the command prints is one per shape, and so is
 larger than the number of comment lines. A dropped shape carrying alternative text also
-gets `# alt text on picture 'Logo': <its alt text>`, or `*alt text on …*` in a transcript, so
-what it showed survives; alt text that is only a file name is left out.
+gets `# alt text on freeform 'Logo': <its alt text>`, or `*alt text on …*` in a transcript,
+so what it showed survives; alt text that is only a file name is left out, and so is a
+picture's.
 
 A group is walked rather than named: its children convert as though each sat on the slide,
 ordered among themselves and taking the group's place in the reading order. Eight levels
 of nesting are walked; a group nested deeper than that is named whole in a
 `# not converted:` comment instead.
+
+A shape PowerPoint stores inside `mc:AlternateContent` — an equation, a 3D model, ink — is
+read from its fallback, as `inspect` and `diff` read it. Its words convert like any other
+shape's, and a fallback picture comes back as a picture.
 
 Three things can put a line in the chrome rather than the bullets, in this order.
 
@@ -345,27 +461,33 @@ its place in the reading order as bullets. The size test reads only runs carryin
 of their own, so a deck that leaves every size to its layout gets no title from it.
 
 Two things are passed over without a comment, because neither held anything: a layout
-placeholder nobody typed into, and an empty text box. A shape painting the whole canvas in a
-flat colour is passed over too — it is the slide's background, and comes back as one. One thing is named without being
-recovered: the words *inside* a chart or a SmartArt graphic. That shape gets its line; its
-labels do not come back as text.
+placeholder nobody typed into, and an empty text box. A shape painting the whole canvas in
+a flat colour is passed over too — it is the slide's background, and comes back as one.
+The words inside a SmartArt graphic are named without being recovered, and so are a
+chart's title and axis titles: its categories and series come back in its `chart:` block,
+its own labels do not.
 
-What builds out of the draft is one rectangle repeated for the length of the file.
-[`docs/treatments.md`](treatments.md) is what fixes that — read it and give each slide
-the shape its content earns before the deck goes anywhere. The draft's header says the
-same thing at the top of the file.
+What builds out of a stranger's draft is one rectangle repeated for the length of the
+file. [`docs/treatments.md`](treatments.md) is what fixes that — read it and give each
+slide the shape its content earns before the deck goes anywhere. The draft's header says
+the same thing at the top of the file.
 
 The draft names `--theme` and is drafted against it: a placement's `rows:` spans that
 theme's own grid, so a theme declaring `scale: {rows: 6}` gets six-row spans. Each
 table placement is given the height that table will ask for at build, so its band is
-sized by its contents; every other placement gets a fixed two rows. A name that resolves to no theme
-file and no packaged theme fails here, before anything is written, rather than later at
-`build`.
+sized by its contents; a chart or a picture takes half the grid, and every other placement
+a fixed two rows. A name that resolves to no theme file and no packaged theme fails here,
+before anything is written, rather than later at `build`.
 
 A slide holding more than the grid can band still yields a spec that builds. Its blocks
-run together into one list, a long list takes a second or third column (`columns:` in the
-draft), and anything still left over is written in as comment lines under `# more than
-one slide holds — these did not fit, and are yours to place:`.
+and cards run together into one list, a long list takes a second or third column
+(`columns:` in the draft) — whichever holds the most lines, each measured wrapped to its
+column the way `build` measures it — and anything still left over is written in as comment
+lines under `# more than one slide holds — these did not fit, and are yours to place:`: a
+table's rows, a chart with its numbers, a picture with its file and alt text.
+
+The transcript carries what the draft does: each placement's and card's words as a list,
+each picture as its alt text, and a table or a chart's data as a table.
 
 It invents no `sections:` — a `.pptx` cannot say where its sections were, and a guessed
 one would make every slide's `section:` a lie. `out:` defaults to
@@ -553,15 +675,16 @@ directory on startup. Defaults live beside the code that reads them, not here.
 | `DECKWRIGHT_MAX_BEAT_SHAPES` | Most shapes one beat of a staged build may reveal before `qa` warns (`beat-size`). Default 6. |
 | `DECKWRIGHT_PDFFONTS` | The Poppler `pdffonts` command QA reads a render's embedded fonts with — `font-substituted` and `cjk-unrendered`. Absent, `font-substituted` falls back to `fc-list`. |
 | `DECKWRIGHT_PDFFONTS_TIMEOUT_S` | Timeout for it. |
-| `DECKWRIGHT_FC_LIST` | The fontconfig `fc-list` command that answers which faces this machine has — `doctor`'s `fonts` row and QA's `font-substituted` check. Absent, both go silent rather than guess. |
-| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | Timeout for it. |
+| `DECKWRIGHT_FC_LIST` | The fontconfig `fc-list` command that answers which faces this machine has — the font files `render` hands LibreOffice, `doctor`'s `fonts` row and QA's `font-substituted` check. Absent, `render` links no fonts and the other two go silent rather than guess. |
+| `DECKWRIGHT_FC_MATCH` | The fontconfig `fc-match` command `render` asks for the font to draw each CJK language with, when the deck carries Chinese, Japanese or Korean text. Absent, none is linked. |
+| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | Timeout for `fc-list` and `fc-match`. |
 
 pf-core supplies the rest — `LOG_LEVEL`, `LOG_FILE` and the API-key vars. See
 `docs/pf-core/config.md` (the symlink `bin/setup` creates).
 
 ## External tools
 
-Six commands shell out. A tool that is not installed fails with a message naming the
+Seven commands shell out. A tool that is not installed fails with a message naming the
 binary it looked for, the command that installs it here, and the `DECKWRIGHT_*` knob that
 points at one installed elsewhere:
 
@@ -572,11 +695,13 @@ points at one installed elsewhere:
 | Poppler `pdftotext` | QA's overflow check |
 | Poppler `pdffonts` | QA's `font-substituted` and `cjk-unrendered` checks |
 | Chrome / Chromium / Edge | `shot`; **building** any deck that uses a `document` component |
-| fontconfig `fc-list` | `doctor`'s `fonts` row; QA's `font-substituted` check |
+| fontconfig `fc-list` | `render`'s font linking; `doctor`'s `fonts` row; QA's `font-substituted` check |
+| fontconfig `fc-match` | `render`'s CJK font linking |
 
-`fc-list` and `pdffonts` are the exceptions to the paragraph above: nothing fails without
-either. Without `pdffonts`, `font-substituted` falls back to `fc-list`, and `cjk-unrendered`
-goes silent; without `fc-list` too, both do.
+`fc-list`, `fc-match` and `pdffonts` are the exceptions to the paragraph above: nothing
+fails without them. Without fontconfig, `render` links no fonts into LibreOffice's profile
+and renders as LibreOffice alone can. Without `pdffonts`, `font-substituted` falls back to
+`fc-list`, and `cjk-unrendered` goes silent; without `fc-list` too, both do.
 
 `inspect` and `qa --no-render` need none of them. `build` needs only Chrome, and only
 when the spec uses `document:` — the one component rendered through HTML. `panel:`
@@ -595,7 +720,10 @@ is on the machine, not in the stack. Debug logging is `-v` / `--verbose` — see
 
 ## Adding a command
 
-1. Add a `@app.command()` function in `src/deckwright/cli.py`. Keep it thin: parse
+1. Add a `@app.command()` function to the concern module it belongs with, under
+   `src/deckwright/cli/`: `build.py` (build/render/shot/qa), `reading.py`
+   (diff/inspect/extract), `onboarding.py` (new/demo/conform/sample/doctor), or
+   `glyphs.py` — or a new sibling module for a new concern. Keep it thin: parse
    arguments, call **one** service or orchestrator function, print the result. No
    business logic: the command parses arguments and calls one function.
 2. Raise the project's own errors (`SpecError`, `ThemeError`, `LayoutError`) for bad

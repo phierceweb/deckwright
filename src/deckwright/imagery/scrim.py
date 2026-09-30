@@ -12,8 +12,10 @@ from typing import Any
 
 from deckwright.errors import LayoutError
 from deckwright.imagery.sample import Cell, effective_bg, solve_alpha
+from deckwright.spec._scalars import boolean
 from deckwright.theme.palette import Palette
 from deckwright.utils.color import contrast_ratio
+from deckwright.utils.keys import refuse_unknown
 
 GRADIENTS = ("none", "top", "bottom")
 AUTO = "auto"
@@ -46,6 +48,7 @@ class Scrim:
 
 def scrim_spec(cfg: Any, *, default_pair: str, where: str) -> ScrimSpec:
     """Validate a ``scrim:`` mapping. ``true`` is shorthand for an auto solve."""
+    cfg = boolean(cfg)
     if cfg is True:
         return ScrimSpec(pair=default_pair)
     if not isinstance(cfg, dict):
@@ -53,11 +56,14 @@ def scrim_spec(cfg: Any, *, default_pair: str, where: str) -> ScrimSpec:
             f"{where}: 'scrim' must be a mapping of {', '.join(_SCRIM_KEYS)} "
             f"(or true for an auto-solved one), got {type(cfg).__name__}"
         )
-    unknown = sorted(set(cfg) - set(_SCRIM_KEYS))
-    if unknown:
-        raise LayoutError(
-            f"{where}: scrim has no key {unknown[0]!r}; known keys: {', '.join(_SCRIM_KEYS)}"
-        )
+    refuse_unknown(
+        cfg,
+        _SCRIM_KEYS,
+        error=LayoutError,
+        where=where,
+        lead="scrim has no key",
+        label="known keys",
+    )
     gradient = str(cfg.get("gradient", "none"))
     if gradient not in GRADIENTS:
         raise LayoutError(

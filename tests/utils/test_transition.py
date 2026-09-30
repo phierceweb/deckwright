@@ -86,3 +86,40 @@ def test_a_second_transition_on_one_slide_is_refused():
     with pytest.raises(LayoutError, match="already carries a transition"):
         add_transition(slide, "wipe")
     assert len(slide._element.findall(qn("p:transition"))) == 1
+
+
+def test_morph_is_written_as_powerpoints_own_wrapper():
+    """Byte for byte what PowerPoint for Mac 16 played from the probe: a `p159` Choice, a fade
+    Fallback, in that order."""
+    from deckwright.motion.transition import morph_xml
+
+    assert morph_xml("slow") == (
+        '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+        '<mc:Choice xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/09/main" '
+        'Requires="p159">'
+        '<p:transition spd="slow"><p159:morph option="byObject"/></p:transition></mc:Choice>'
+        '<mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback>'
+        "</mc:AlternateContent>"
+    )
+
+
+def test_morph_refuses_a_speed_the_schema_does_not_have():
+    from deckwright.motion.transition import morph_xml
+
+    with pytest.raises(
+        LayoutError, match="transition speed must be one of slow, med, fast, got 'warp'"
+    ):
+        morph_xml("warp")
+
+
+def test_a_morph_slide_reads_back_as_morph_and_refuses_a_second_transition():
+    from pptx import Presentation
+
+    from deckwright.motion.transition import add_transition, read_kind
+
+    slide = Presentation().slides.add_slide(Presentation().slide_layouts[6])
+    add_transition(slide, "morph", speed="med")
+    assert read_kind(slide._element) == "morph"
+    with pytest.raises(LayoutError, match="already carries a transition"):
+        add_transition(slide, "fade")

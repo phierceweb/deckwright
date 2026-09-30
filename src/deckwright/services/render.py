@@ -1,6 +1,8 @@
 """Render a ``.pptx`` to per-slide images via LibreOffice + Poppler.
 
-The ``DECKWRIGHT_SOFFICE`` / ``DECKWRIGHT_PDFTOPPM`` / ``DECKWRIGHT_RENDER_DPI`` knobs are
+LibreOffice is handed the deck's own fonts first (:mod:`.render_fonts`), and each render
+leaves a stamp that lets ``qa`` reuse it (:mod:`.render_stamp`). The
+``DECKWRIGHT_SOFFICE`` / ``DECKWRIGHT_PDFTOPPM`` / ``DECKWRIGHT_RENDER_DPI`` knobs are
 listed in ``docs/cli.md``.
 """
 
@@ -10,12 +12,16 @@ import platform
 import re
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 
 from deckwright.errors import MissingToolError, RenderError
+from deckwright.services.render_fonts import deck_font_files, seed_fonts
+from deckwright.services.render_stamp import matching_render, write_stamp
 from deckwright.utils.env import env_str
 from pf_core.log import get_logger
 from pf_core.utils.env import resolve_int
+from pf_core.utils.hashing import content_hash
 
 logger = get_logger(__name__)
 
@@ -114,11 +120,14 @@ def render_to_images(
             f"no deck to render at {pptx_path}",
             context={"pptx": str(pptx_path)},
         )
+    deck_hash = content_hash(pptx_path.read_bytes())
+    fonts = deck_font_files(pptx_path)
 
     logger.info("render_pptx_start", pptx=str(pptx_path), outdir=str(outdir), dpi=dpi)
     # LibreOffice locks one shared user profile, so a concurrent conversion exits
     # without converting and without a usable error. A profile per process fixes it.
     with tempfile.TemporaryDirectory(prefix="deckwright-soffice-") as profile:
+        seed_fonts(Path(profile), fonts)
         try:
             subprocess.run(
                 [
@@ -166,7 +175,15 @@ def render_to_images(
     flag = "-jpeg" if fmt == "jpeg" else f"-{fmt}"
     try:
         subprocess.run(
-            [pdftoppm, flag, "-r", str(dpi), str(pdf), str(outdir / "slide")],
+            [
+                pdftoppm,
+                flag,
+                "-r",
+                str(dpi),
+                *_whole_pixels(pptx_path, dpi),
+                str(pdf),
+                str(outdir / "slide"),
+            ],
             check=True,
             capture_output=True,
             encoding="utf-8",
@@ -186,6 +203,44 @@ def render_to_images(
             cause=e,
         )
 
-    images = [str(p) for p in _rendered_pages(outdir)]
-    logger.info("render_pptx_done", count=len(images))
-    return images
+    pages = _rendered_pages(outdir)
+    write_stamp(outdir, deck_hash=deck_hash, fonts=fonts, pdf=pdf, images=pages, dpi=dpi, fmt=fmt)
+    logger.info("render_pptx_done", count=len(pages))
+    return [str(p) for p in pages]
+
+
+_EMU_PER_INCH = 914400
+_SLIDE_SIZE = re.compile(rb"<p:sldSz\b[^>]*?\bcx=\"(\d+)\"[^>]*?\bcy=\"(\d+)\"")
+
+
+def _whole_pixels(pptx_path, dpi: int) -> list[str]:
+    """pdftoppm arguments that fit the page to a whole number of pixels.
+
+    A slide 1466.63px wide is rounded up, and the last column comes out part paper. Nothing
+    is returned for a deck whose size cannot be read; the resolution alone then stands.
+    """
+    try:
+        with zipfile.ZipFile(pptx_path) as deck:
+            found = _SLIDE_SIZE.search(deck.read("ppt/presentation.xml"))
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return []
+    if found is None:
+        return []
+    width, height = (round(int(emu) / _EMU_PER_INCH * dpi) for emu in found.groups())
+    return ["-scale-to-x", str(width), "-scale-to-y", str(height)]
+
+
+def reuse_render(pptx_path, outdir, *, dpi: int | None = None) -> list[str] | None:
+    """The page images already in ``outdir`` when they are a render of ``pptx_path`` as it
+    is now, given the fonts a render would be given now, at the DPI
+    :func:`render_to_images` would use or finer — else None.
+
+    The PDF beside them, ``<stem>.pdf``, is vouched for by the same stamp.
+    """
+    pptx_path = Path(pptx_path).resolve()
+    if not pptx_path.is_file():
+        return None
+    dpi = resolve_int(dpi, "DECKWRIGHT_RENDER_DPI", default=_DPI_DEFAULT)
+    return matching_render(
+        pptx_path, Path(outdir).resolve(), dpi=dpi, fonts=lambda: deck_font_files(pptx_path)
+    )

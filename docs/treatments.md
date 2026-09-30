@@ -89,7 +89,7 @@ single word is set. It is why a slide that "has room for one more point" often d
 |---|---|---|
 | `rule`, `connector`, `icon`, `ellipse`, `nav` | Almost nothing | Marks and furniture. They compose with anything. |
 | `swatches`, `grid` | Half a band, or most of one | Both draw the theme rather than content: a palette wraps to as many rows as it has roles, and a grid needs depth to read as one. |
-| `bullets`, `callouts`, `card`, `prose` | Half a band | Two fit on one slide, one over the other. `prose` caps its measure, so more copy costs depth, never width. |
+| `bullets`, `callouts`, `card`, `prose`, `equation` | Half a band | Two fit on one slide, one over the other. `prose` caps its measure, so more copy costs depth, never width; an `equation` costs the rows it stacks and never wraps. |
 | `stats`, `table`, `versus`, `panel`, `chart`, `code` | Most of a band | Pair one with a lighter band rather than another of these. |
 | `diverge` | Most of a band, or half of one | The exception to the row above: two blocks stack on one slide, and `peak:` exists to make them share a scale. |
 | `flow`, `fanout`, `image`, `document` | The slide | A second component alongside one of these is a footer strip, not a peer. |

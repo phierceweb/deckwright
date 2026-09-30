@@ -8,10 +8,7 @@ from deckwright.compile.record import box_of
 from deckwright.qa.model import Finding, Severity
 from deckwright.qa.walk import all_shapes, slides
 from deckwright.theme.model import Theme
-from deckwright.utils.color import AA_LARGE, contrast_ratio, delta_e
-
-# Below this a fill differs from its ground in neither lightness nor colour.
-_DISTINCT_DELTA_E = 35.0
+from deckwright.utils.color import contrast_ratio, delta_e, stands_off
 
 
 def check_fill_ground(manifest: dict[str, Any], theme: Theme) -> list[Finding]:
@@ -25,10 +22,9 @@ def check_fill_ground(manifest: dict[str, Any], theme: Theme) -> list[Finding]:
             fill, ground = shape.get("fill"), shape.get("ground")
             if not fill or not ground:
                 continue
-            ratio = contrast_ratio(fill, ground)
-            distance = delta_e(fill, ground)
-            if ratio >= AA_LARGE or distance >= _DISTINCT_DELTA_E:
+            if stands_off(fill, ground):
                 continue
+            ratio, distance = contrast_ratio(fill, ground), delta_e(fill, ground)
             findings.append(
                 Finding(
                     slide=slide["index"],

@@ -103,6 +103,28 @@ def chart_legend_slides() -> dict[str, dict[str, Any]]:
                 }
             ],
         },
+        "chart-stacked-highlight": {
+            "title": "A stacked column whose marked quarter keeps its colours",
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": "top-two-thirds"},
+                    "chart": {
+                        "alt": CHART_ALT,
+                        "kind": "column-stacked",
+                        "data": [
+                            {"category": "Q1", "values": {"North": 12, "South": 10}},
+                            {"category": "Q2", "values": {"North": 18, "South": 14}},
+                            {"category": "Q3", "values": {"North": 22, "South": 19}},
+                            {
+                                "category": "Q4",
+                                "values": {"North": 30, "South": 21},
+                                "highlight": True,
+                            },
+                        ],
+                    },
+                }
+            ],
+        },
     }
 
 
@@ -141,6 +163,26 @@ def chart_intro_slides() -> dict[str, dict[str, Any]]:
                             {"category": "Urban", "value": 36},
                             {"category": "Suburban", "value": 52},
                             {"category": "Rural", "value": 64, "highlight": True},
+                        ],
+                    },
+                }
+            ],
+        },
+        "chart-pie-highlight": {
+            "title": "A pie with one wedge marked",
+            "place": [
+                {
+                    "at": {"cols": {"from": 0, "to": 10}, "rows": "top-two-thirds"},
+                    "chart": {
+                        "alt": CHART_ALT,
+                        "kind": "pie",
+                        "unit": "%",
+                        "data": [
+                            {"category": "Direct", "value": 30},
+                            {"category": "Referral", "value": 25, "highlight": True},
+                            {"category": "Paid", "value": 20},
+                            {"category": "Organic", "value": 15},
+                            {"category": "Other", "value": 10},
                         ],
                     },
                 }

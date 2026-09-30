@@ -8,16 +8,19 @@ import pytest
 from PIL import Image
 
 from deckwright.errors import RenderError
+from deckwright.services.chrome import (
+    NO_SANDBOX_ENV_VAR,
+    chrome_cmd,
+    log_tail,
+    no_sandbox,
+    sandbox_advice,
+)
 from deckwright.services.htmlshot import (
     CSP_META,
     _HEIGHT_PROBE,
-    _NO_SANDBOX_ENV_VAR,
     _autocrop,
     _check_not_clipped,
-    _chrome_cmd,
-    _no_sandbox,
     _probe_height,
-    _sandbox_advice,
     _with_csp,
 )
 
@@ -55,7 +58,7 @@ def test_autocrop_pad_expands_within_bounds():
 
 
 def test_chrome_cmd_shape():
-    cmd = _chrome_cmd(
+    cmd = chrome_cmd(
         "chrome",
         "file:///x.html",
         "/tmp/o.png",
@@ -129,15 +132,15 @@ def test_the_probe_publishes_the_scroll_height_under_the_expected_attribute():
 def _as_normal_user(monkeypatch):
     """Pin the euid so these read the same for a developer and a root CI container."""
     monkeypatch.setattr(os, "geteuid", lambda: 1000, raising=False)
-    monkeypatch.delenv(_NO_SANDBOX_ENV_VAR, raising=False)
+    monkeypatch.delenv(NO_SANDBOX_ENV_VAR, raising=False)
 
 
 def test_the_browser_is_sandboxed_by_default(monkeypatch):
     """A card's HTML can carry script, so the flag that switches the sandbox off is
     opt-in. Make `_no_sandbox` return True unconditionally and this goes red."""
     _as_normal_user(monkeypatch)
-    assert _no_sandbox() is False
-    cmd = _chrome_cmd(
+    assert no_sandbox() is False
+    cmd = chrome_cmd(
         "chrome",
         "file:///x.html",
         "/tmp/o.png",
@@ -151,9 +154,9 @@ def test_the_browser_is_sandboxed_by_default(monkeypatch):
 
 def test_the_env_var_switches_the_sandbox_off(monkeypatch):
     _as_normal_user(monkeypatch)
-    monkeypatch.setenv(_NO_SANDBOX_ENV_VAR, "1")
-    assert _no_sandbox() is True
-    cmd = _chrome_cmd(
+    monkeypatch.setenv(NO_SANDBOX_ENV_VAR, "1")
+    assert no_sandbox() is True
+    cmd = chrome_cmd(
         "chrome",
         "file:///x.html",
         "/tmp/o.png",
@@ -166,21 +169,21 @@ def test_the_env_var_switches_the_sandbox_off(monkeypatch):
 
 
 def test_root_gets_the_flag_because_the_sandbox_cannot_work_there(monkeypatch):
-    monkeypatch.delenv(_NO_SANDBOX_ENV_VAR, raising=False)
+    monkeypatch.delenv(NO_SANDBOX_ENV_VAR, raising=False)
     monkeypatch.setattr(os, "geteuid", lambda: 0, raising=False)
-    assert _no_sandbox() is True
+    assert no_sandbox() is True
 
 
 def test_a_sandbox_failure_names_the_escape_hatch():
     """Chrome's own wording, so the error a user actually sees points somewhere."""
-    assert _NO_SANDBOX_ENV_VAR in _sandbox_advice(
+    assert NO_SANDBOX_ENV_VAR in sandbox_advice(
         "[0806/120000.1:FATAL:zygote_host_impl_linux.cc(200)] No usable sandbox! "
         "Update your kernel or see https://chromium.googlesource.com/..."
     )
 
 
 def test_an_unrelated_crash_gets_no_sandbox_advice():
-    assert _sandbox_advice("[FATAL] out of memory while decoding image") == ""
+    assert sandbox_advice("[FATAL] out of memory while decoding image") == ""
 
 
 def test_the_content_policy_is_the_first_thing_inside_head():
@@ -197,3 +200,71 @@ def test_the_policy_names_no_source_a_frame_object_or_embed_could_load_from():
     assert "default-src 'none'" in CSP_META
     assert not any(d in CSP_META for d in ("frame-src", "child-src", "object-src"))
     assert "file:" not in CSP_META
+
+
+def _fake_chrome(tmp_path, body: str) -> str:
+    script = tmp_path / "chrome"
+    script.write_text("#!/bin/sh\n" + body)
+    script.chmod(0o755)
+    return str(script)
+
+
+def test_a_browser_that_exits_without_writing_is_a_render_error(tmp_path):
+    from deckwright.services.htmlshot import render_html_to_png
+
+    fake = _fake_chrome(tmp_path, "echo boom >&2\nexit 0\n")
+    with pytest.raises(RenderError, match="Chrome exited without a screenshot"):
+        render_html_to_png("<html/>", tmp_path / "o.png", chrome=fake, timeout=5)
+
+
+def test_a_browser_that_hangs_is_killed_and_reported(tmp_path):
+    from deckwright.services.htmlshot import render_html_to_png
+
+    fake = _fake_chrome(tmp_path, "exec sleep 30\n")
+    with pytest.raises(RenderError, match="headless Chrome timed out"):
+        render_html_to_png("<html/>", tmp_path / "o.png", chrome=fake, timeout=1)
+
+
+def test_a_configured_browser_that_is_not_there_names_the_tool(tmp_path):
+    from deckwright.errors import MissingToolError
+    from deckwright.services.htmlshot import render_html_to_png
+
+    with pytest.raises(MissingToolError, match="could not start the browser at"):
+        render_html_to_png("<html/>", tmp_path / "o.png", chrome=str(tmp_path / "no-chrome"))
+
+
+def test_a_canvas_that_is_not_positive_is_a_configuration_error(tmp_path):
+    from pf_core.exceptions import ConfigurationError
+
+    from deckwright.services.htmlshot import render_html_to_png
+
+    with pytest.raises(ConfigurationError, match="must be a positive number of CSS px, got 0"):
+        render_html_to_png("<html/>", tmp_path / "o.png", canvas_height=0, chrome="/bin/sh")
+
+
+def test_a_stderr_log_that_cannot_be_read_tails_to_nothing(tmp_path):
+    (tmp_path / "log").write_text("x" * 2000 + "END")
+    assert log_tail(tmp_path / "log", 3) == "END"
+    assert log_tail(tmp_path / "absent") == ""
+
+
+def test_autocrop_reads_alpha_where_the_image_has_any():
+    """A white card on a transparent canvas has nothing that differs from white."""
+    img = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    img.paste((255, 255, 255, 255), (20, 30, 40, 50))
+    assert _autocrop(img).size == (20, 20)
+
+
+def test_autocrop_of_an_opaque_image_still_crops_by_difference_from_white():
+    img = Image.new("RGBA", (100, 100), (255, 255, 255, 255))
+    img.paste((0, 0, 0, 255), (50, 50, 51, 51))
+    assert _autocrop(img).size == (1, 1)
+
+
+def test_a_transparent_shot_asks_the_browser_for_a_clear_page():
+    asked = chrome_cmd(
+        "c", "file:///x", "o.png", width=1, height=1, scale=1, user_data_dir="d", transparent=True
+    )
+    plain = chrome_cmd("c", "file:///x", "o.png", width=1, height=1, scale=1, user_data_dir="d")
+    assert "--default-background-color=00000000" in asked
+    assert "--default-background-color=00000000" not in plain

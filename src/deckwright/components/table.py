@@ -23,7 +23,7 @@ from deckwright.theme.palette import Pair, lum
 from deckwright.utils.color import relative_luminance
 from deckwright.utils.shapes import ALIGN, ANCHOR, ANCHORS, para
 
-from deckwright.components._shape import known_fields, stroke, weight_pt
+from deckwright.components._shape import flag, known_fields, stroke, weight_pt
 from deckwright.components._tablegeom import aligns, heights, widths
 from deckwright.components._tablespec import Cell, Placed, Row, read_rows
 
@@ -226,7 +226,7 @@ def _row_fills(ctx: SlideCtx, rows: list[Row]) -> list[Pair | None]:
     head_pair = ctx.theme.palette.pair(str(ctx.body.get("head_pair", _HEAD_PAIR_DEFAULT)))
     named = ctx.body.get("body_pair")
     body_pair = ctx.theme.palette.pair(str(named)) if named is not None else None
-    bands = _band_fill(ctx, body_pair) if ctx.body.get("banding") else None
+    bands = _band_fill(ctx, body_pair) if flag(ctx, "banding") else None
 
     out: list[Pair | None] = []
     body_index = 0

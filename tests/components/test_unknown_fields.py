@@ -59,13 +59,13 @@ ITEM_BODIES = {
 
 
 def test_every_component_declaring_item_fields_also_enforces_them():
-    """Either the shared helper or the older inline set-difference counts as enforcing."""
+    """The shared helper is the one enforcement: a component with its own check drifts."""
     offenders = []
     for path in sorted(COMPONENTS.glob("*.py")):
         source = path.read_text()
         if not re.search(r"^_ITEM_FIELDS\s*=", source, re.M):
             continue
-        if "known_item_fields(" not in source and "- _ITEM_FIELDS" not in source:
+        if "known_item_fields(" not in source:
             offenders.append(path.name)
     assert offenders == [], f"declare _ITEM_FIELDS but never enforce it: {offenders}"
 
@@ -106,8 +106,8 @@ def test_a_prose_key_inside_an_item_names_the_split(ctx_factory):
 
 
 def test_a_flow_step_says_it_too(ctx_factory):
-    """`flow` validates its steps inline rather than through the shared helper, so it is
-    the one that silently diverges."""
+    """`flow` checks its steps in its own loop, after the 'head' check, so the hint has to
+    survive that route too."""
     ctx = ctx_factory(
         {
             "title": "T",

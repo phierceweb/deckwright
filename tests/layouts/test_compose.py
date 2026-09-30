@@ -910,3 +910,48 @@ def test_settle_measures_only_the_shapes_the_placement_drew(theme, monkeypatch):
     # The probe draws exactly one textbox. Anything else in here is a shape drawn by
     # the title or one of the three placements before it, wrongly read as new.
     assert len(drawn) == 1, [s.name for s in drawn]
+
+
+# --- morph --------------------------------------------------------------------
+
+
+def test_a_slide_may_ask_for_morph_and_the_manifest_says_so(theme):
+    from deckwright.motion.transition import read_kind
+
+    _probe("t-morph", [])
+    spec = SlideSpec(
+        index=2,
+        transition="morph",
+        place=(Placement(at={"cols": (0, 6)}, component="t-morph", morph="hero"),),
+    )
+    ctx = _ctx(theme, spec)
+
+    render_slide(ctx)
+
+    assert read_kind(ctx.slide._element) == "morph"
+    assert ctx.manifest.slides[0].transition == "morph"
+
+
+def test_a_morph_placement_is_named_without_its_slide_number(theme):
+    """PowerPoint pairs shapes by name, and a name that carries its slide's number is a
+    different name on the next slide."""
+    spec = SlideSpec(
+        index=2,
+        place=(
+            Placement(at={"cols": (0, 6)}, component="panel", morph="hero"),
+            Placement(at={"cols": (6, 12)}, component="panel", id="plain"),
+        ),
+    )
+    ctx = _ctx(theme, spec)
+
+    render_slide(ctx)
+
+    assert [s.name for s in ctx.slide.shapes] == ["m.hero.panel#1", "s2.plain.panel#1"]
+
+
+def test_a_slide_still_cannot_name_any_other_transition(theme):
+    spec = SlideSpec(index=1, transition="push")
+    with pytest.raises(
+        LayoutError, match=r"transition 'push' — a slide may only say 'none'.* or 'morph'"
+    ):
+        render_slide(_ctx(theme, spec))

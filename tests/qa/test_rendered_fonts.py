@@ -103,3 +103,22 @@ def test_without_fontconfig_the_cjk_half_says_nothing(tmp_path, monkeypatch):
 def test_without_pdffonts_the_caller_is_told_to_fall_back(tmp_path, monkeypatch):
     monkeypatch.setattr(rf, "embedded_fonts", lambda pdf, page=None: None)
     assert rf.check_rendered_faces(_deck(tmp_path), tmp_path / "d.pdf", _MANIFEST) is None
+
+
+def test_a_face_named_only_in_a_branch_the_render_does_not_take_is_not_the_decks(
+    tmp_path, theme_file
+):
+    """An equation's maths is set in Cambria Math inside the Choice PowerPoint reads;
+    LibreOffice reads the Fallback. Counting the Choice reports a face the render never
+    set as substituted."""
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "e.deck.yaml"
+    spec.write_text(
+        "theme: testtheme\ntitle: T\nout: out/E.pptx\n---\ntitle: Maths\n"
+        "place:\n  - at: {cols: full}\n    equation: {tex: 'x^2'}\n"
+    )
+    deck = build_deck(spec, theme_path=theme_file).deck
+    faces = rf.deck_faces(deck)
+    assert "Cambria Math" not in faces
+    assert faces  # the fallback line's own face is still read

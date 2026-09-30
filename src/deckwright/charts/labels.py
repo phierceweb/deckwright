@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING
 
 from lxml import etree
 from pptx.chart.chart import Chart
+from pptx.enum.chart import XL_DATA_LABEL_POSITION
 from pptx.oxml.ns import qn
 from pptx.util import Pt
 
 from deckwright.charts._native_types import (
+    _CENTER_LABEL_CHART_TYPES,
     _CONNECTED_LABEL_POSITION,
     _GAP_WIDTH_CHART_TYPES,
     _INSIDE_END_CHART_TYPES,
@@ -116,7 +118,9 @@ def style_data_labels(
     labels.font.italic = value_style.italic
     labels.font.name = ctx.theme.face
     labels.font.color.rgb = ctx.rgb(ink)
-    if style.label_position in _LABEL_POSITIONS and spec.type in _INSIDE_END_CHART_TYPES:
+    if spec.type in _CENTER_LABEL_CHART_TYPES:
+        labels.position = XL_DATA_LABEL_POSITION.CENTER
+    elif style.label_position in _LABEL_POSITIONS and spec.type in _INSIDE_END_CHART_TYPES:
         labels.position = _LABEL_POSITIONS[style.label_position]
     elif spec.type in _POINT_LABEL_CHART_TYPES:
         labels.position = _CONNECTED_LABEL_POSITION

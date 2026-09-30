@@ -24,9 +24,12 @@ from deckwright.theme.defaults import (
 )
 from deckwright.theme.model import TypeStyle
 from deckwright.theme.palette import AUTO_INK
+from deckwright.theme.resolve import beside
 from deckwright.theme.scale import Grid, Scale
+from deckwright.utils.keys import refuse_unknown
 from deckwright.utils.spans import percent
 from deckwright.theme.stock import is_stock_accent
+from deckwright.utils.color import mix
 
 if TYPE_CHECKING:
     from deckwright.layouts.chrome import ChromeField
@@ -36,6 +39,8 @@ logger = get_logger(__name__)
 
 _Num = TypeVar("_Num", int, float)
 
+# How far an unbound `line` sits from its page toward its ink: the built-in line's own step.
+_LINE_TOWARD_INK = 0.12
 _ACCENT_ROLE = re.compile(r"^accent-([1-9][0-9]*)$")
 _HEX = re.compile(r"^#?[0-9A-Fa-f]{6}$")
 # A mark decorates a painted backdrop, and only 'inverse' paints one — a page slide
@@ -81,11 +86,9 @@ def reject_unknown(cfg: dict[str, Any], known: tuple[str, ...], *, where: str) -
     A typo in a nested block is otherwise silent: the value is dropped and the default
     stands, so a theme reads as if it were honoured.
     """
-    unknown = sorted(set(cfg) - set(known))
-    if unknown:
-        raise ThemeError(
-            f"{where}: unknown key {unknown[0]!r}; known keys: {', '.join(sorted(known))}"
-        )
+    refuse_unknown(
+        cfg, sorted(known), error=ThemeError, where=where, lead="unknown key", label="known keys"
+    )
 
 
 def check_keys(raw: dict[str, Any], *, path: Path) -> None:
@@ -93,12 +96,13 @@ def check_keys(raw: dict[str, Any], *, path: Path) -> None:
     for key, note in _REPLACED_KEYS.items():
         if key in raw:
             raise ThemeError(f"theme {path}: {note}")
-    unknown = sorted(set(raw) - _KNOWN_KEYS)
-    if unknown:
-        raise ThemeError(
-            f"theme file {path} has unknown top-level key {unknown[0]!r}; "
-            f"known keys: {', '.join(sorted(_KNOWN_KEYS))}"
-        )
+    refuse_unknown(
+        raw,
+        sorted(_KNOWN_KEYS),
+        error=ThemeError,
+        lead=f"theme file {path} has unknown top-level key",
+        label="known keys",
+    )
     if "min_size" in mapping(raw.get("type"), "type", where=f"theme {path}"):
         raise ThemeError(
             f"theme {path}: key 'type.min_size' was replaced by 'min_pt' "
@@ -157,6 +161,8 @@ def bind(
         roles[role] = resolved
         if accent:
             pairs[role] = (AUTO_INK, role)
+    if "line" not in cfg and roles["page"] != DEFAULT_ROLES["page"]:
+        roles["line"] = mix(roles["page"], roles["ink"], _LINE_TOWARD_INK)
     return roles, pairs
 
 
@@ -188,6 +194,27 @@ def mapping(value: Any, key: str, *, where: str) -> dict[str, Any]:
     return value
 
 
+def face_name(value: Any, key: str, *, where: str) -> str | None:
+    """A typeface named in theme config, as written; ``None`` where the key is unset."""
+    if value is None or isinstance(value, str):
+        return value
+    raise ThemeError(f"{where}: {key} is one typeface name, like 'Helvetica', got {value!r}")
+
+
+def per_height(pt: float, reference_height: float, *, scale: Scale, key: str, where: str) -> float:
+    """A point size written at ``reference_height``, as points per inch of canvas height."""
+    if pt <= 0:
+        raise ThemeError(f"{where}: {key} is a point size above zero, got {pt!r}")
+    ratio = pt / reference_height
+    if not isfinite(scale.pt(ratio)):
+        raise ThemeError(
+            f"{where}: {key} {pt!r} over type.reference_height {reference_height!r} is past any "
+            f"finite point size; reference_height is the canvas height in inches the sizes are "
+            f"written for"
+        )
+    return ratio
+
+
 def rung(
     name: str,
     cfg: Any,
@@ -217,21 +244,22 @@ def rung(
     if "pt" not in cfg:
         raise ThemeError(f"{where} needs a 'pt'")
     pt = number(cfg["pt"], "pt", where=where, cast=float, expected="a point size")
-    alias = cfg.get("face")
+    ratio = per_height(pt, reference_height, scale=scale, key="pt", where=where)
+    alias = face_name(cfg.get("face"), "face", where=where)
     # An entry that names only a size keeps the design system's weight and face for its
     # rung: `title: {pt: 34}` resizes the title, it does not quietly un-bold it.
     if alias is None:
         resolved = heading_face if name in _RAMP_HEADING else None
     else:
         faces = dict(zip(_FACE_ALIASES, (face, heading_face, mono_face), strict=True))
-        wanted = str(alias)
+        wanted = alias
         resolved = faces.get(wanted, wanted)
         if wanted not in faces and wanted.casefold() in faces:
             logger.warning(
                 "theme_ramp_face_alias_case", rung=name, face=wanted, aliases=_FACE_ALIASES
             )
     return TypeStyle(
-        rung=pt / reference_height,
+        rung=ratio,
         scale=scale,
         bold=bool(cfg.get("bold", name in _RAMP_BOLD)),
         italic=bool(cfg.get("italic", False)),
@@ -283,13 +311,15 @@ def grid(cfg: dict[str, Any], scale: Scale, *, where: str = "theme") -> Grid:
 
 def marks(cfg: dict[str, Any], *, path: Path) -> dict[str, Any]:
     """Theme art, keyed by the background it decorates."""
-    unknown = sorted(set(cfg) - set(_MARK_NAMES))
-    if unknown:
-        raise ThemeError(
-            f"theme {path}: mark {unknown[0]!r} names no painted backdrop, so nothing "
-            f"would ever lay it down; a mark's name is the background it decorates — "
-            f"known marks: {', '.join(_MARK_NAMES)}"
-        )
+    refuse_unknown(
+        cfg,
+        _MARK_NAMES,
+        error=ThemeError,
+        where=f"theme {path}",
+        lead="unknown mark",
+        label="a mark is named for the painted backdrop it decorates, and nothing would "
+        "ever lay down any other — known marks",
+    )
     for name, value in cfg.items():
         if not isinstance(value, dict) or not value.get("media"):
             raise ThemeError(
@@ -307,7 +337,7 @@ def icons(cfg: Any, *, path: Path) -> Path | None:
     """
     if cfg is None:
         return None
-    directory = (path.parent / str(cfg)).resolve()
+    directory = beside(path, str(cfg), key="icons")
     if not directory.is_dir():
         raise ThemeError(
             f"theme {path}: icons directory not found: {directory} — 'icons:' names a "
@@ -369,11 +399,9 @@ def _region(cfg: Any, *, path: Path) -> Reserved:
             f"{where}: 'applies_to' is gone — a slide has no layout to scope "
             f"a region to; every region applies to every slide"
         )
-    unknown = sorted(set(cfg) - set(_RESERVE_KEYS))
-    if unknown:
-        raise ThemeError(
-            f"{where}: unknown key {unknown[0]!r}; known keys: {', '.join(_RESERVE_KEYS)}"
-        )
+    refuse_unknown(
+        cfg, _RESERVE_KEYS, error=ThemeError, where=where, lead="unknown key", label="known keys"
+    )
     poly = cfg.get("poly")
     if not isinstance(poly, list):
         raise ThemeError(

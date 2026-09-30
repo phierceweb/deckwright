@@ -18,6 +18,7 @@ from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, rect, rrect, solid, textbox
 
 from deckwright.components._shape import known_fields, known_item_fields
+from deckwright.components._shared import bounded
 
 _FIELDS = ("source", "items", "weight")
 _ITEM_FIELDS = frozenset({"text", "icon"})
@@ -31,24 +32,6 @@ _ICON_SIDE = 0.28
 _HEAD = 0.15
 _SOURCE_MAX_H = 1.15
 _CHIP_MAX_H = 0.48
-
-
-def _weight(ctx: SlideCtx) -> float:
-    raw = ctx.body.get("weight", 1.0)
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        raise LayoutError(
-            f"slide {ctx.spec.index} (component 'fanout'): 'weight' scales the bus "
-            f"stroke, got {raw!r}"
-        ) from None
-    low, high = _WEIGHT_RANGE
-    if not low <= value <= high:
-        raise LayoutError(
-            f"slide {ctx.spec.index} (component 'fanout'): 'weight' scales the bus "
-            f"stroke, {low} to {high}; got {value:g}"
-        )
-    return value
 
 
 def _items(ctx: SlideCtx) -> list[dict]:
@@ -82,7 +65,9 @@ def fanout(ctx: SlideCtx) -> BodyResult:
             f"branches leave from"
         )
     items = _items(ctx)
-    stroke = _STROKE * _weight(ctx)
+    stroke = _STROKE * bounded(
+        ctx, "weight", default=1.0, bounds=_WEIGHT_RANGE, what="scales the bus stroke"
+    )
     r = ctx.body_rect
 
     src_w = r.width * _SOURCE_FRACTION

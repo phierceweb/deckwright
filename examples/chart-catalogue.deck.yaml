@@ -567,7 +567,7 @@ notes: 'pie-exploded — XL_CHART_TYPE.PIE_EXPLODED. Writes a series-level
 
   <c:explosion val="25"/> — every wedge pulls apart uniformly, not just a
 
-  highlighted one; highlight''s second accent is still the only per-wedge callout.
+  highlighted one; highlight is still the only per-wedge callout.
 
   '
 place:

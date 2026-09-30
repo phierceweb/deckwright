@@ -57,7 +57,7 @@ jobs:
       - name: doctor
         run: python -m deckwright.cli doctor
 
-  # The only job that builds the real 89-exercise catalogue. Everything above runs
+  # The only job that builds the real exercise catalogue. Everything above runs
   # without LibreOffice, Poppler or a browser — which is why nothing above proves the
   # library still produces a deck anyone can open.
   demo:

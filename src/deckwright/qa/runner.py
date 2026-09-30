@@ -12,6 +12,7 @@ from pf_core.log import get_logger
 from deckwright.errors import SpecError
 from deckwright.paths import render_dir
 from deckwright.qa.alt import check_alt_text
+from deckwright.qa.linkcontrast import check_link_contrast
 from deckwright.qa.links import check_links
 from deckwright.qa.geometry import (
     check_bounds,
@@ -26,13 +27,14 @@ from deckwright.qa.fills import check_fill_ground
 from deckwright.qa.fonts import check_faces
 from deckwright.qa.imagery import check_render_contrast
 from deckwright.qa.model import Finding, QaReport, Severity
+from deckwright.qa.morph import check_morph
 from deckwright.qa.motion import check_beats, check_triggers
 from deckwright.qa.package import check_package
 from deckwright.qa.placeholder import check_placeholder
 from deckwright.qa.rendered_fonts import check_rendered_faces
 from deckwright.qa.report import write_json, write_markdown
 from deckwright.qa.textflow import check_overflow, extract_pages
-from deckwright.services.render import render_to_images
+from deckwright.services.render import render_to_images, reuse_render
 from deckwright.theme import load_theme
 from deckwright.theme.model import Theme
 
@@ -167,6 +169,7 @@ def run_qa(
         check_text_fit,
         check_placeholder,
         check_beats,
+        check_morph,
     ):
         findings.extend(check(data, theme))
     # These read the saved package: a hand-edit after the build leaves the manifest
@@ -176,10 +179,12 @@ def run_qa(
     findings.extend(check_triggers(deck))
     findings.extend(check_alt_text(deck))
     findings.extend(check_links(deck))
+    findings.extend(check_link_contrast(deck, data))
 
     out = Path(outdir) if outdir else render_dir(deck)
     if render:
-        images = render_to_images(deck, out)
+        reused = reuse_render(deck, out)
+        images = reused if reused is not None else render_to_images(deck, out)
         pdf = out / f"{deck.stem}.pdf"
         rendered = check_rendered_faces(deck, pdf, data)
         findings.extend(rendered if rendered is not None else check_faces(data, theme))
@@ -187,7 +192,7 @@ def run_qa(
             check_overflow(data, extract_pages(pdf), extract_pages(pdf, layout=True), pdf_path=pdf)
         )
         findings.extend(check_render_contrast(data, images))
-        logger.info("qa_rendered", slides=len(images))
+        logger.info("qa_rendered", slides=len(images), reused=reused is not None)
 
     findings.sort(key=lambda f: (f.slide, -f.severity.rank, f.check))
     report = QaReport(deck=str(deck), findings=tuple(findings))

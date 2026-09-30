@@ -71,7 +71,12 @@ def _sidecar_for(template: pathlib.Path) -> pathlib.Path | None:
     return None
 
 
-@pytest.fixture(scope="module", params=[p.name for p in TEMPLATES])
+# One xdist group per template: under `--dist loadgroup` its tests share a worker, so this
+# module-scoped fixture builds each template once rather than once per worker it lands on.
+@pytest.fixture(
+    scope="module",
+    params=[pytest.param(p.name, marks=pytest.mark.xdist_group(p.name)) for p in TEMPLATES],
+)
 def built(request, tmp_path_factory):
     """Every capability built against one template, once, through its adopted theme where
     it has one — that is the theme its decks resolve."""

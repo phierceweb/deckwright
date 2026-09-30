@@ -12,6 +12,8 @@ from typing import Any
 
 from deckwright.errors import LayoutError
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import boolean
+from deckwright.utils.keys import refuse_unknown
 from deckwright.utils.shapes import ALIGNS, ANCHORS
 
 CELL_KEYS = ("text", "across", "down", "align", "valign", "emphasis", "pair")
@@ -230,21 +232,33 @@ def _cell(ctx: SlideCtx, value: Any, *, where: str) -> Cell:
             )
         return Cell(text=str(value))
 
-    unknown = sorted(set(value) - set(CELL_KEYS))
-    if unknown:
-        raise LayoutError(
-            f"slide {ctx.spec.index} (component 'table'): {where} has no key "
-            f"{unknown[0]!r}; a cell reads: {', '.join(CELL_KEYS)}"
-        )
+    refuse_unknown(
+        value,
+        CELL_KEYS,
+        error=LayoutError,
+        where=f"slide {ctx.spec.index} (component 'table')",
+        lead=f"{where} has no key",
+        label="a cell reads",
+    )
     return Cell(
         text="" if value.get("text") is None else str(value["text"]),
         across=_reach(ctx, value.get("across", 1), key="across", axis="columns", where=where),
         down=_reach(ctx, value.get("down", 1), key="down", axis="rows", where=where),
         align=_word(ctx, value.get("align"), key="align", known=ALIGNS, where=where),
         valign=_word(ctx, value.get("valign"), key="valign", known=ANCHORS, where=where),
-        emphasis=bool(value.get("emphasis", False)),
+        emphasis=_emphasis(ctx, value.get("emphasis", False), where=where),
         pair=None if value.get("pair") is None else str(value["pair"]),
     )
+
+
+def _emphasis(ctx: SlideCtx, value: Any, *, where: str) -> bool:
+    value = boolean(value)
+    if not isinstance(value, bool):
+        raise LayoutError(
+            f"slide {ctx.spec.index} (component 'table'): {where} 'emphasis' must be "
+            f"true or false, got {value!r}"
+        )
+    return value
 
 
 def _reach(ctx: SlideCtx, value: Any, *, key: str, axis: str, where: str) -> int:

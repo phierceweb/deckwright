@@ -164,8 +164,8 @@ rows in the order you write them, so sorting is your job in the `data:` list.
 series. Past four series a clustered column becomes a picket fence — split it into two
 charts on the grid, or drop to the two series your claim actually needs.
 
-**To draw the eye to one bar, set `highlight: true` on that row.** It recolours that one
-point. At most one row per chart may set it.
+**To draw the eye to one bar, set `highlight: true` on that row.** That row keeps its
+colour and every other bar recedes. At most one row per chart may set it.
 
 ## Part-to-whole
 

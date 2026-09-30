@@ -49,9 +49,9 @@ theme's resolved colours (`--c-<role>`), type sizes (`--t-<role>`), and faces
 (`--font`, `--font-mono`). Pass it as `content_css` (or append it to your own
 CSS) so the browser-rendered half of the slide draws from the same theme as
 the python-pptx half. `deckwright.services.htmlcard`'s own rules consume these
-with hardcoded fallbacks (`var(--c-bg, #ffffff)`), so a card rendered without
+with hardcoded fallbacks (`var(--c-page, #ffffff)`), so a card rendered without
 a theme still looks reasonable. This is a real, verified contract — set a
-theme's `bg` role to a colour and the panel's background changes to match.
+theme's `page` role to a colour and the panel's background changes to match.
 
 **A `var()` fallback only fires when the variable is undefined.** `--font`
 and `--font-mono` are always declared by `panel_css`, so a card rule reading
@@ -101,7 +101,7 @@ wrote, so this is not an edge case reserved for arbitrary HTML fed to
 a browser ignoring `--dump-dom`, defeats it the same way.
 
 The pixels are the fallback, and they are read rather than shrugged at. A card
-floats on white, so ink on the render's **last** row with none on its **first**
+floats on white, or on a clear page where the shot was asked for one, so ink on the render's **last** row with none on its **first**
 means the canvas cut the content off, and that raises `RenderError` naming the
 canvas height — the same fix as the measured case. Ink on *both* rows is the one
 case that still only warns (`html_shot_height_unknown`) and renders unchecked: a

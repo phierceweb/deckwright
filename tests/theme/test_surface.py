@@ -175,3 +175,60 @@ def test_a_picture_surface_names_the_media_it_stretches(tmp_path):
     surface = inherited_surface(pick_compose_layout(Presentation(str(path))))
     assert surface.media.startswith("image")
     assert surface.flat is None
+
+
+_NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_SCHEME = {"lt1": "FFFFFF", "dk1": "000000"}
+_THEME = (
+    f'<a:theme xmlns:a="{_NS_A}"><a:themeElements><a:fmtScheme>'
+    '<a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>'
+    '<a:bgFillStyleLst><a:solidFill><a:srgbClr val="123456"/></a:solidFill></a:bgFillStyleLst>'
+    "</a:fmtScheme></a:themeElements></a:theme>"
+).encode()
+
+
+def _ref(idx):
+    return etree.fromstring(
+        f'<p:bgRef xmlns:p="{_NS_P}" xmlns:a="{_NS_A}" idx="{idx}"><a:schemeClr val="bg1"/></p:bgRef>'
+    )
+
+
+def test_a_background_reference_that_names_no_style_is_no_surface():
+    """Not a number, zero, past the fill list, past the background list, and the list's own base."""
+    import pytest  # noqa: F401
+    from deckwright.theme.surface import _from_ref
+
+    for idx in ("x", "0", "999", "1002", "1000"):
+        assert _from_ref(_ref(idx), _THEME, scheme=_SCHEME, clrmap={"bg1": "lt1"}) is None, idx
+
+
+def test_a_background_reference_into_the_background_styles_resolves():
+    from deckwright.theme.surface import _from_ref
+
+    found = _from_ref(_ref("1001"), _THEME, scheme=_SCHEME, clrmap={"bg1": "lt1"})
+    assert found.fills == ("123456",)
+
+
+def test_a_theme_with_no_format_scheme_is_no_surface():
+    from deckwright.theme.surface import _from_ref
+
+    bare = f'<a:theme xmlns:a="{_NS_A}"/>'.encode()
+    assert _from_ref(_ref("1001"), bare, scheme=_SCHEME, clrmap={"bg1": "lt1"}) is None
+
+
+def test_a_fill_the_reader_does_not_know_and_a_gradient_with_no_stop_are_no_surface():
+    from deckwright.theme.surface import _flat
+
+    pattern = etree.fromstring(f'<a:pattFill xmlns:a="{_NS_A}"/>')
+    empty = etree.fromstring(f'<a:gradFill xmlns:a="{_NS_A}"><a:gsLst/></a:gradFill>')
+    assert _flat(pattern, scheme=_SCHEME, clrmap={}, phclr=None) is None
+    assert _flat(empty, scheme=_SCHEME, clrmap={}, phclr=None) is None
+
+
+def test_a_picture_fill_that_embeds_nothing_names_no_media():
+    from deckwright.theme.surface import _media_name
+
+    assert _media_name(etree.fromstring(f'<a:blipFill xmlns:a="{_NS_A}"/>'), None) is None
+    bare = etree.fromstring(f'<a:blipFill xmlns:a="{_NS_A}"><a:blip/></a:blipFill>')
+    assert _media_name(bare, None) is None

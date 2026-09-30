@@ -70,3 +70,68 @@ def test_a_recorded_line_is_measured_as_written_even_when_it_reads_as_a_link():
     line = "See [docs](https://example.com/reference/manual/chapter-one/section-two/the-long-page)"
     findings = check_text_fit(_manifest(_fitted([line], height=0.3, width=2.0)), _theme())
     assert [f.check for f in findings] == ["text-fit"]
+
+
+def _spaced(*, height):
+    """Three 14pt lines, 0.70in, with 8pt after each paragraph."""
+    shape = _fitted(["one", "two", "three"], height=height, line_pt=[14.0] * 3)
+    shape["space_after_pt"] = [8.0] * 3
+    return shape
+
+
+def test_the_space_between_paragraphs_counts_toward_the_height_they_need():
+    """0.70in of lines fits 0.80in; the two gaps between them take it to 0.92in."""
+    findings = check_text_fit(_manifest(_spaced(height=0.8)), _theme())
+    assert [f.check for f in findings] == ["text-fit"]
+    assert "needs 0.92in" in findings[0].detail
+
+
+def test_the_space_after_the_last_paragraph_is_not_counted():
+    """It sets no ink: 0.92in fits a 0.90in box inside the slack, where 1.03in would not."""
+    assert check_text_fit(_manifest(_spaced(height=0.9)), _theme()) == []
+
+
+# Two lines a bullet across the base theme's full 11.73in column at 16pt.
+_BULLET = (
+    "A point long enough that it cannot sit on one line of a column this wide, so the "
+    "list has to be measured as it wraps rather than as one line per bullet"
+)
+_SPEC = (
+    "theme: base\ntitle: Fit\nout: fit.pptx\n---\ntitle: A list\nplace:\n"
+    "  - at: {cols: full, rows: {from: 0, to: 5}}\n    bullets:\n      items:\n"
+    + "".join(f"        - {_BULLET}\n" for _ in range(4))
+)
+
+
+def test_a_wrapping_list_that_overflows_its_column_is_reported_from_a_built_deck(
+    tmp_path, monkeypatch
+):
+    """The deck a single-line bullet count let through: eight lines, 2.13in, fit the
+    2.25in column; the three gaps between the bullets take it to 2.47in."""
+    import json
+
+    import deckwright.components.bullets as bullets
+    from deckwright.compile import build_deck
+    from deckwright.theme import load_theme
+
+    monkeypatch.setattr(bullets, "item_lines", lambda item, **_: 1)
+    spec = tmp_path / "fit.deck.yaml"
+    spec.write_text(_SPEC, encoding="utf-8")
+    manifest = json.loads(build_deck(spec).deck.with_suffix(".manifest.json").read_text())
+    findings = check_text_fit(manifest, load_theme("base"))
+    assert [(f.check, f.shape) for f in findings] == [("text-fit", "s1.p1.bullets#1")]
+    assert "needs 2.47in but the shape declares 2.25in" in findings[0].detail
+
+
+def test_the_build_refuses_the_same_list_before_it_is_drawn(tmp_path):
+    import pytest
+
+    from deckwright.compile import build_deck
+    from deckwright.errors import LayoutError
+
+    spec = tmp_path / "fit.deck.yaml"
+    spec.write_text(_SPEC, encoding="utf-8")
+    with pytest.raises(
+        LayoutError, match=r"4 bullets wrap to 8 lines in the tallest column and need 2\.58in"
+    ):
+        build_deck(spec)

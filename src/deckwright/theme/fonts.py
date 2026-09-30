@@ -1,25 +1,18 @@
 """Which faces a theme sets type in, and whether this machine has them.
 
-Config (env, read at call time, so ``.env`` changes take effect between runs):
-
-- ``DECKWRIGHT_FC_LIST``           — fontconfig's fc-list command (default ``fc-list``).
-- ``DECKWRIGHT_FC_LIST_TIMEOUT_S`` — seconds before it is killed (default 20).
+fontconfig is asked through :mod:`deckwright.utils.fontconfig`, which lists its knobs.
 """
 
 from __future__ import annotations
 
-import subprocess
-
 from pf_core.log import get_logger
-from pf_core.utils.env import resolve_int
 
 from deckwright.theme.model import Theme
 from deckwright.utils.env import env_str
+from deckwright.utils.fontconfig import CJK_LANGS, FC_LIST_DEFAULT
+from deckwright.utils.fontconfig import fc_list as _fc_list
 
 logger = get_logger(__name__)
-
-_FC_LIST_DEFAULT = "fc-list"
-_TIMEOUT_S_DEFAULT = 20
 
 
 def theme_faces(theme: Theme) -> tuple[str, ...]:
@@ -41,33 +34,21 @@ def installed_families(
     None and an empty set are different answers: None means fontconfig is absent or
     failed, so a caller must not conclude anything about a face.
     """
-    binary = env_str(fc_list, "DECKWRIGHT_FC_LIST", default=_FC_LIST_DEFAULT)
-    timeout_s: int = resolve_int(
-        timeout, "DECKWRIGHT_FC_LIST_TIMEOUT_S", default=_TIMEOUT_S_DEFAULT
-    )
-    try:
-        result = subprocess.run(
-            [binary, ":", "family"],
-            capture_output=True,
-            check=True,
-            timeout=timeout_s,
-            encoding="utf-8",
-            errors="replace",
+    found = _fc_list([":", "family"], fc_list=fc_list, timeout=timeout)
+    if found is None:
+        logger.info(
+            "font_scan_unavailable",
+            fc_list=env_str(fc_list, "DECKWRIGHT_FC_LIST", default=FC_LIST_DEFAULT),
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        logger.info("font_scan_unavailable", fc_list=binary)
         return None
     families = {
         alias.strip().casefold()
-        for line in result.stdout.splitlines()
+        for line in found.splitlines()
         for alias in line.split(",")
         if alias.strip()
     }
     logger.info("font_scan_done", families=len(families))
     return frozenset(families)
-
-
-_CJK_LANGS = ("ja", "ko", "zh-cn", "zh-tw")
 
 
 def cjk_postscript_names(
@@ -78,7 +59,7 @@ def cjk_postscript_names(
     None when fontconfig cannot be asked.
     """
     names: set[str] = set()
-    for lang in _CJK_LANGS:
+    for lang in CJK_LANGS:
         found = _fc_list([f":lang={lang}", "postscriptname"], fc_list=fc_list, timeout=timeout)
         if found is None:
             return None
@@ -88,24 +69,6 @@ def cjk_postscript_names(
             if "postscriptname=" in line
         )
     return frozenset(n for n in names if n)
-
-
-def _fc_list(args: list[str], *, fc_list: str | None, timeout: int | None) -> str | None:
-    binary = env_str(fc_list, "DECKWRIGHT_FC_LIST", default=_FC_LIST_DEFAULT)
-    timeout_s: int = resolve_int(
-        timeout, "DECKWRIGHT_FC_LIST_TIMEOUT_S", default=_TIMEOUT_S_DEFAULT
-    )
-    try:
-        return subprocess.run(
-            [binary, *args],
-            capture_output=True,
-            check=True,
-            timeout=timeout_s,
-            encoding="utf-8",
-            errors="replace",
-        ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        return None
 
 
 def postscript_names(

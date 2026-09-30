@@ -713,6 +713,21 @@ place:
       label: components reporting their height
     caption: The component reports how tall it came out; the layout bounds it from that.
 ---
+title: One card, before
+notes: The next slide arrives by morph and carries the same card under the same name.
+place:
+- at: {cols: {from: 0, to: 5}, rows: {from: 0, to: 6}}
+  morph: figure
+  card: {heading: Revenue, body: Up 12% on the year}
+---
+title: The same card, after
+transition: morph
+notes: 'Written as a Morph transition with a fade as its fallback. The card carries the same name as on the slide before, which is how Morph pairs the two.'
+place:
+- at: {cols: {from: 3, to: 12}, rows: {from: 0, to: 8}}
+  morph: figure
+  card: {heading: Revenue, body: Up 12% on the year}
+---
 background: inverse
 title: deckwright
 notes: Close on the two commands that produced this deck.

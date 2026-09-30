@@ -10,6 +10,7 @@ from deckwright.layouts.registry import SlideCtx
 from deckwright.panels.css import panel_css
 from deckwright.panels.model import Panel
 from deckwright.panels.place import place_panel
+from deckwright.services.card_pictures import UnembeddableImage
 from deckwright.services.htmlcard import markdown_card
 
 from deckwright.components._shape import figure_text, known_fields
@@ -22,8 +23,23 @@ _SIDES = ("left", "right", "full")
 def _render(html: str, path: str, *, width: int, scale: int) -> str:
     from deckwright.services.htmlshot import render_html_to_png
 
-    return render_html_to_png(html, path, width=width, scale=scale)
+    return render_html_to_png(html, path, width=width, scale=scale, transparent=True)
 
+
+_UNEMBEDDABLE = {
+    "missing": (
+        "image not found: {src} (named in {path}) — a card embeds the pictures its source "
+        "names, read from the source's own directory"
+    ),
+    "outside": (
+        "image {src} (named in {path}) is outside the source's own directory — a card embeds "
+        "only pictures that ship beside its source; copy it there"
+    ),
+    "not-image": (
+        "{src} (named in {path}) is not an image a card can embed — name a png, jpeg, gif, "
+        "svg or webp"
+    ),
+}
 
 _FIELDS = ("source", "alt", "decorative", "side", "max_width", "filename", "lines")
 
@@ -64,6 +80,22 @@ def _resolve_source(ctx: SlideCtx, source: str) -> Path:
         if beside.exists():
             return beside
     return given
+
+
+def _card(ctx: SlideCtx, md_text: str, path: Path, max_width: int) -> str:
+    where = f"slide {ctx.spec.index} (component 'document')"
+    try:
+        return markdown_card(
+            md_text,
+            filename=str(ctx.body.get("filename", path.name)),
+            max_width=max_width,
+            content_css=panel_css(ctx.theme),
+            image_base=path.parent,
+        )
+    except UnembeddableImage as e:
+        raise LayoutError(
+            f"{where}: " + _UNEMBEDDABLE[e.reason].format(src=e.src, path=path)
+        ) from None
 
 
 @component("document")
@@ -107,12 +139,7 @@ def document(ctx: SlideCtx) -> BodyResult:
         ) from e
     if "lines" in ctx.body:
         md_text = _excerpt(ctx, md_text, ctx.body["lines"], path)
-    html = markdown_card(
-        md_text,
-        filename=str(ctx.body.get("filename", path.name)),
-        max_width=max_width,
-        content_css=panel_css(ctx.theme),
-    )
+    html = _card(ctx, md_text, path, max_width)
 
     rect = ctx.body_rect
     width = rect.width if side == "full" else (rect.width - ctx.grid.gutter) / 2

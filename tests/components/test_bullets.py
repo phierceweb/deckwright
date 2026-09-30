@@ -302,3 +302,54 @@ def test_columns_still_reveal_one_column_per_group(ctx_factory):
     ctx = ctx_factory({"bullets": {"columns": 2, "items": ["a", "b", "c", "d"]}})
     groups = get_component("bullets")(ctx).groups
     assert _targets(groups) == [[None], [None]]
+
+
+# Two lines at the fixture's full 12.10in column, five at a third of it: 11pt Calibri.
+_WRAPS = (
+    "A point long enough that it cannot sit on one line of a column this wide, so the "
+    "list has to be measured as it wraps rather than as one line per bullet, and then it "
+    "keeps going for a while longer so that it takes a third line as well"
+)
+
+
+def test_the_reported_height_counts_each_items_wrapped_lines_and_the_space_after_each(
+    ctx_factory,
+):
+    """One line and two, at 13.2pt a line, plus 8pt after each: 55.6pt."""
+    result = get_component("bullets")(ctx_factory({"bullets": {"items": ["Short", _WRAPS]}}))
+    assert result.height == pytest.approx(55.6 / 72, abs=0.001)
+
+
+def test_a_wrapping_list_the_single_line_count_would_pass_is_refused(ctx_factory):
+    """Twelve items is 3.53in counted a line each, but 5.73in as they wrap into 5.30in."""
+    ctx = ctx_factory({"bullets": {"items": [_WRAPS] * 12}})
+    with pytest.raises(
+        LayoutError,
+        match=r"slide 1 \(component 'bullets'\): 12 bullets wrap to 24 lines in the tallest "
+        r"column and need 5\.73in but only 5\.30in is available",
+    ):
+        get_component("bullets")(ctx)
+
+
+def test_one_wrapping_item_fewer_fits(ctx_factory):
+    result = get_component("bullets")(ctx_factory({"bullets": {"items": [_WRAPS] * 11}}))
+    assert result.height == pytest.approx(11 * 34.4 / 72, abs=0.001)
+
+
+def test_each_column_is_measured_at_its_own_width_less_the_markers_hang(ctx_factory):
+    """At a third of the width the item sets on five lines; four without the hang its
+    marker takes, and two at the full width, and either would let this through."""
+    ctx = ctx_factory({"bullets": {"columns": 3, "items": [_WRAPS] * 16}})
+    with pytest.raises(
+        LayoutError, match=r"6 bullets wrap to 30 lines in the tallest column and need 6\.17in"
+    ):
+        get_component("bullets")(ctx)
+
+
+def test_each_column_records_a_size_and_the_space_after_every_line(ctx_factory):
+    """What `text-fit` needs to measure the column at all, and to count its spacing."""
+    ctx = ctx_factory({"bullets": {"items": ["alpha", _WRAPS]}})
+    get_component("bullets")(ctx)
+    (column,) = [r for r in ctx.manifest.slides[0].shapes if r.lines]
+    assert column.line_pt == [11.0, 11.0]
+    assert column.space_after_pt == [8, 8]

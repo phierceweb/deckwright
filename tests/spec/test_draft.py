@@ -163,6 +163,31 @@ def test_a_draft_of_a_slide_of_more_words_than_the_band_holds_builds(tmp_path):
     assert _built(tmp_path, render_spec(slides, title="Deck")).deck.is_file()
 
 
+_WRAPPING = (
+    "A point long enough that it cannot sit on one line of a column this wide, so the "
+    "list has to be measured as it wraps rather than as one line per bullet"
+)
+
+
+def test_a_draft_of_lines_that_wrap_keeps_what_its_columns_hold_and_builds(tmp_path):
+    """Thirteen of these count as 4.91in a line each, inside the 5.40in band, but each
+    wraps: three columns hold nine and the rest are named in the draft."""
+    slides = [SlideContent(index=1, blocks=(tuple(f"{i} {_WRAPPING}" for i in range(13)),))]
+    drafted = draft_spec(slides, title="Deck", out=str(tmp_path / "wrap.pptx"))
+    bullets = _docs(drafted.text)[1]["place"][0]["bullets"]
+    assert (bullets["columns"], len(bullets["items"]), drafted.spilled) == (3, 9, 4)
+    assert _built(tmp_path, drafted.text).deck.is_file()
+
+
+def test_a_line_too_deep_for_its_band_on_its_own_is_named_in_the_draft_not_placed(tmp_path):
+    """A placement of no bullets is one the compiler refuses, so the whole block spills."""
+    slides = [SlideContent(index=1, title="T", blocks=((" ".join([_WRAPPING] * 20),),))]
+    drafted = draft_spec(slides, title="Deck", out=str(tmp_path / "deep.pptx"))
+    assert "place" not in _docs(drafted.text)[1]
+    assert drafted.spilled == 1
+    assert _built(tmp_path, drafted.text).deck.is_file()
+
+
 @pytest.mark.parametrize(
     "deep, kept",
     [
@@ -386,3 +411,17 @@ def test_a_foreign_slide_painted_white_drafts_as_an_ordinary_page(tmp_path):
     text = render_spec(harvest(source), title="Deck")
     assert "background" not in text
     assert _docs(text)[1]["place"][0]["bullets"]["items"] == ["Hello"]
+
+
+@pytest.mark.parametrize(
+    "box, drafted",
+    [
+        ((0.123442, 0.1, 0.1, 0.2), {"x": "12.344%", "y": "10%", "w": "10.001%", "h": "20%"}),
+        ((0.1, 0.25, 0.3, 0.0), {"x": "10%", "y": "25%", "w": "30%", "h": "0.001%"}),
+    ],
+)
+def test_a_placements_box_is_rounded_outward_and_never_flat(box, drafted):
+    """Outward, so words drawn tight in their box still fit; an exact edge stays put."""
+    from deckwright.spec.draft import _box
+
+    assert _box(*box) == drafted

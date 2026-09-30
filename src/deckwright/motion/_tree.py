@@ -6,6 +6,7 @@ from pptx.oxml import parse_xml
 from pptx.oxml.ns import qn
 
 from deckwright.errors import LayoutError
+from deckwright.utils.mce import in_fallback
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -44,13 +45,14 @@ def text_bearing(slide, spids) -> set[int]:
 
     PowerPoint requires a ``<p:bldP>``'s ``spid`` to name an ``sp`` holding real text
     (``[MS-OI29500]`` §19.5.16(c)); pictures, frames and text-free autoshapes have no
-    paragraph build, so a ``bldP`` naming one is a claim the shape cannot honour.
+    paragraph build, so a ``bldP`` naming one is a claim the shape cannot honour. A shape
+    in ``mc:AlternateContent`` is judged by its Choice, the branch PowerPoint reads.
     """
     want = {int(s) for s in spids}
     found: set[int] = set()
     for sp in slide._element.iter(qn("p:sp")):
         nv = sp.find(f"{{{_P}}}nvSpPr/{{{_P}}}cNvPr")
-        if nv is None:
+        if nv is None or in_fallback(sp):
             continue
         spid = int(nv.get("id"))
         if spid in want and any((t.text or "").strip() for t in sp.iter(qn("a:t"))):

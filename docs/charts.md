@@ -45,7 +45,7 @@ their order come from the first row's `values` mapping.
 Two consequences worth knowing when working on the renderer:
 
 - **`highlight` arrives as an index**, resolved from whichever row set
-  `highlight: true`. The renderer's per-point colour override is unchanged.
+  `highlight: true`. `charts/fills.py` turns it into per-point fills.
 - **`Series.unit` comes from the block, not the row.** `unit:` is a key of the
   `chart:` block, threaded through `_parse_category_rows` onto every `Series`, and
   `_number_format` turns it into the code both the labels and the value axis print
@@ -76,9 +76,9 @@ chart — cannot fall through to the presentation theme's dark ink and disappear
 an `inverse` slide. The legend also takes the theme's face and the `caption` rung
 rather than python-pptx's 18pt default.
 
-Eleven per-type option frozensets drive the divergence, so a new type is added
-by extending a set, never by branching on `spec.type`. A twelfth,
-`_SIDE_LABEL_CHART_TYPES`, has its own section below:
+Per-type option frozensets drive the divergence, so a new type is added
+by extending a set, never by branching on `spec.type`. `_SIDE_LABEL_CHART_TYPES`
+has its own section below:
 
 - `_AXIS_CHART_TYPES` — everything except `pie`/`doughnut`/`pie-exploded`/
   `doughnut-exploded`, which have no category or value axis
@@ -248,8 +248,16 @@ end, so the label lands on the point it names and collides with its own marker. 
 that names a position the kind can honour keeps it.
 
 **A position is written only where the chart group offers one.** `inside_end` reaches the
-bar family and a pie; area, doughnut and radar take no position at all, and writing one
-into those parts is what makes PowerPoint ask to repair the file.
+bar family; area, doughnut and radar take no position at all, and writing one into those
+parts is what makes PowerPoint ask to repair the file.
+
+**A pie's label position is pinned to `ctr`, not the theme's `label_position`.** Left
+unset — what an ordinary bar's `outside_end` amounts to — a renderer's own best fit can
+push a wedge too small for its label past the rim and onto the slide behind it, in an ink
+chosen for the wedge, not the page: a real, silent way to lose a label. `ctr` keeps every
+wedge's label inside it regardless of size, so a pie never reaches `_LABEL_POSITIONS` at
+all. A doughnut's ring never narrows to a point the way a pie's does, but it still takes
+no position, for the same repair-prompt reason as area and radar.
 
 **A label drawn on a fill is inked for that fill.** On a pie or doughnut wedge, an area
 band, a stacked bar, or a bar whose theme sets `inside_end`, the label reads against the
@@ -340,22 +348,50 @@ change, and a floor at zero flattens it.
 Multiple series (or wedges on a pie/doughnut/pie-exploded/doughnut-exploded)
 cycle the palette's accent ramp — `accent-1`…`accent-N`, counting only the
 accents a theme genuinely binds — so each is visually distinct without a legend
-doing all the work. `highlight` overrides whichever colour the cycle assigns to
-that one category with the second accent. A single series stays `accent-1`; the
-ramp only engages once colour has to carry a distinction between two or more
-series or wedges. Keep an example inside the theme's accent count: past it the
-cycle repeats, and two series share a colour.
+doing all the work. A single series stays `accent-1`; the ramp only engages once
+colour has to carry a distinction between two or more series or wedges. Keep an
+example inside the theme's accent count: past it the cycle repeats, and two series
+share a colour. `qa` reports it as
+`series-colour`, naming the two series and the fill they share.
+
+Every fill is resolved in `charts/fills.py` before python-pptx sees it, as hex.
+
+**A pie's wedges are a ring.** `_ring` cycles the accents' distinct colours, so two roles
+bound to one hex count once, and a last wedge that would match the first takes the next
+colour that matches neither neighbour. When no accent is left for it (one distinct accent,
+or two under an odd number of wedges), `_apart` fades an accent in `_RECEDE`'s steps, toward
+the ground first and then white and black, and takes the first fade an ink reads on that
+`stands_off` both neighbours: the ΔE-or-contrast rule of `qa`'s `fill-ground` check. A single
+accent pairs with such a fade to go round at all.
+
+**`highlight` is emphasis by isolation**: the marked point keeps its colour and every other
+mark recedes, so no other mark on the plot shares its fill. One series mutes the rest to
+`muted`, fading it further if `muted` alone reads no label. Several fade each series'
+colour toward the ground the frame sits on, the paper `ctx.text_ink` reports, so every
+series keeps its hue and a stacked column keeps its segments apart. A fade starts halfway
+and goes on in steps until an ink reads on it — `native.py` checks this against the
+gradient's second, paler stop too, when the theme gradients the mark, so a fade legible
+flat cannot still lighten past its label's ink — since halfway between a pale accent and a
+dark page is a mid-tone no ink reads on; `_RECEDE` holds the steps, and none of them settle
+for one that stays a mid-tone. A pie marks its wedge in `accent-1` and alternates two fades
+of that same accent toward the ground, starting from the wedge after the marked one so the
+run never puts two alike side by side. Both stop short of `_RECEDE`'s own steps: `_quiet`
+searches a finer ladder from the start, for the fullest fade that still stands off the
+ground — `utils.color.stands_off` — since `accent-1` can sit far enough from the ground in
+lightness that `_RECEDE`'s halfway point already reads as the ground itself, on a page the
+marked wedge alone would otherwise still clear. Neither the ring nor the isolation reads
+past the first accent, or the theme's `muted` role at all.
 
 ## Adding a new chart type
 
-1. Add it to `ChartSpec`'s `_TYPES` in `charts/model.py` — a type outside this
+1. Add it to `ChartSpec`'s `_TYPES` in `charts/_kinds.py` — a type outside this
    set never reaches the renderer. If its data shape isn't one value per
    category, add it to `_XY_CHART_TYPES` or `_BUBBLE_CHART_TYPES` too, so
    `_shape()` and the `points`-vs-`values` validation pick it up.
-2. Map it to an `XL_CHART_TYPE` in `charts/native.py`'s `_CHART_TYPES` — 29 of
+2. Map it to an `XL_CHART_TYPE` in `charts/_native_types.py`'s `_CHART_TYPES` — 29 of
    `XL_CHART_TYPE`'s 73 members are creatable through python-pptx; the other
    44 raise `NotImplementedError`.
-3. Measure the new type against each of the twelve option frozensets in
+3. Measure the new type against each of the option frozensets in
    [The native renderer](#the-native-renderer) before assuming it matches its
    family — `gap_width` and `has_data_labels` are both silent no-ops or raise
    `AttributeError` on the wrong plot class, so a wrong guess here fails

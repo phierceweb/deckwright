@@ -6,12 +6,13 @@ from dataclasses import replace
 from typing import Any
 
 from deckwright.errors import SpecError
+from deckwright.spec._scalars import boolean
 from deckwright.spec.model import Placement
 from deckwright.utils.shapes import ALIGNS, ANCHORS
 from deckwright.utils.spans import Share, parse_box, parse_span
-from deckwright.utils.keys import unknown_field
+from deckwright.utils.keys import refuse_unknown
 
-PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals", "goto")
+PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals", "goto", "morph")
 AT_FIELDS = ("cols", "rows", "box")
 
 
@@ -66,12 +67,14 @@ def place(value: Any, *, where: str) -> tuple[Placement, ...]:
 
 def _split(entry: dict[str, Any], *, where: str) -> list[Placement]:
     """A band divided among its children, left to right: one placement in, several out."""
-    unknown = sorted(set(entry) - {"at", "split"})
-    if unknown:
-        raise SpecError(
-            f"{where}: a placement with 'split' takes only 'at' and 'split'; "
-            f"{unknown_field(unknown[0], ('at', 'split'), suggest=True)}"
-        )
+    refuse_unknown(
+        entry,
+        ("at", "split"),
+        error=SpecError,
+        where=where,
+        lead="a placement with 'split' takes only 'at' and 'split'; unknown field",
+        suggest=True,
+    )
     children = entry["split"]
     if not isinstance(children, list) or not children:
         raise SpecError(
@@ -117,10 +120,8 @@ def _placement(entry: Any, *, where: str) -> Placement:
         raise SpecError(f"{where}: expected a mapping, got {type(entry).__name__}")
     known = known_components()
     allowed = (*PLACEMENT_FIELDS, *known)
+    refuse_unknown(entry, allowed, error=SpecError, where=where, suggest=True)
     keys = [k for k in entry if k not in PLACEMENT_FIELDS]
-    unknown = [k for k in keys if k not in known]
-    if unknown:
-        raise SpecError(f"{where}: {unknown_field(unknown[0], allowed, suggest=True)}")
     if not keys:
         raise SpecError(
             f"{where}: no component — a placement needs exactly one component key; "
@@ -136,7 +137,7 @@ def _placement(entry: Any, *, where: str) -> Placement:
     body = entry[name] if entry[name] is not None else {}
     if not isinstance(body, dict):
         raise SpecError(f"{where}: component {name!r} must be a mapping, got {type(body).__name__}")
-    bleed = entry.get("bleed", False)
+    bleed = boolean(entry.get("bleed", False))
     if not isinstance(bleed, bool):
         raise SpecError(f"{where}: 'bleed' must be true or false, got {bleed!r}")
     if "at" not in entry and not bleed:
@@ -151,6 +152,7 @@ def _placement(entry: Any, *, where: str) -> Placement:
         id=_named(entry.get("id"), "'id'", where=where),
         reveals=_named(entry.get("reveals"), "'reveals'", where=where),
         goto=_named(entry.get("goto"), "'goto'", where=where),
+        morph=_named(entry.get("morph"), "'morph'", where=where),
         bleed=bleed,
         align=_choice(entry.get("align"), "align", ALIGNS, default="left", where=where),
         anchor=_choice(entry.get("anchor"), "anchor", ANCHORS, default="top", where=where),
@@ -169,9 +171,7 @@ def _choice(value: Any, key: str, options: tuple[str, ...], *, default: str, whe
 def _at(value: Any, *, where: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise SpecError(f"{where}: 'at' must be a mapping, got {type(value).__name__}")
-    unknown = sorted(set(value) - set(AT_FIELDS))
-    if unknown:
-        raise SpecError(f"{where}: 'at': {unknown_field(unknown[0], AT_FIELDS, suggest=True)}")
+    refuse_unknown(value, AT_FIELDS, error=SpecError, where=f"{where}: 'at'", suggest=True)
     if "box" in value:
         if "cols" in value or "rows" in value:
             raise SpecError(f"{where}: 'at.box' cannot be combined with 'cols' or 'rows'")

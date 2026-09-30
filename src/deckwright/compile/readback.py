@@ -9,17 +9,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pf_core.log import get_logger
 from pf_core.utils.io import atomic_write_text
 
+from deckwright.compile._drift import Change, Kind, motion_drift, style_drift
 from deckwright.compile.record import box_of
 from deckwright.errors import SpecError
+from deckwright.motion.transition import read_kind
+from deckwright.utils.a11y import described
 from deckwright.utils.deck import open_presentation
 from deckwright.utils.mce import resolved_shapes
+from deckwright.utils.provenance import find_manifest
 
 logger = get_logger(__name__)
 
@@ -27,17 +32,7 @@ _EMU_PER_INCH = 914400
 # Inches — twenty times the manifest's rounding, so float dust is not a move.
 _MOVED = 0.01
 
-Kind = Literal["moved", "retyped", "added", "gone"]
-
-
-@dataclass(frozen=True)
-class Change:
-    """One difference between the deck on disk and the build that made it."""
-
-    kind: Kind
-    slide: int
-    shape: str
-    detail: str
+_ORIGIN = re.compile(r"^s(\d+)\.")
 
 
 @dataclass(frozen=True)
@@ -60,17 +55,56 @@ def read_back(deck: str | Path, *, manifest: str | Path | None = None) -> Drift:
         SpecError: the deck or its manifest is missing or unreadable.
     """
     deck = Path(deck)
-    path = Path(manifest) if manifest else deck.with_suffix(".manifest.json")
-    if not path.is_file():
-        raise SpecError(
-            f"manifest not found: {path} — a deck can only be read back against the "
-            f"build that made it. Build it with 'deckwright build'."
-        )
-    data = json.loads(path.read_text(encoding="utf-8"))
     prs = open_presentation(deck, what="deck", error=SpecError)
+    path = Path(manifest) if manifest else _manifest_for(deck, prs)
+    if not path.is_file():
+        raise SpecError(f"manifest not found: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
     changes: list[Change] = []
-    for index, slide in enumerate(prs.slides, start=1):
-        changes.extend(_slide_drift(slide, _records(data, index), index))
+    indexed: dict[int, Any] = {}
+    placed: list[tuple[int, int]] = []
+    for position, slide in enumerate(prs.slides, start=1):
+        index = _build_index(slide, position)
+        if index is None:
+            changes.append(
+                Change(
+                    "slide-added",
+                    position,
+                    f"slide {position}",
+                    "not in the build — added by hand",
+                )
+            )
+            continue
+        if index in indexed:
+            changes.append(
+                Change(
+                    "slide-added",
+                    position,
+                    f"slide {position}",
+                    f"a copy of slide {index} — added by hand",
+                )
+            )
+            continue
+        indexed[index] = slide
+        placed.append((index, position))
+    changes.extend(_moved(placed, built=len(data.get("slides") or [])))
+    for recorded in data.get("slides") or []:
+        index = int(recorded.get("index", 0))
+        if index not in indexed:
+            changes.append(
+                Change(
+                    "slide-gone",
+                    index,
+                    f"slide {index}",
+                    "the build made this slide and the deck no longer has it",
+                )
+            )
+            continue
+        changes.extend(_slide_drift(indexed[index], list(recorded.get("shapes") or []), index))
+        changes.extend(motion_drift(indexed[index], list(recorded.get("animations") or []), index))
+        was, now = recorded.get("transition"), read_kind(indexed[index]._element)
+        if was is not None and was != now:
+            changes.append(Change("retimed", index, f"slide {index}", f"transition {was} → {now}"))
     drift = Drift(
         deck=str(deck),
         spec=str(data.get("spec") or "?"),
@@ -81,6 +115,46 @@ def read_back(deck: str | Path, *, manifest: str | Path | None = None) -> Drift:
     return drift
 
 
+def _moved(placed: list[tuple[int, int]], *, built: int) -> list[Change]:
+    """The slides out of build order, as few as explain the order the deck is in.
+
+    ``placed`` is ``(build number, position)`` in deck order. The longest run still in build
+    order stayed put; the rest were moved.
+    """
+    numbers = [index for index, _ in placed]
+    best: list[list[int]] = []
+    for i, number in enumerate(numbers):
+        runs = [best[j] for j in range(i) if numbers[j] < number]
+        longest: list[int] = []
+        for run in runs:
+            if len(run) > len(longest):
+                longest = run
+        best.append([*longest, number])
+    stayed: set[int] = set()
+    for run in best:
+        if len(run) > len(stayed):
+            stayed = set(run)
+    return [
+        Change("slide-moved", index, f"slide {index}", f"built at {index} of {built}, now at {at}")
+        for index, at in placed
+        if index not in stayed
+    ]
+
+
+def _manifest_for(deck: Path, prs) -> Path:
+    """The sibling manifest, else the one beside the deck that records the deck's build id."""
+    found = find_manifest(deck, str(prs.core_properties.identifier or ""))
+    if found is not None:
+        return found
+    ident = str(prs.core_properties.identifier or "")
+    raise SpecError(
+        f"manifest not found: {deck.with_suffix('.manifest.json')}, and no manifest in "
+        f"{deck.parent} records build {ident or '(none recorded)'} — a deck can only be read "
+        f"back against the build that made it. Keep the copy beside its build, or pass "
+        f"--manifest."
+    )
+
+
 def _edited(deck: Path, data: dict[str, Any]) -> bool:
     """Whether the file differs from the one the manifest was written beside."""
     recorded = data.get("deck_hash")
@@ -89,21 +163,28 @@ def _edited(deck: Path, data: dict[str, Any]) -> bool:
     return hashlib.sha256(deck.read_bytes()).hexdigest()[: len(recorded)] != recorded
 
 
-def _records(data: dict[str, Any], index: int) -> list[dict[str, Any]]:
-    for slide in data.get("slides") or []:
-        if slide.get("index") == index:
-            return list(slide.get("shapes") or [])
-    return []
+def _build_index(slide, position: int) -> int | None:
+    """The slide number the build gave this slide, read off its first `sN.` shape name.
+
+    A slide holding only morph-named shapes carries no number, and is taken where it sits.
+    """
+    names = [str(shape.name) for shape in resolved_shapes(slide.shapes)]
+    for name in names:
+        if match := _ORIGIN.match(name):
+            return int(match.group(1))
+    return position if any(name.startswith("m.") for name in names) else None
 
 
 def _claimed(name: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The records a package shape answers for — itself, or its parts.
+    """The records a package shape answers for — itself, its dotted children, and the parts
+    of the frame it is.
 
-    ``s1.chrome`` claims ``s1.chrome.title`` and its siblings. A table frame is
-    ``…table#1`` and so claims no cells, which are ``…table.r1c1`` — never shapes.
+    ``s1.chrome`` claims ``s1.chrome.title``. A frame ``…table#1`` claims ``…table.r1c1``,
+    and ``…chart#1`` claims ``…chart.labels``: parts that are records and never shapes.
     """
+    prefixes = (f"{name}.", f"{name.rsplit('#', 1)[0]}.")
     return [
-        r for r in records if r.get("name") == name or str(r.get("name", "")).startswith(f"{name}.")
+        r for r in records if r.get("name") == name or str(r.get("name", "")).startswith(prefixes)
     ]
 
 
@@ -148,6 +229,16 @@ def _shape_drift(shape, claimed: list[dict[str, Any]], index: int, name: str) ->
     was_text, now_text = _flat(before), _flat(after)
     if was_text and now_text and was_text != now_text:
         out.append(Change("retyped", index, name, f"{was_text!r} → {now_text!r}"))
+    out.extend(style_drift(shape, claimed, index, name))
+    own = next((r for r in claimed if r.get("name") == name), None)
+    if own is not None:
+        was_alt, was_skipped = own.get("alt") or None, bool(own.get("decorative"))
+        now_alt, now_skipped = described(shape)
+        if was_skipped != now_skipped:
+            mark = "decorative" if now_skipped else "not decorative"
+            out.append(Change("relabelled", index, name, f"marked {mark}"))
+        elif was_alt != now_alt:
+            out.append(Change("relabelled", index, name, f"alt {was_alt or 'none'} → {now_alt!r}"))
     return out
 
 
@@ -179,7 +270,7 @@ def render_drift(drift: Drift) -> str:
     if not drift.changes:
         lines += [
             "The file differs but no shape does — a resave, or a change this "
-            "cannot see (a colour, a font, a size).",
+            "cannot see (a fill, a face, anything on the master).",
             "",
         ]
         return "\n".join(lines)

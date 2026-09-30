@@ -16,10 +16,12 @@ from deckwright.imagery.sample import aspect, cells, weakest
 from deckwright.imagery.scrim import Scrim, gradient_fraction, resolve, scrim_spec
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import boolean, has_text
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
 from deckwright.utils.a11y import describe
 from deckwright.utils.color import required_ratio
+from deckwright.utils.keys import refuse_unknown
 from deckwright.utils.shapes import ALIGN, ANCHOR, para, textbox
 from deckwright.utils.text import wrapped_lines
 
@@ -129,14 +131,16 @@ def _over(ctx: SlideCtx) -> tuple[tuple[str, str, str], ...]:
     for entry in raw:
         if isinstance(entry, str):
             entry = {"text": entry}
-        if not isinstance(entry, dict) or not entry.get("text"):
+        if not isinstance(entry, dict) or not has_text(entry.get("text")):
             raise LayoutError(f"{_where(ctx)}: every 'over' line needs a 'text', got {entry!r}")
-        unknown = sorted(set(entry) - set(_OVER_KEYS))
-        if unknown:
-            raise LayoutError(
-                f"{_where(ctx)}: an 'over' line has no key "
-                f"{unknown[0]!r}; known keys: {', '.join(_OVER_KEYS)}"
-            )
+        refuse_unknown(
+            entry,
+            _OVER_KEYS,
+            error=LayoutError,
+            where=_where(ctx),
+            lead="an 'over' line has no key",
+            label="known keys",
+        )
         align = str(entry.get("align", ctx.align))
         if align not in ALIGN:
             raise LayoutError(
@@ -178,7 +182,7 @@ def _scrim(ctx: SlideCtx, *, path, fit, lines) -> Scrim | None:
 
     With ``over`` text the solve is against that text's own band, not the whole picture.
     """
-    declared = ctx.body.get("scrim", True if lines else None)
+    declared = boolean(ctx.body.get("scrim", True if lines else None))
     if declared is None or declared is False:
         return None
     spec = scrim_spec(declared, default_pair=_OVER_PAIR_DEFAULT, where=_where(ctx))

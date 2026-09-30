@@ -82,6 +82,13 @@ def test_a_placement_may_declare_that_it_bleeds(tmp_path):
     )
 
 
+def test_bleed_written_as_a_word_takes_the_truth_it_spells(tmp_path):
+    """`bleed: on` lets a placement leave out `at:`; `bleed: off` does not."""
+    assert _one("bleed: on\n    bullets: {items: [a]}", tmp_path).place[0].bleed is True
+    with pytest.raises(SpecError, match=r"missing required field 'at'"):
+        _one("bleed: off\n    bullets: {items: [a]}", tmp_path)
+
+
 def test_a_non_boolean_bleed_is_rejected(tmp_path):
     with pytest.raises(SpecError, match=r"placement 1: 'bleed' must be true or false, got 'yes'"):
         _one("at: {cols: left-half}\n    bleed: 'yes'\n    bullets: {items: [a]}", tmp_path)
@@ -143,7 +150,7 @@ def test_an_unrecognisable_placement_key_lists_what_is_accepted(tmp_path):
     with pytest.raises(
         SpecError,
         match=r"placement 1: unknown field 'colour'; known fields: "
-        r"at, id, bleed, align, anchor, reveals, goto, bullets",
+        r"at, id, bleed, align, anchor, reveals, goto, morph, bullets",
     ):
         _one("at: {cols: left-half}\n    colour: blue", tmp_path)
 

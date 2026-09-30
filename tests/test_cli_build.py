@@ -121,3 +121,56 @@ def test_a_missing_theme_file_exits_1_with_a_readable_message(project, capsys):
         )
     assert exit_info.value.code == 1
     assert "theme file not found" in _stderr(capsys)
+
+
+def _need_soffice():
+    import shutil
+
+    if not shutil.which("soffice"):
+        pytest.skip("no LibreOffice on this machine")
+
+
+def _need_chrome():
+    from deckwright.services.chrome import resolve_chrome
+
+    try:
+        resolve_chrome(None)
+    except Exception:
+        pytest.skip("no Chrome/Chromium binary available")
+
+
+def test_render_writes_a_contact_sheet_when_asked(clean_manifest_deck, tmp_path):
+    _need_soffice()
+    deck, _ = clean_manifest_deck
+    out = tmp_path / "r"
+    result = runner.invoke(
+        app, ["render", str(deck), "--outdir", str(out), "--contact-sheet", "--cols", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[-1] == f"contact sheet -> {out / 'contact_sheet.png'}"
+    assert (out / "contact_sheet.png").is_file()
+
+
+def test_shot_renders_an_html_file_beside_itself(tmp_path):
+    _need_chrome()
+    page = tmp_path / "card.html"
+    page.write_text(
+        "<html><body><div style='width:200px;height:100px;background:#123'></div></body></html>"
+    )
+    result = runner.invoke(app, ["shot", str(page), "--width", "400"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout == f"wrote {page.with_suffix('.png')}\n"
+    assert page.with_suffix(".png").is_file()
+
+
+def test_qa_without_its_renderer_says_which_checks_need_none(clean_manifest_deck, tmp_path):
+    deck, manifest = clean_manifest_deck
+    result = runner.invoke(
+        app,
+        ["qa", str(deck), "--manifest", str(manifest), "--outdir", str(tmp_path / "qa")],
+        env={"DECKWRIGHT_SOFFICE": "/nonexistent/soffice"},
+    )
+    assert result.exit_code != 0
+    assert "Or re-run with --no-render for the checks that need no external tool" in str(
+        result.exception
+    )

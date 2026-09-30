@@ -8,12 +8,13 @@ from PIL import Image
 from deckwright.errors import RenderError
 from deckwright.services.htmlcard import markdown_card
 from deckwright.services import htmlshot
-from deckwright.services.htmlshot import _resolve_chrome, render_html_to_png
+from deckwright.services.chrome import resolve_chrome
+from deckwright.services.htmlshot import render_html_to_png
 
 
 def _chrome_or_skip() -> str:
     try:
-        return _resolve_chrome(None)
+        return resolve_chrome(None)
     except RenderError:
         pytest.skip("no Chrome/Chromium binary available")
 
@@ -83,3 +84,37 @@ def test_the_height_probe_still_runs_under_the_content_policy(tmp_path, monkeypa
     monkeypatch.setenv("DECKWRIGHT_SHOT_CANVAS_H", "200")
     with pytest.raises(RenderError, match=r"content is \d+px tall"):
         render_html_to_png(CARD, tmp_path / "clipped.png", width=600, scale=1)
+
+
+def test_a_card_is_placed_on_a_slide_without_its_file_name_as_alt_text(tmp_path):
+    """python-pptx describes a picture by its file name; a temp file's name is not alt text."""
+    from pptx import Presentation
+
+    from deckwright.services.htmlshot import card_to_slide
+    from deckwright.utils.a11y import described
+
+    chrome = _chrome_or_skip()
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    picture = card_to_slide(slide, CARD, left=1.0, top=1.0, width=4.0, chrome=chrome)
+    assert [s.shape_type for s in slide.shapes] == [picture.shape_type]
+    assert round(picture.width / 914400, 2) == 4.0
+    assert described(picture) == (None, False)
+
+
+def test_a_transparent_render_is_clear_outside_the_card_and_solid_inside(tmp_path):
+    png = render_html_to_png(
+        CARD, tmp_path / "card.png", chrome=_chrome_or_skip(), width=600, pad=20, transparent=True
+    )
+    with Image.open(png) as img:
+        assert img.mode == "RGBA"
+        assert img.getpixel((0, 0))[3] == 0
+        assert img.getpixel((img.width // 2, img.height // 2))[3] == 255
+
+
+def test_a_plain_render_is_as_opaque_as_it_was(tmp_path):
+    png = render_html_to_png(
+        CARD, tmp_path / "card.png", chrome=_chrome_or_skip(), width=600, pad=20
+    )
+    with Image.open(png) as img:
+        assert img.convert("RGBA").getpixel((0, 0))[3] == 255

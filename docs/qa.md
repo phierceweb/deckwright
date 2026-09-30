@@ -48,6 +48,12 @@ Poppler's `pdftotext`; `render-contrast` reads the pixels of that same render. B
 it, and `--no-render` skips both when you only want the fast geometry/contrast pass
 (e.g. a pre-commit hook).
 
+The render is reused when one already matches. `render` records the deck's SHA-256 and a
+digest of every file it wrote in `.build/render.json`; when the deck on disk has those bytes
+and the PDF and page images are all still there unchanged, at the configured DPI or finer,
+`qa` checks them instead of converting again. `bin/run render` followed by `bin/run qa`
+therefore converts the deck once. Any edit to the deck starts a fresh render.
+
 `--outdir` controls where `qa.md` / `qa.json` land (default `<deck-dir>/render/<deck>`).
 
 ## The checks
@@ -59,26 +65,29 @@ it, and `--no-render` skips both when you only want the fast geometry/contrast p
 | `reserved` | manifest only | A shape's declared box intrudes on one of the theme's `reserve:` regions (e.g. the logo wedge). |
 | `min-font` | manifest only | A shape's declared font size is below the theme's minimum. A chart's data labels, axis text and legend are recorded as parts of its frame, so they are held to it too. |
 | `contrast` | manifest only | A shape's declared foreground/background pair fails WCAG AA (4.5:1 normal text, 3.0:1 at 18pt+). **Severity follows certainty**: a shortfall above 3:1 warns, because the manifest records the pair a component asked for and the real backdrop may be better; below 3:1 nothing behind the text saves it, so it is an error. The build itself never refuses on contrast — it logs `theme_pair_below_aa` and carries on, so a brand's own palette is never unbuildable over a check this layer runs better. Chart text is checked as written into the chart part: each label's ink against the worst stop of the fill it sits on, or against the paper behind the chart when it sits beside its shape. |
-| `text-fit` | manifest only | A shape whose own recorded text needs more height than the box it declared — text running past its own frame, which `bounds` structurally cannot see. Each line is measured at its own recorded size. |
+| `text-fit` | manifest only | A shape whose own recorded text needs more height than the box it declared — text running past its own frame, which `bounds` structurally cannot see. Each line is measured at its own recorded size, and the space recorded after each paragraph but the last is added to it, so a list whose items wrap past the bottom of their column is reported. |
 | `fill-ground` | manifest only | A shape filled to stand off what is behind it — an inverse or accent `panel`, `card` or `ellipse`, a `versus` plate, a `diverge` bar, a callout's dot, a `fanout` source — that neither luminance (under 3:1) nor colour (under 35 ΔE) separates from the ground it was laid on, so it all but vanishes: an `inverse` bound to the page's own colour, an accent the page already is. A `surface` fill is a recess by design and records no fill to judge. WARN. |
 | `placeholder` | manifest only | Recorded text that reads like copy nobody meant to ship — four phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`, `FIXME`, `[insert`, and a run of three or more `x` in either case. Bare capitalised `TODO` fires unless whitespace and two more capitals follow it — the one exception, and what spares the Spanish *TODO EL MUNDO*; *TODO el mundo* and *TODO, EL MUNDO* are both reported, the second because a comma is not whitespace. `TODO:` fires unconditionally. Lowercase `todo` fires only as `todo:` opening a line, or as `@todo` anywhere. Every recorded row is read — its `lines`, or its `text` where it records none — and so are the slide's speaker notes. `TBD` is deliberately not matched: a deck may legitimately say it. WARN. |
 | `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. A line the whole page does not hold is asked for again inside the shape's own box, because pdftotext merges side-by-side placements row by row and splices one column's line into the other's. |
 | `render-contrast` | **the render's pixels** | Text on a slide showing a picture — one this deck placed, or one the template paints behind every slide — whose *rendered* surroundings fall below WCAG AA. Measured in three horizontal bands per shape, so a gradient scrim is judged where it is weakest. |
-| `font-substituted` | **the render's PDF**, else this machine | A face the deck's runs name that the render did not embed, so it is set in something else and every finding drawn from it — `overflow`, `render-contrast` — judged type the deck does not carry. Read from the fonts the rendered PDF embeds (`pdffonts`), matched through the PostScript names fontconfig gives each family; where `pdffonts` cannot run, from `fc-list`'s installed families instead. One finding per face, on slide `0`. Runs only when `qa` renders. WARN. |
-| `cjk-unrendered` | **the render's PDF** | A slide carrying Chinese, Japanese or Korean text whose page embeds no font fontconfig lists as covering those languages. LibreOffice drew the words blank or as empty boxes, while `pdftotext` still extracts them, so `overflow` passes on text nobody can see. Silent when fontconfig or `pdffonts` cannot run. ERROR. |
+| `font-substituted` | **the render's PDF**, else this machine | A face the deck's runs name that the render did not embed, so it is set in something else and every finding drawn from it — `overflow`, `render-contrast` — judged type the deck does not carry. Read from the fonts the rendered PDF embeds (`pdffonts`), matched through the PostScript names fontconfig gives each family; where `pdffonts` cannot run, from `fc-list`'s installed families instead. The render hands LibreOffice every installed family the deck names (see [`cli.md`](cli.md#render--deck-to-images)), so on a machine with fontconfig a finding means the face is not installed there under that name. A run the render never draws — an equation's maths, set in the Choice branch PowerPoint reads — is not counted. One finding per face, on slide `0`. Runs only when `qa` renders. WARN. |
+| `cjk-unrendered` | **the render's PDF** | A slide carrying Chinese, Japanese or Korean text whose page embeds no font fontconfig lists as covering those languages. LibreOffice drew the words blank or as empty boxes, while `pdftotext` still extracts them, so `overflow` passes on text nobody can see. The render links the font `fc-match` picks for each CJK language into LibreOffice's profile whenever the deck carries such text, so this fires where that lookup failed or found no CJK font. Silent when fontconfig or `pdffonts` cannot run. ERROR. |
 | `chart-negative` | **the .pptx itself** | A bar or column chart carrying a negative value — not a fault in the file, but one the render cannot verify, because LibreOffice plots it as positive. Line and scatter series are unaffected and are not flagged. See [`charts.md`](charts.md#negative-values-and-why-the-render-cannot-check-them). |
 | `chart-datapoints` | **the .pptx itself** | A bar or column chart plotting fewer than four values across all its series — the treatment `choosing.md` says is usually a `stats` row in disguise. The finding quotes that rule. WARN, never an error: the judgement is contextual, and a build that refused it would be wrong more often than the author. Only the six bar and column kinds; a line reads as a direction between ordered points, a pie's slices are the composition itself, and an XY or bubble mark already carries two or three numbers. |
+| `series-colour` | **the .pptx itself** | Two series in one chart drawn in the same fill: the theme's accents ran out and the palette cycled, so a reader cannot tell the series apart. A fill given as a scheme reference is resolved through the theme first. WARN. |
 | `alt-text` | **the .pptx itself** | A picture, chart or other graphic frame carrying neither alternative text nor Office's decorative flag, or whose only alternative text is an image file name such as `photo.png`. A table's frame is text a screen reader reaches, and is not asked. Reads the package, so alt text added by hand in PowerPoint counts. WARN. |
 | `link` | **the .pptx itself** | A click action or hyperlink that cannot reach its target: a jump to a slide the show no longer contains, or declared through a relationship nothing holds (ERROR); a relative jump no show knows (`first`, `previous`, `next`, `last`, PowerPoint's last-viewed and end-show are known), or a web link that is not an `http`, `https` or `mailto` address with a host (WARN). Reads the package, so a link added by hand in PowerPoint is checked too. |
+| `link-contrast` | **the .pptx itself** + manifest | A linked shape whose template `hlink` colour fails 4.5:1 on the shape's recorded ground. That colour is what Keynote draws a link in, whatever ink the build wrote; PowerPoint and LibreOffice draw the line's own ink. WARN. |
 | `beats` | manifest only | Reports each animated slide's rhythm — how many clicks the build spends and how many shapes each beat reveals — in the vocabulary the author wrote (`animate: together`, `animate: one_at_a_time`, `reveals:`, a chart's own build). INFO, so it never fails a run on its own; it is the only place a deck's reveal order surfaces beside `<deck>.beats.md`. |
+| `morph-unpaired` | manifest only | A `morph:` name on a slide that arrives by morph with no namesake on the slide before, so Morph has nothing of that name to pair it with; or a morph slide on which no placement carries `morph:` at all. WARN. |
 | `beat-size` | manifest only | One beat of a *staged* build revealing more shapes than `DECKWRIGHT_MAX_BEAT_SHAPES` (default 6) — a slide that asked to be revealed a piece at a time and delivers most of it on one click. `animate: together`, a chart build and a `reveals:` trigger are exempt: one click is what they declare. WARN. |
 | `dead-trigger` | **the .pptx itself** | An interactive reveal that cannot do its job: a hidden shape whose every trigger is itself hidden, so nothing can ever be clicked to show it (ERROR), or a target the slide's main build also reveals, so it is already on screen when the trigger is clicked (WARN). The compiler refuses every spec-level case, so this catches a hand-edit or a regression. |
-| `shape-id` | **the .pptx itself** | Two shapes on a slide sharing an id, or an id outside 1..2147483647. |
+| `shape-id` | **the .pptx itself** | Two shapes on a slide sharing an id, or an id outside 1..2147483647. Ids are counted per branch of an `mc:AlternateContent`: PowerPoint stores an equation or a 3D model as a Choice and a Fallback copy under one id, and no reader draws both, so that pair is not a duplicate. Two shapes inside one branch, or a branch's shape and one beside the wrapper, still are. |
 | `theme-substituted` | manifest + the resolved theme | The recorded `theme_path` was not there, so the theme was resolved by *name* — and the file that answered hashes differently from the one the deck was built against. Every other finding is measured against that other theme's palette, grid and rungs. Pass `--theme` to name the right one. WARN. |
 | `stale-manifest` | both | The deck's bytes no longer hash to what the manifest recorded — it was edited after the build, so every other finding describes the file that was built rather than the one on disk. WARN. |
-| `shape-name` | **the .pptx itself** | Two shapes on a slide sharing a name. Legal OOXML and invisible in a render, but it costs the deck the mapping back to its spec — see [Shape names](#shape-names). WARN. |
+| `shape-name` | **the .pptx itself** | Two shapes on a slide sharing a name, counted per branch like `shape-id`. Legal OOXML and invisible in a render, but it costs the deck the mapping back to its spec — see [Shape names](#shape-names). WARN. |
 | `animation-target` | **the .pptx itself** | An animation naming a shape id the slide does not contain. |
-| `relationship` | **the .pptx itself** | An `r:embed`/`r:id` nothing declares, or one pointing at a part the package does not hold. |
+| `relationship` | **the .pptx itself** | An `r:embed`/`r:id` nothing declares, or one pointing at a part the package does not hold. A target is resolved against the slide's folder, or from the package root when it starts with `/`. |
 | `package` | **the .pptx itself** | The file is not a readable `.pptx`, or a slide part is not well-formed XML. |
 
 The first five read the *manifest*, not the `.pptx` file's actual XML — the manifest
@@ -150,13 +159,17 @@ The manifest opens with what produced it, before the records it describes:
 
 | Key | What it is |
 |---|---|
-| `build_id` | Identity of the build: the spec, the theme and the deckwright version. The same inputs give the same id. |
+| `build_id` | Identity of the build: the spec, the theme and the deckwright version. The same inputs give the same id. The deck carries it too, as `deckwright:<build_id>` in its core properties' identifier, which is how `diff` finds the manifest for a copy saved under another name. |
 | `deckwright` | The version that wrote the file, so an old manifest is recognisable as old. |
 | `spec` | The `.deck.yaml` this deck was compiled from. |
 | `spec_hash` | That file's contents when it was read. |
 | `deck` / `deck_hash` | The `.pptx` written, and its contents. |
 | `theme` / `theme_hash` / `theme_path` | The theme, unchanged from before. |
 | `canvas` | `{"w", "h", "unit": "in"}` — the slide size, rounded like every other inch. |
+
+Each slide records the `transition` it arrives on — the theme's kind, or `none` for a hard
+cut — beside its `animations`. A manifest written before the key existed carries none, and
+`diff` treats that as unknown.
 
 Paths are written **relative to the manifest** wherever the two share a directory
 tree, so a manifest handed over beside its deck carries no absolute home directory,
@@ -220,6 +233,20 @@ entry in `lines`:
 Without it a reader has no way to tell a 13.5pt body line from its 18pt heading, and
 measuring both at 18 over-reports the shape's height by half. `record()` refuses a
 `line_pt` whose length does not match `lines`, so the two cannot drift apart.
+
+A shape that spaces its paragraphs apart also records `space_after_pt`, the points set
+after each line's paragraph — one entry per line, refused on a length mismatch the same
+way. A `bullets` column records 8 after every bullet:
+
+```json
+"lines": ["•  First point", "•  Second point"],
+"font_pt": 16.0,
+"line_pt": [16.0, 16.0],
+"space_after_pt": [8, 8]
+```
+
+`text-fit` adds every entry but the last, which sets no ink below it. A shape without
+the field is measured with no space between its paragraphs.
 
 ### Shape names
 
@@ -378,8 +405,9 @@ picks up `.env` changes between calls:
 | `DECKWRIGHT_RENDER_DPI` | `110` | Rasterization DPI for that render. |
 | `DECKWRIGHT_PDFFONTS` | `pdffonts` | The Poppler binary `font-substituted` and `cjk-unrendered` read the render's embedded fonts with. |
 | `DECKWRIGHT_PDFFONTS_TIMEOUT_S` | `60` | Seconds before that call is killed. |
-| `DECKWRIGHT_FC_LIST` | `fc-list` | The fontconfig binary those checks ask for PostScript names and CJK coverage, and `font-substituted` falls back to for installed families. |
-| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | `20` | Seconds before that call is killed. |
+| `DECKWRIGHT_FC_LIST` | `fc-list` | The fontconfig binary those checks ask for PostScript names and CJK coverage, and `font-substituted` falls back to for installed families. The render asks it for the font files of the faces the deck names. |
+| `DECKWRIGHT_FC_MATCH` | `fc-match` | The fontconfig binary the render asks for each CJK language's font, when the deck carries CJK text. |
+| `DECKWRIGHT_FC_LIST_TIMEOUT_S` | `20` | Seconds before either fontconfig call is killed. |
 
 ## What this layer cannot catch
 
@@ -450,7 +478,9 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   because measuring a body paragraph at its heading's size over-reports by a wide margin
   and would fill a sound deck with invented findings. So a component that records a
   heading and its copy under one `font_pt` is invisible to this check until it records
-  the sizes too.
+  the sizes too. Space between paragraphs is counted only where a component records
+  `space_after_pt`; `bullets` does, and a shape without it is measured as though its
+  paragraphs touched.
 - **Every width this layer measures is only as good as the face's metrics.**
   `text-fit`, and the height arithmetic every component uses to size its own
   boxes, are computed from per-character advances — and deckwright ships those for
@@ -468,7 +498,8 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   table of measured families and what to do about it.
 - **`font-substituted` answers for this render, not for the deck.** It reads the fonts
   the rendered PDF embeds, so it catches a renderer that cannot reach a face `fc-list`
-  says is installed. It matches a face to an embedded font by name and by the PostScript
+  says is installed. The render links each such face into LibreOffice's profile before
+  converting, so what it mostly reports is a face missing from the machine that rendered. It matches a face to an embedded font by name and by the PostScript
   names fontconfig reports, so without fontconfig — macOS does not ship it; `brew install
   fontconfig` supplies it — a face whose PostScript name differs from its family name
   (`游ゴシック` is `YuGothic`) is reported substituted when it was not. Without `pdffonts`
@@ -485,8 +516,9 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   "chart" passes. Only pictures and graphic frames are asked: a glyph `icon` is a drawn
   shape, and a screen reader in PowerPoint announces an unlabelled one without this
   check reporting it. Office's decorative flag is written from [MS-ODRAWXML]'s schema;
-  the extension URI it sits under is not in that document, and PowerPoint reading the
-  flag is not yet confirmed.
+  the extension URI it sits under is not in that document, but PowerPoint for Mac 16
+  reads the flag — *Mark as decorative* shows ticked — and writes the same extension
+  back, `{C183D7F6-B498-43B3-948B-1728B52AA6E4}` around `adec:decorative val="1"`.
 - **`min-font` and `contrast` see rows, not lines.** A manifest row can stand
   for a whole multi-paragraph shape under one dominant size and colour, and a
   row that names no size (or no colour pair) is skipped without a finding —
@@ -541,8 +573,7 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   back. On a single `[error] overflow` it is still worth a look at the render.
 - **None of these checks are a design review.** Visual hierarchy,
   alignment, spacing balance, and "does this look intentional" are out of
-  scope entirely — the vision-model design review carried into Plan C2 is
-  aimed at that gap, not this one.
+  scope entirely — closing that gap is separate work, not this one.
 
 ## Adding a new check
 

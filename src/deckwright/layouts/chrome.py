@@ -14,6 +14,7 @@ from deckwright.errors import LayoutError
 from deckwright.layouts.place import AT_KEYS, resolve_at
 from deckwright.theme.model import Rect
 from deckwright.theme.scale import Grid
+from deckwright.utils.keys import refuse_unknown
 from deckwright.utils.shapes import ALIGNS, ANCHORS
 from deckwright.utils.spans import parse_box, parse_span
 from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, wrapped_lines
@@ -84,12 +85,14 @@ def chrome_field(cfg: Any, *, name: str) -> ChromeField:
             f"chrome field {name!r} must be a mapping of {', '.join(_CHROME_KEYS)}, "
             f"got {type(cfg).__name__}"
         )
-    unknown = sorted(set(cfg) - set(_CHROME_KEYS))
-    if unknown:
-        raise LayoutError(
-            f"chrome field {name!r}: unknown key {unknown[0]!r}; "
-            f"known keys: {', '.join(_CHROME_KEYS)}"
-        )
+    refuse_unknown(
+        cfg,
+        _CHROME_KEYS,
+        error=LayoutError,
+        where=f"chrome field {name!r}",
+        lead="unknown key",
+        label="known keys",
+    )
     at, auto_height = _chrome_at(cfg.get("at"), name=name)
     return ChromeField(
         at=at,
@@ -124,11 +127,9 @@ def _chrome_at(value: Any, *, name: str) -> tuple[dict[str, Any] | None, bool]:
         raise LayoutError(
             f"{where}: 'at' must be a mapping with 'cols' or 'box', got {type(value).__name__}"
         )
-    unknown = sorted(set(value) - set(AT_KEYS))
-    if unknown:
-        raise LayoutError(
-            f"{where}: unknown 'at' key {unknown[0]!r}; known keys: {', '.join(AT_KEYS)}"
-        )
+    refuse_unknown(
+        value, AT_KEYS, error=LayoutError, where=where, lead="unknown 'at' key", label="known keys"
+    )
     if "box" in value:
         box, auto_height = _auto_height(value["box"])
         x, y, w, h = parse_box(box, where=where, error=LayoutError)
@@ -182,11 +183,7 @@ def chrome_bands(
             carries it, and this is the one an author meets most.
     """
     at = f"slide {slide}: " if slide is not None else ""
-    unknown = sorted(set(lines) - set(CHROME_ORDER))
-    if unknown:
-        raise LayoutError(
-            f"unknown chrome field {unknown[0]!r}; known fields: {', '.join(CHROME_ORDER)}"
-        )
+    refuse_unknown(lines, CHROME_ORDER, error=LayoutError, lead="unknown chrome field")
     canvas = Rect(0.0, 0.0, grid.slide_w, grid.slide_h)
     out: list[ChromeBand] = []
     y = grid.top

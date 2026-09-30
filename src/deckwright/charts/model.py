@@ -22,7 +22,8 @@ from deckwright.charts._kinds import (
     _XY_ROW_KEYS,
 )
 from deckwright.errors import LayoutError
-from deckwright.utils.keys import unknown_field
+from deckwright.spec._scalars import boolean
+from deckwright.utils.keys import refuse_unknown
 
 if TYPE_CHECKING:
     from deckwright.layouts.registry import SlideCtx
@@ -133,6 +134,8 @@ class ChartSpec:
             raise LayoutError(
                 f"'highlight' index {self.highlight} is out of range for {n_points} {noun}"
             )
+        if self.highlight is not None and self.type not in _HIGHLIGHTABLE_KINDS:
+            raise LayoutError(_cannot_highlight(self.type))
 
     @classmethod
     def from_body(cls, ctx: SlideCtx, body: dict[str, Any]) -> ChartSpec:
@@ -149,9 +152,7 @@ class ChartSpec:
             if legacy_key in body:
                 raise LayoutError(f"{where}: {hint}")
 
-        unknown = sorted(set(body) - set(_CHART_KEYS))
-        if unknown:
-            raise LayoutError(unknown_field(unknown[0], _CHART_KEYS, where=where))
+        refuse_unknown(body, _CHART_KEYS, error=LayoutError, where=where)
 
         chart_kind = str(body.get("kind", ""))
         if chart_kind not in _TYPES:
@@ -184,11 +185,7 @@ class ChartSpec:
         y_max = _coerce_optional_float(where, body, "y_max")
 
         if highlight is not None and chart_kind not in _HIGHLIGHTABLE_KINDS:
-            raise LayoutError(
-                f"{where}: chart kind {chart_kind!r} cannot show 'highlight' — its data points "
-                f"have no fill of their own. Kinds that can: "
-                f"{', '.join(sorted(_HIGHLIGHTABLE_KINDS))}"
-            )
+            raise LayoutError(f"{where}: {_cannot_highlight(chart_kind)}")
         return cls(
             type=chart_kind,
             categories=categories,
@@ -200,8 +197,15 @@ class ChartSpec:
         )
 
 
+def _cannot_highlight(kind: str) -> str:
+    return (
+        f"chart kind {kind!r} cannot show 'highlight' — its data points have no fill of "
+        f"their own. Kinds that can: {', '.join(sorted(_HIGHLIGHTABLE_KINDS))}"
+    )
+
+
 def _row_is_highlighted(where: str, ref: str, row: dict) -> bool:
-    raw = row.get("highlight", False)
+    raw = boolean(row.get("highlight", False))
     if not isinstance(raw, bool):
         raise LayoutError(f"{where}: {ref} 'highlight' must be true or false, got {raw!r}")
     return raw
@@ -231,13 +235,9 @@ def _parse_category_rows(
                 f"{where}: {pos} carries 'x'/'y' but chart kind {chart_kind!r} is "
                 f"category-shaped; use 'category' and 'values'"
             )
-        unknown = sorted(set(row) - set(_CATEGORY_ROW_KEYS))
-        if unknown:
-            raise LayoutError(
-                unknown_field(
-                    unknown[0], _CATEGORY_ROW_KEYS, where=where, lead=f"{pos} has unknown field"
-                )
-            )
+        refuse_unknown(
+            row, _CATEGORY_ROW_KEYS, error=LayoutError, where=where, lead=f"{pos} has unknown field"
+        )
         if "category" not in row:
             raise LayoutError(f"{where}: {pos} needs a 'category'")
         category = str(row["category"])
@@ -325,11 +325,9 @@ def _parse_point_rows(
                 f"{where}: {ref} carries 'category' but chart kind {chart_kind!r} takes "
                 f"'x'/'y', not 'category'"
             )
-        unknown = sorted(set(row) - set(allowed))
-        if unknown:
-            raise LayoutError(
-                unknown_field(unknown[0], allowed, where=where, lead=f"{ref} has unknown field")
-            )
+        refuse_unknown(
+            row, allowed, error=LayoutError, where=where, lead=f"{ref} has unknown field"
+        )
         if "x" not in row:
             raise LayoutError(f"{where}: {ref} needs an 'x'")
         if "y" not in row:
@@ -395,6 +393,7 @@ def _apply_labels(where: str, raw: Any, series: tuple[Series, ...]) -> tuple[Ser
                 f"{where}: 'labels' names series {str(name)!r}, which no data row defines; "
                 f"known series: {', '.join(known)}"
             )
+        shown = boolean(shown)
         if not isinstance(shown, bool):
             raise LayoutError(
                 f"{where}: 'labels' entry {str(name)!r} must be true or false, got {shown!r}"

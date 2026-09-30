@@ -105,7 +105,9 @@ there in the same change that adds a doc.
 
 ## Layout
 
-- `src/deckwright/cli.py` — CLI entry (thin; pf-core `create_cli` / `run_cli`).
+- `src/deckwright/cli/` — CLI entry (thin; pf-core `create_cli` / `run_cli`), split by
+  concern: `build.py` (build/render/shot/qa), `reading.py` (diff/inspect/extract),
+  `onboarding.py` (new/demo/conform/sample/doctor), `glyphs.py`.
 - `src/deckwright/config.py` — `Config(AppConfig)` subclass; the `cfg` singleton.
 - Add one package per domain under `src/deckwright/`. Grow a layer dir
   (`<domain>/services/`, `orchestrators/`, `utils/`) only when it has ≥2 files.

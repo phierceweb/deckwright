@@ -138,13 +138,16 @@ brand.pptx
   · ink came from dk2, not dk1 — dk1 is not this template's darkest
   ok    cover
   FAIL  panel: <the error, first line, truncated>
-  <passed>/103 exercises
+  <passed>/110 exercises
 ```
 
 The `·` notes are what a reader of the theme needs to know about this template: its
 canvas, which layout generated slides compose on, the `page`, `ink` and `inverse` it
 bound with their measured contrast, and any judgement call worth surfacing (a stock
-accent ignored, a dark ink that did not come from `dk1`). The colours are read from the
+accent ignored, an accent skipped because it vanishes into the page, two bound
+accents closer than 35 ΔE, which two series in one chart would draw as one, a dark ink that did
+not come from `dk1`). A kept theme that still binds such an accent gets a line naming the
+role, the slot and how far it stands off the page. The colours are read from the
 theme the run **wrote**, not from the scheme. A master that paints its own dark ground
 reports that ground, so a dark template reads as light ink on a dark page. A slot is
 shown as `slot=RRGGBB`; a colour sampled from the master is shown as the bare hex.
@@ -247,7 +250,7 @@ the template at all, so there is nothing worth installing under a project name. 
 report says so and names the derived file to read:
 
 ```
-  0/103 exercises
+  0/110 exercises
   not adopted: no exercise built, so the derived theme does not describe brand.pptx —
   read out/conform/brand/brand.theme.yaml and fix its bind: before adopting
 ```
@@ -261,6 +264,7 @@ The interesting part of `conform/derive.py` is what it refuses to trust:
 | The `fontScheme` | **Not read as a declaration.** Across the eleven-template corpus it was honoured by no run at all — one template declares Calibri while every slide in it is Aptos. The face is counted from the runs on the template's own slides, weighted by how much text is set in it. The scheme is consulted for one thing: a run whose typeface reads `+mj-lt` or `+mn-lt` (or the `-ea`/`-cs` script variants) is not set in a face at all — that is OOXML's *reference* to the theme's major or minor font, and it is resolved through the master's own `fontScheme` before it counts. A reference no scheme can resolve is skipped rather than counted, since the built-in default is at least a real typeface. |
 | `lt1`/`dk1` by position | **Ignored.** `page` and `ink` bind to the lightest and darkest slots by measured luminance. Three corpus templates carry a mid-grey in `dk1` and their real dark in `dk2`. |
 | Unedited accent slots | **Dropped.** An accent still holding Microsoft's shipped value says nothing about the brand, so it is not bound and the report says how many were skipped. |
+| An accent the page already is | **Dropped.** An accent that stands off the page by neither 3:1 contrast nor 35 ΔE (the rule `qa`'s `fill-ground` check applies) would paint every badge, dot and plate into the page. It is measured against the page the theme binds, which is the master's own paint when it has one, and it is skipped like a stock accent: the accents after it move up a number and the report lists each one skipped. |
 | The master's own paint | **Outranks the scheme.** What a slide will really show is the master's paint, so when it differs meaningfully from the page slot, every surface role is re-derived against it — a `clrScheme` has no slot for "secondary text on this template's photograph". |
 | A background picture | **Sampled, not guessed.** The colour taken is the spot that reads *worst* against whatever ink will land on it, because a title crosses the whole frame and the palette's stated contrast should be the real floor. |
 | Type sizes | **Only when they nearly match a built-in rung.** A measured rung further than the tolerance from any built-in is noise, not a decision, and is left out. |

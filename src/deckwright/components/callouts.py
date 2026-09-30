@@ -9,6 +9,7 @@ from __future__ import annotations
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import Disc, SlideCtx
+from deckwright.spec._scalars import has_text
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import ANCHOR, rrect, textbox
 
@@ -137,14 +138,14 @@ def callouts(ctx: SlideCtx) -> BodyResult:
             anchor=ANCHOR["top"],
         )
         ink, paper = head(ctx, tf, str(item["head"]), first=True)
-        if item.get("body"):
+        if has_text(item.get("body")):
             body(ctx, tf, str(item["body"]))
         ctx.manifest.record(
             tf._parent,
-            lines=[str(item["head"])] + ([str(item["body"])] if item.get("body") else []),
+            lines=[str(item["head"])] + ([str(item["body"])] if has_text(item.get("body")) else []),
             font_pt=ctx.style("head").size,
             line_pt=[ctx.style("head").size]
-            + ([ctx.style("body").size] if item.get("body") else []),
+            + ([ctx.style("body").size] if has_text(item.get("body")) else []),
             # Two paragraph colours (head ink, body muted); record the head's —
             # it's the dominant, larger-and-bolder run, matching the font_pt above.
             fg=ink,

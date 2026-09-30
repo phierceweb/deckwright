@@ -100,6 +100,7 @@ class ManifestRecorder:
         lines: list[str] | None = None,
         font_pt: float | None = None,
         line_pt: list[float] | None = None,
+        space_after_pt: list[float] | None = None,
         fg: str | None = None,
         bg: str | None = None,
         rendered: Rendered = "native",
@@ -115,7 +116,8 @@ class ManifestRecorder:
         overrun out of the bounds check. ``part`` names it within its origin — a table
         passes ``r1c1``; without one an origin's shapes are numbered as drawn.
         ``line_pt`` is one size per line, for a shape mixing rungs, which ``font_pt``
-        alone would over-report. ``annotation`` marks a shape that *depicts* geometry —
+        alone would over-report; ``space_after_pt`` is the space set after each line's
+        paragraph. ``annotation`` marks a shape that *depicts* geometry —
         a drawn reserved region — so the geometry checks do not report it against the
         thing it is a picture of. ``text`` and ``lines`` are recorded as they show, their
         ``[words](address)`` links as words, unless ``literal`` says the shape sets markup as
@@ -138,6 +140,11 @@ class ManifestRecorder:
                 f"line_pt has {len(line_pt)} size(s) for {len(lines or [])} line(s) — "
                 f"it is one size per recorded line, or omitted"
             )
+        if space_after_pt is not None and len(space_after_pt) != len(lines or []):
+            raise InvalidInputError(
+                f"space_after_pt has {len(space_after_pt)} spacing(s) for "
+                f"{len(lines or [])} line(s) — it is one per recorded line, or omitted"
+            )
         rec = ShapeRecord(
             shape_id=int(shape.shape_id),
             name=self._name(shape, part),
@@ -146,6 +153,7 @@ class ManifestRecorder:
             lines=list(lines or []),
             font_pt=None if font_pt is None else round(font_pt, _POINT_DP),
             line_pt=[round(pt, _POINT_DP) for pt in (line_pt or [])],
+            space_after_pt=[round(pt, _POINT_DP) for pt in (space_after_pt or [])],
             fg=fg,
             bg=bg,
             rendered=rendered,
@@ -226,6 +234,12 @@ class ManifestRecorder:
         if trigger is not None:
             entry["trigger"] = self._step_name(trigger)
         self.slides[-1].animations.append(entry)
+
+    def record_transition(self, kind: str) -> None:
+        """The transition the current slide arrives on; ``"none"`` for a hard cut."""
+        if not self.slides:
+            raise PreconditionError("call begin_slide() before record_transition()")
+        self.slides[-1].transition = kind
 
     def _step_name(self, item: Any) -> str:
         """One reveal target as the name its shape carries in the deck."""

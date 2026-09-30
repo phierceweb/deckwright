@@ -6,6 +6,7 @@ Quarters are absent: every quarter is one of N equal siblings, which ``split:`` 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any
 
 
@@ -122,12 +123,15 @@ def parse_box(
 
 
 def percent(value: Any, key: str, *, where: str, error: type[Exception]) -> float:
-    """A percent string as a fraction — ``10.5%`` is ``0.105``."""
+    """A finite percent string as a fraction — ``10.5%`` is ``0.105``."""
     if isinstance(value, str) and value.endswith("%"):
         try:
-            return float(value[:-1]) / 100.0
+            frac = float(value[:-1]) / 100.0
         except ValueError:
             pass
+        else:
+            if isfinite(frac):
+                return frac
     raise error(
         f"{where}: {key} is a percent of the canvas, got {value!r} — write '50%' for half of it"
     )

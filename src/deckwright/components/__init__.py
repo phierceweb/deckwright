@@ -10,6 +10,7 @@ from deckwright.components import (  # noqa: F401
     diverge,
     doccard,
     ellipse,
+    equation,
     fanout,
     flow,
     grid,

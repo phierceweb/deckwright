@@ -51,3 +51,37 @@ def test_missing_faces_names_the_face_the_machine_lacks():
 
 def test_missing_faces_reports_nothing_when_the_machine_cannot_be_asked():
     assert missing_faces(_base(), None) == ()
+
+
+def test_cjk_postscript_names_are_read_off_each_fonts_own_line(tmp_path):
+    from deckwright.theme.fonts import cjk_postscript_names
+
+    fc = _fake_fc_list(
+        tmp_path, ":postscriptname=HiraginoSans-W3\\n:postscriptname=PingFangSC-Regular\\nnoise\\n"
+    )
+    assert cjk_postscript_names(fc_list=fc, timeout=5) == frozenset(
+        {"HiraginoSans-W3", "PingFangSC-Regular"}
+    )
+
+
+def test_each_family_alias_maps_to_the_postscript_names_a_pdf_embeds(tmp_path):
+    from deckwright.theme.fonts import postscript_names
+
+    fc = _fake_fc_list(
+        tmp_path,
+        "Yu Gothic,游ゴシック:postscriptname=YuGothic-Medium\\n"
+        "Yu Gothic:postscriptname=YuGothic-Bold\\n"
+        "Unnamed:postscriptname=\\n",
+    )
+    assert postscript_names(fc_list=fc, timeout=5) == {
+        "yu gothic": frozenset({"YuGothic-Medium", "YuGothic-Bold"}),
+        "游ゴシック": frozenset({"YuGothic-Medium"}),
+    }
+
+
+def test_a_fontconfig_that_cannot_be_asked_answers_none_not_nothing(tmp_path):
+    from deckwright.theme.fonts import cjk_postscript_names, postscript_names
+
+    absent = str(tmp_path / "no-such-fc-list")
+    assert cjk_postscript_names(fc_list=absent, timeout=5) is None
+    assert postscript_names(fc_list=absent, timeout=5) is None

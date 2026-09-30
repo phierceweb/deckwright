@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from deckwright.errors import ThemeError
-from deckwright.utils.keys import unknown_field
+from deckwright.utils.keys import refuse_unknown
 
 _GRID_VALUES = ("none", "horizontal")
 _LABEL_POSITIONS = ("outside_end", "inside_end", "none")
@@ -84,31 +85,35 @@ def _chart_int(cfg: dict[str, Any], key: str, default: int, *, path: Path) -> in
     raw = cfg.get(key, default)
     try:
         return int(raw)
-    except (TypeError, ValueError) as e:
+    except (TypeError, ValueError, OverflowError) as e:
         raise ThemeError(f"theme {path}: chart.{key} must be an int, got {raw!r}") from e
 
 
 def _chart_float(cfg: dict[str, Any], key: str, default: float, *, path: Path) -> float:
     raw = cfg.get(key, default)
     try:
-        return float(raw)
-    except (TypeError, ValueError) as e:
+        out = float(raw)
+    except (TypeError, ValueError, OverflowError) as e:
         raise ThemeError(f"theme {path}: chart.{key} must be a number, got {raw!r}") from e
+    if not isfinite(out):
+        raise ThemeError(f"theme {path}: chart.{key} must be a finite number, got {raw!r}")
+    return out
 
 
 def chart_style(cfg: dict[str, Any], *, path: Path) -> ChartStyle:
     """Build a :class:`ChartStyle` from a theme file's ``chart:`` block.
 
     Raises:
-        ThemeError: the block names an unknown field or a value of the wrong type.
+        ThemeError: the block names an unknown field, a value of the wrong type, or a
+            number that is not finite.
     """
-    unknown = sorted(set(cfg) - set(_CHART_KEYS))
-    if unknown:
-        raise ThemeError(
-            unknown_field(
-                unknown[0], _CHART_KEYS, where=f"theme {path}", lead="chart block has unknown field"
-            )
-        )
+    refuse_unknown(
+        cfg,
+        _CHART_KEYS,
+        error=ThemeError,
+        where=f"theme {path}",
+        lead="chart block has unknown field",
+    )
     return ChartStyle(
         gap_width=_chart_int(cfg, "gap_width", _FIELD_DEFAULTS["gap_width"], path=path),
         gradient=bool(cfg.get("gradient", _FIELD_DEFAULTS["gradient"])),

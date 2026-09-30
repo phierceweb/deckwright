@@ -7,6 +7,7 @@ is :mod:`deckwright.theme.resolve`; its resolvers are re-exported here.
 from __future__ import annotations
 
 import hashlib
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,7 @@ from deckwright.theme.defaults import (
 )
 from deckwright.theme.model import Theme
 from deckwright.theme.palette import build_palette
+from deckwright.theme.resolve import beside
 from deckwright.theme.resolve import resolve_theme, theme_dir, theme_file  # noqa: F401 — re-exported
 from deckwright.theme.scale import Scale
 from deckwright.theme.surface import Surface, inherited_surface
@@ -111,7 +113,7 @@ def load_theme(
     template: Path | None = None
 
     if declared:
-        template = (path.parent / declared).resolve()
+        template = beside(path, declared, key="template")
         if not template.is_file():
             raise ThemeError(f"template not found: {template} (referenced by {path})")
         prs = open_presentation(template)
@@ -153,9 +155,9 @@ def load_theme(
     blocks.reject_unknown(type_cfg, _TYPE_KEYS, where=f"{where} 'type'")
     # A template's fontScheme routinely lags the face its slides really use, so an
     # explicit face: wins over it. major is the display face, minor the body face.
-    face = _declared_face(type_cfg, "face", minor, theme=name)
-    heading_face = _declared_face(type_cfg, "heading_face", major, theme=name)
-    mono = _declared_face(type_cfg, "mono", MONO_DEFAULT, theme=name)
+    face = _declared_face(type_cfg, "face", minor, theme=name, where=where)
+    heading_face = _declared_face(type_cfg, "heading_face", major, theme=name, where=where)
+    mono = _declared_face(type_cfg, "mono", MONO_DEFAULT, theme=name, where=where)
     ea = {**scripts, **_ea_faces(type_cfg.get("ea"), where=where)}
     # An unmeasured face is estimated with CEILING, which errs wide.
     for role, candidate in (("face", face), ("heading_face", heading_face)):
@@ -180,10 +182,16 @@ def load_theme(
             f"{where}: type.reference_height is {reference_h!r}; it is the canvas height the "
             f"ramp's point sizes are written for, so it must be above zero"
         )
+    if not isfinite(scale.pt(1 / reference_h)):
+        raise ThemeError(
+            f"{where}: type.reference_height is {reference_h!r}, too small to divide by — 1pt "
+            f"over it is past any finite point size; it is the canvas height in inches the "
+            f"ramp's point sizes are written for"
+        )
     ramp.update(
         {
-            name_: blocks.rung(
-                name_,
+            str(name_): blocks.rung(
+                str(name_),
                 cfg,
                 face=face,
                 heading_face=heading_face,
@@ -206,7 +214,9 @@ def load_theme(
         mono=mono,
         ea=ea,
         ramp=ramp,
-        min_pt=scale.pt(_rung(type_cfg, "min_pt", MIN_RUNG_DEFAULT, ref=reference_h, where=where)),
+        min_pt=scale.pt(
+            _rung(type_cfg, "min_pt", MIN_RUNG_DEFAULT, ref=reference_h, scale=scale, where=where)
+        ),
         grid=blocks.grid(
             blocks.mapping(raw.get("scale"), "scale", where=where), scale, where=where
         ),
@@ -214,7 +224,12 @@ def load_theme(
         marks=blocks.marks(blocks.mapping(raw.get("marks"), "marks", where=where), path=path),
         line_weight=scale.pt(
             _rung(
-                type_cfg, "line_weight_pt", LINE_WEIGHT_RUNG_DEFAULT, ref=reference_h, where=where
+                type_cfg,
+                "line_weight_pt",
+                LINE_WEIGHT_RUNG_DEFAULT,
+                ref=reference_h,
+                scale=scale,
+                where=where,
             )
         ),
         chart=chart_style(blocks.mapping(raw.get("chart"), "chart", where=where), path=path),
@@ -269,13 +284,15 @@ def _ea_faces(value: Any, *, where: str) -> dict[str, str]:
     return faces
 
 
-def _declared_face(type_cfg: dict[str, Any], key: str, fallback: str, *, theme: str) -> str:
+def _declared_face(
+    type_cfg: dict[str, Any], key: str, fallback: str, *, theme: str, where: str
+) -> str:
     """A ``type:`` face name, with an OOXML fontScheme reference discarded for ``fallback``.
 
     ``+mj-lt`` and its siblings name a slot in a template's fontScheme, not a typeface:
     nothing can measure one, and a reader resolves it against whatever template it has.
     """
-    declared = str(type_cfg.get(key) or "").strip()
+    declared = (blocks.face_name(type_cfg.get(key), f"type.{key}", where=where) or "").strip()
     if not declared:
         return fallback
     if declared.lower().startswith(_SCHEME_REF):
@@ -291,14 +308,16 @@ def _declared_face(type_cfg: dict[str, Any], key: str, fallback: str, *, theme: 
     return declared
 
 
-def _rung(type_cfg: dict[str, Any], key: str, default: float, *, ref: float, where: str) -> float:
+def _rung(
+    type_cfg: dict[str, Any], key: str, default: float, *, ref: float, scale: Scale, where: str
+) -> float:
     """A ``type:`` point size as its ratio to the reference canvas, or the system default."""
     if key not in type_cfg:
         return default
     pt = blocks.number(
         type_cfg[key], f"type.{key}", where=where, cast=float, expected="a point size"
     )
-    return pt / ref
+    return blocks.per_height(pt, ref, scale=scale, key=f"type.{key}", where=where)
 
 
 def _compose_layout(prs, prefer: str | None = None):

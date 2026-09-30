@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml import parse_xml
 from pptx.oxml.ns import qn
 
 import re
@@ -116,6 +117,39 @@ def test_bld_p_is_written_only_for_shapes_that_carry_text():
     assert re.findall(r'<p:bldP spid="(\d+)"', xml) == [str(worded.shape_id)]
     # Both still animate — only the build-list entry is withheld.
     assert xml.count('<p:spTgt spid="%d"' % empty.shape_id) == 2
+
+
+def _alternate_content(slide, choice_words: str, fallback_words: str) -> int:
+    """One shape stored as PowerPoint stores an equation: a Choice and a Fallback copy
+    under one id, each carrying its own words."""
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    choice, fallback = _texty(slide, choice_words), _texty(slide, fallback_words)
+    fallback._element.nvSpPr.cNvPr.set("id", str(choice.shape_id))
+    alternate = parse_xml(
+        f'<mc:AlternateContent xmlns:mc="{mc}"><mc:Choice Requires="a14"'
+        ' xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"/>'
+        "<mc:Fallback/></mc:AlternateContent>"
+    )
+    choice._element.addprevious(alternate)
+    alternate[0].append(choice._element)
+    alternate[1].append(fallback._element)
+    return choice.shape_id
+
+
+@pytest.mark.parametrize(
+    "choice, fallback, entries",
+    [("", "only the fallback has words", 0), ("the choice has words", "", 1)],
+)
+def test_a_shape_in_markup_compatibility_earns_a_bld_p_by_its_choice(choice, fallback, entries):
+    """PowerPoint reads the Choice, so words only the Fallback holds are no paragraph
+    build the shape it draws can honour."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    spid = _alternate_content(slide, choice, fallback)
+    add_click_build(slide, [spid])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:bldP spid="(\d+)"', xml) == [str(spid)] * entries
 
 
 def test_a_slide_of_only_text_free_shapes_writes_no_build_list_and_no_grp_id():

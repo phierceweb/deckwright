@@ -459,6 +459,17 @@ def test_constructing_an_xy_spec_directly_with_an_out_of_range_highlight_is_reje
         )
 
 
+def test_constructing_a_spec_directly_with_a_highlight_its_kind_cannot_show_is_rejected():
+    """The renderer paints a highlight only on the kinds ``from_body`` lets carry one."""
+    with pytest.raises(LayoutError, match=r"^chart kind 'line-markers' cannot show 'highlight'"):
+        ChartSpec(
+            type="line-markers",
+            categories=("a", "b"),
+            series=(Series(name="A", values=(1.0, 2.0)),),
+            highlight=1,
+        )
+
+
 def test_constructing_a_spec_directly_with_empty_series_is_rejected():
     with pytest.raises(LayoutError, match="series"):
         ChartSpec(type="bar", categories=("Q1", "Q2"), series=())

@@ -12,6 +12,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
 from deckwright.utils.links import LINK, spans
+from deckwright.utils.mce import resolved_children
 
 # A group nested deeper than this is named in `dropped` rather than walked, so a
 # pathological file cannot exhaust the stack.
@@ -22,9 +23,8 @@ MAX_GROUP_DEPTH = 8
 _ROW_OVERLAP = 0.35
 
 # The children of a `p:spTree` or `p:grpSp` python-pptx has a shape proxy for. Any
-# other content tag — `p:contentPart` for ink, `mc:AlternateContent` wrapping a 3D
-# model or a newer-namespace effect — a slide's factory raises on and a group's hands
-# back as a bare shape with no geometry to read.
+# other content tag, such as `p:contentPart` for ink, a slide's factory raises on and a
+# group's hands back as a bare shape with no geometry to read.
 _SHAPE_TAGS = frozenset(
     qn(tag) for tag in ("p:sp", "p:grpSp", "p:graphicFrame", "p:cxnSp", "p:pic")
 )
@@ -52,6 +52,12 @@ def shape_type(shape) -> MSO_SHAPE_TYPE | None:
         return shape.shape_type
     except NotImplementedError:
         return None
+
+
+def is_picture(shape) -> bool:
+    """A ``p:pic``, a filled picture placeholder included — python-pptx types that one as a
+    placeholder, not as the picture it holds."""
+    return bool(shape._element.tag == qn("p:pic"))
 
 
 def leaves(shapes, depth: int = 0):
@@ -96,11 +102,12 @@ def members(shapes) -> tuple[list, list[Unreadable]]:
     Iterating the tree itself is not safe: a group hands back anything it does not
     recognise as a bare shape with no geometry, and a slide raises instead. Both are
     still the author's slide, so an unreadable element is named rather than ending
-    the harvest.
+    the harvest. An ``mc:AlternateContent`` is read from the branch
+    :func:`~deckwright.utils.mce.branch` chooses.
     """
     built: list = []
     unreadable: list[Unreadable] = []
-    for element in shapes._element.iterchildren():
+    for element in resolved_children(shapes._element):
         if not isinstance(element.tag, str) or element.tag in _SCAFFOLDING:
             continue
         shape = _build(shapes, element) if element.tag in _SHAPE_TAGS else None
@@ -198,3 +205,14 @@ def flat(text: str) -> str:
     python-pptx writes the character it becomes back out as literal ``_x000B_``.
     Nothing else moves — the author's own spacing is content."""
     return text.replace(SOFT_BREAK, " ").strip()
+
+
+def table_grid(shape) -> tuple[tuple[str, ...], ...]:
+    """A table's cells as text, row by row, each cell's paragraphs joined."""
+    return tuple(
+        tuple(
+            flat("\n".join(linked_text(p) for p in cell.text_frame.paragraphs))
+            for cell in row.cells
+        )
+        for row in shape.table.rows
+    )

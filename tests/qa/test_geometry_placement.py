@@ -192,3 +192,17 @@ def test_a_shorter_origin_does_not_claim_a_longer_ones_shape():
 )
 def test_owns_requires_the_separator(origin, name, expected):
     assert owns(origin, name) is expected
+
+
+def test_a_morph_named_shape_answers_to_its_placement_like_any_other():
+    """A morph placement's shapes carry no slide number. Left out of the join on that account,
+    one that overruns its rect would pass unseen."""
+    placement = _placement(origin="m.hero.card")
+    escaped = check_placement_fit(
+        _manifest([_shape(ESCAPES, name="m.hero.card#1")], [placement]), THEME
+    )
+    assert [(f.check, f.shape) for f in escaped] == [("placement-fit", "m.hero.card#1")]
+    assert (
+        check_placement_fit(_manifest([_shape(INSIDE, name="m.hero.card#1")], [placement]), THEME)
+        == []
+    )

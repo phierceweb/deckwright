@@ -151,7 +151,7 @@ Releases are tagged; `main` is the development line. Release notes:
 
 ```bash
 deckwright new "Q4 Review"              # scaffold a deck that already builds, and build it
-deckwright extract <deck>.pptx          # draft a .deck.yaml from a deck deckwright did not build
+deckwright extract <deck>.pptx          # draft a .deck.yaml from any deck
 deckwright build <spec>.deck.yaml       # compile a .deck.yaml into a themed .pptx + manifest
 deckwright demo                         # every capability in one deck, against any theme
 deckwright render <deck>.pptx           # rasterize each slide to an image
@@ -186,12 +186,17 @@ for catching. Details:
 
 ## What ships
 
-Twenty-two slide components, 29 native chart kinds, ~4,000 Material Symbols glyphs, imagery
-with fit/crop and automatic scrims, HTML panels rendered through headless Chrome, and
-animation — builds, click-to-reveal and slide transitions. 103 capability exercises cover
-them, and the test suite drives all of them against every brand template present, so "it
-works under your brand" is something the suite checks. `conform` reuses the same set to
-report on a template it has just met.
+- Twenty-three slide components
+- 29 native chart kinds
+- ~4,000 Material Symbols glyphs
+- Display equations from a LaTeX subset, written as Office Math with a one-line text fallback
+- Imagery with fit/crop and automatic scrims
+- HTML panels rendered through headless Chrome
+- Animation: builds, click-to-reveal, and slide transitions including morph
+
+110 capability exercises cover them, and the test suite drives all of them against every brand
+template present, so "it works under your brand" is something the suite checks. `conform`
+reuses the same set to report on a template it has just met.
 
 ## Working from a checkout
 

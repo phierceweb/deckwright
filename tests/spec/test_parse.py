@@ -335,6 +335,79 @@ def test_a_parsed_number_dumps_back_as_it_was_written(tmp_path):
     ]
 
 
+def _cell(written, tmp_path):
+    text = f"theme: base\n---\ntitle: T\nplace:\n  - at: {{cols: full}}\n    table: {{rows: [[{written}]]}}\n"
+    return _parse(text, tmp_path).slides[0].place[0].body["rows"][0][0]
+
+
+_WORDS = [("yes", True), ("no", False), ("on", True), ("off", False)]
+_WORDS += [("Yes", True), ("NO", False), ("On", True), ("OFF", False)]
+
+
+@pytest.mark.parametrize(("written", "truth"), _WORDS)
+def test_a_yaml_boolean_word_is_the_text_written(tmp_path, written, truth):
+    """YAML 1.1 reads `yes` as True, and a cell would print it that way."""
+    assert str(_cell(written, tmp_path)) == written
+
+
+@pytest.mark.parametrize(("written", "truth"), _WORDS)
+def test_a_yaml_boolean_word_keeps_the_truth_yaml_reads_in_it(tmp_path, written, truth):
+    """So a field read by truthiness, such as an extension component's own flag, still works."""
+    assert bool(_cell(written, tmp_path)) is truth
+
+
+@pytest.mark.parametrize(("written", "value"), [("true", True), ("False", False), ("TRUE", True)])
+def test_true_and_false_stay_booleans(tmp_path, written, value):
+    assert _cell(written, tmp_path) is value
+
+
+def test_a_key_spelled_as_a_boolean_word_is_that_text(tmp_path):
+    """A series named `yes` is a name, and beside an unknown key it must still sort."""
+    text = (
+        "theme: base\n---\ntitle: T\nplace:\n  - at: {cols: full}\n"
+        "    chart: {kind: column, data: [{category: A, values: {yes: 1, off: 2}}]}\n"
+    )
+    row = _parse(text, tmp_path).slides[0].place[0].body["data"][0]
+    assert [str(k) for k in row["values"]] == ["yes", "off"]
+    with pytest.raises(SpecError, match=r"slide 1: unknown field 'on'"):
+        _parse("theme: base\n---\ntitle: T\non: 1\nzz: 2\n", tmp_path)
+
+
+def test_a_boolean_word_dumps_back_as_it_was_written(tmp_path):
+    import yaml
+
+    from deckwright.spec._scalars import SpecLoader
+
+    cells = [_cell("Yes", tmp_path), _cell("off", tmp_path)]
+    dumped = yaml.safe_dump(cells)
+    assert dumped == "- Yes\n- off\n"
+    assert [(str(c), bool(c)) for c in yaml.load(dumped, Loader=SpecLoader)] == [
+        ("Yes", True),
+        ("off", False),
+    ]
+
+
+def test_a_copied_boolean_word_keeps_its_text_and_truth(tmp_path):
+    import copy
+    import pickle
+
+    for clone in (
+        copy.deepcopy(_cell("off", tmp_path)),
+        pickle.loads(pickle.dumps(_cell("off", tmp_path))),
+    ):
+        assert (str(clone), bool(clone)) == ("off", False)
+
+
+def test_an_image_background_takes_a_scrim_written_yes(tmp_path):
+    slide = _parse("theme: t\n---\nbackground: {image: a.png, scrim: yes}\n", tmp_path).slides[0]
+    assert slide.background.scrim is not None and slide.background.scrim.pair == "inverse"
+
+
+def test_a_bool_tag_on_a_word_that_is_no_boolean_is_invalid_yaml(tmp_path):
+    with pytest.raises(SpecError, match=r"invalid YAML — .*'maybe' is not a boolean"):
+        _cell("!!bool maybe", tmp_path)
+
+
 def test_chapters_run_out_of_their_declared_order_are_rejected_naming_both(tmp_path):
     """Contiguous runs can still contradict `sections:`, and a `nav` drawn from it would lie."""
     text = (
@@ -502,3 +575,106 @@ def test_a_goto_refusal_numbers_placements_as_the_author_wrote_them(tmp_path):
     )
     with pytest.raises(SpecError, match=r"slide 1: placement 2: 'goto: apendix' names no slide"):
         parse_deck_text(_deck(slide), source=tmp_path / "d.deck.yaml")
+
+
+@pytest.mark.parametrize(
+    ("spec", "named"),
+    [
+        pytest.param(
+            "theme: t\ntrue: 1\nzzz: 2\n---\ntitle: T\n",
+            "d.deck.yaml: deck config: unknown field true;",
+            id="deck-config-bool",
+        ),
+        pytest.param(
+            "theme: t\n2021-01-01: 1\nzzz: 2\n---\ntitle: T\n",
+            "d.deck.yaml: deck config: unknown field 2021-01-01;",
+            id="deck-config-date",
+        ),
+        pytest.param(
+            "theme: t\n---\ntitle: T\ntrue: 1\nzzz: 2\n",
+            "d.deck.yaml: slide 1: unknown field true;",
+            id="slide-bool",
+        ),
+        pytest.param(
+            "theme: t\n---\ntitle: T\n2021-01-01: 1\nzzz: 2\n",
+            "d.deck.yaml: slide 1: unknown field 2021-01-01;",
+            id="slide-date",
+        ),
+        pytest.param(
+            "theme: t\n---\ntitle: T\nplace: [{at: {cols: full}, true: 1}]\n",
+            "d.deck.yaml: slide 1: placement 1: unknown field true;",
+            id="placement-bool-alone",
+        ),
+    ],
+)
+def test_a_key_yaml_read_as_a_boolean_or_a_date_is_a_spec_error(tmp_path, spec, named):
+    """Beside a string key it once raised TypeError from `sorted`; alone, from the
+    did-you-mean lookup."""
+    with pytest.raises(SpecError) as e:
+        _parse(spec, tmp_path)
+    assert named in str(e.value)
+    assert str(e.value).endswith("; quote the key")
+
+
+@pytest.mark.parametrize("written", ["nan%", "inf%", "1e400%"])
+def test_a_box_percent_that_is_not_finite_is_refused(tmp_path, written):
+    spec = (
+        "theme: t\n---\ntitle: T\nplace:\n"
+        f"  - at: {{box: {{x: {written}, y: 0%, w: 10%, h: 10%}}}}\n"
+        "    bullets: {items: [a]}\n"
+    )
+    with pytest.raises(SpecError, match=rf"box.x is a percent of the canvas, got '{written}'"):
+        _parse(spec, tmp_path)
+
+
+_MORPH_CARD = "place:\n  - at: {{cols: full}}\n    morph: {}\n    {}"
+
+
+def test_a_morph_name_is_read_onto_its_placement(tmp_path):
+    deck = _parse(
+        _deck("title: One\n" + _MORPH_CARD.format("hero", "card: {heading: H}")), tmp_path
+    )
+    assert deck.slides[0].place[0].morph == "hero"
+
+
+def test_a_chart_cannot_morph(tmp_path):
+    chart = "chart: {kind: column, data: [{category: a, value: 1}]}"
+    with pytest.raises(
+        SpecError,
+        match=r"slide 1: placement 1: 'morph' on a chart — deckwright pairs no chart across "
+        r"slides; morph a card, panel, image or icon",
+    ):
+        _parse(_deck("title: One\n" + _MORPH_CARD.format("hero", chart)), tmp_path)
+
+
+def test_one_morph_name_cannot_be_two_placements_on_a_slide(tmp_path):
+    twice = (
+        "title: One\nplace:\n"
+        "  - at: {cols: left-half}\n    morph: hero\n    card: {heading: A}\n"
+        "  - at: {cols: right-half}\n    morph: hero\n    card: {heading: B}"
+    )
+    with pytest.raises(
+        SpecError,
+        match=r"slide 1: placement 2: 'morph: hero' is already placement 1 — a name pairs one "
+        r"placement with its namesake on the next slide",
+    ):
+        _parse(_deck(twice), tmp_path)
+
+
+def test_one_morph_name_cannot_be_two_components_on_slides_in_a_row(tmp_path):
+    first = "title: One\n" + _MORPH_CARD.format("hero", "card: {heading: H}")
+    second = "title: Two\ntransition: morph\n" + _MORPH_CARD.format("hero", "panel: {}")
+    with pytest.raises(
+        SpecError,
+        match=r"slide 2: placement 1: 'morph: hero' is a card on slide 1 and a panel here — "
+        r"PowerPoint pairs shapes in the order they were drawn",
+    ):
+        _parse(_deck(first, second), tmp_path)
+
+
+def test_one_morph_name_may_be_two_components_on_slides_apart(tmp_path):
+    first = "title: One\n" + _MORPH_CARD.format("hero", "card: {heading: H}")
+    between = "title: Between"
+    third = "title: Three\n" + _MORPH_CARD.format("hero", "panel: {}")
+    deck = _parse(_deck(first, between, third), tmp_path)
+    assert [s.place[0].morph for s in deck.slides if s.place] == ["hero", "hero"]

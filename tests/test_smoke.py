@@ -22,3 +22,18 @@ def test_render_help_runs():
 def test_shot_help_runs():
     result = runner.invoke(app, ["shot", "--help"])
     assert result.exit_code == 0
+
+
+def test_a_source_tree_that_was_never_installed_reports_a_dev_version(monkeypatch):
+    import importlib
+    from importlib import metadata
+
+    import deckwright
+
+    def missing(name):
+        raise metadata.PackageNotFoundError(name)
+
+    with monkeypatch.context() as patched:
+        patched.setattr(metadata, "version", missing)
+        assert importlib.reload(deckwright).__version__ == "0.0.0.dev0"
+    assert importlib.reload(deckwright).__version__ != "0.0.0.dev0"

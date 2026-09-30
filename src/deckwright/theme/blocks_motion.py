@@ -10,6 +10,7 @@ from deckwright.motion import transition_xml
 from deckwright.motion.builds import ENTRANCES
 from deckwright.theme.blocks import mapping, number
 from deckwright.theme.model import DEFAULT_MOTION_ROLES, Motion, Transition
+from deckwright.utils.keys import refuse_unknown
 
 MOTION_KEYS = ("stagger_ms", "advance", "beat_ms", "roles", "transition")
 TRANSITION_KEYS = ("kind", "dir", "speed")
@@ -21,11 +22,14 @@ def motion(cfg: Any, *, path: Path) -> Motion:
     a beat looks like."""
     where = f"theme {path}"
     cfg = mapping(cfg, "motion", where=where)
-    unknown = sorted(set(cfg) - set(MOTION_KEYS))
-    if unknown:
-        raise ThemeError(
-            f"{where}: unknown motion key {unknown[0]!r}; known keys: {', '.join(MOTION_KEYS)}"
-        )
+    refuse_unknown(
+        cfg,
+        MOTION_KEYS,
+        error=ThemeError,
+        where=where,
+        lead="unknown motion key",
+        label="known keys",
+    )
     stagger = number(
         cfg.get("stagger_ms", 0),
         "motion stagger_ms",
@@ -96,12 +100,14 @@ def _transition(cfg: Any, *, path: Path) -> Transition:
         raise ThemeError(
             f"theme {path}: motion transition must be a mapping with 'kind:', got {cfg!r}"
         )
-    unknown = sorted(set(cfg) - set(TRANSITION_KEYS))
-    if unknown:
-        raise ThemeError(
-            f"theme {path}: unknown transition key {unknown[0]!r}; "
-            f"known keys: {', '.join(TRANSITION_KEYS)}"
-        )
+    refuse_unknown(
+        cfg,
+        TRANSITION_KEYS,
+        error=ThemeError,
+        where=f"theme {path}",
+        lead="unknown transition key",
+        label="known keys",
+    )
     kind = str(cfg.get("kind", "none"))
     direction = str(cfg.get("dir", ""))
     speed = str(cfg.get("speed", "fast"))

@@ -55,3 +55,11 @@ def test_colour_difference_is_zero_for_one_colour_and_a_hundred_from_black_to_wh
 
     assert delta_e("3282BE", "3282BE") == 0.0
     assert delta_e("000000", "FFFFFF") == pytest.approx(100.0, abs=0.01)
+
+
+def test_relative_luminance_reuses_the_cached_answer_for_a_repeated_colour():
+    """Sampling a picture asks for the same few hundred colours over and over."""
+    relative_luminance.cache_clear()
+    relative_luminance("3282BE")
+    relative_luminance("3282BE")
+    assert relative_luminance.cache_info().hits == 1

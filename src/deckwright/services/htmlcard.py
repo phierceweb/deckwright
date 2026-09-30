@@ -6,15 +6,19 @@ around the doc and code snippets that get screenshotted into slides.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import markdown
+
+from deckwright.services.card_pictures import inline_local_images
 
 # Window chrome shared by every card. Kept out of any f-string so its literal
 # CSS (e.g. ``border-radius: 50%``, the ``{`` braces) needs no escaping.
 _BASE_CSS = """\
 * { box-sizing: border-box; }
-/* The canvas stays white on purpose: htmlshot crops the card out of it by
-   difference-from-white, so a themed body is a card the height of the canvas. */
-body { margin: 0; background: #ffffff;
+/* The canvas takes no colour: a themed body is a card the height of the canvas. A plain
+   shot paints the page white behind it; a transparent one leaves it clear. */
+body { margin: 0; background: transparent;
        font-family: var(--font, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif); }
 .window { margin: 16px auto; background: var(--c-page, #ffffff); border: 1px solid var(--c-line, #d0d7de);
           border-radius: 14px; overflow: hidden; box-shadow: 0 12px 34px rgba(16,26,54,0.13); }
@@ -50,6 +54,10 @@ _CONTENT_CSS = """\
 .content hr { border: 0; border-top: 1px solid var(--c-line, #d0d7de); margin: 24px 0; }
 .content em { font-style: italic; }
 .content strong { font-weight: 700; }
+.content table { border-collapse: collapse; margin: 0 0 16px; }
+.content th, .content td { border: 1px solid var(--c-line, #d0d7de); padding: 8px 14px;
+                           text-align: left; vertical-align: top; }
+.content th { background: var(--c-surface, #f2f3f5); font-weight: 600; }
 """
 
 # Sizes suit a compact card; scale up via the ``extra_css`` argument.
@@ -109,6 +117,7 @@ def markdown_card(
     extensions: list[str] | None = None,
     content_css: str = "",
     max_width: int = 1000,
+    image_base: Path | None = None,
 ) -> str:
     """Render ``md_text`` to HTML and wrap it in a window card.
 
@@ -120,8 +129,12 @@ def markdown_card(
         content_css: CSS appended after the default document typography to
             override specific rules.
         max_width: Card width in pixels.
+        image_base: The source's directory. Given, the pictures the markdown names from
+            under it are embedded; see :func:`inline_local_images`.
     """
     body = markdown.markdown(md_text, extensions=extensions or _DEFAULT_EXTENSIONS)
+    if image_base is not None:
+        body = inline_local_images(body, image_base)
     return window_card(
         body, filename=filename, max_width=max_width, extra_css=_CONTENT_CSS + content_css
     )

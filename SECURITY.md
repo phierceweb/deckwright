@@ -59,6 +59,9 @@ named:
 - **No frames, objects or embeds at all** — this is what closes local-file reads.
 - **No script**, except the height probe deckwright itself appends, allowed by hash.
 - **Images and fonts** may load from `data:`, `https:` and `http:` — not from `file:`.
+  A `document:` card embeds the pictures its markdown names as `data:` before the browser
+  sees them, and only from the markdown's own directory and below: a path that climbs out
+  of it, or names a file elsewhere, is a build error. Only image types are read.
 - **Inline CSS only.**
 
 The policy is applied where HTML meets the browser (`services/htmlshot.py`), so it

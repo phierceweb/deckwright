@@ -1,4 +1,5 @@
-"""`inverse` is chosen against the page a slide really shows, not a presumed light one.
+"""`inverse` and the accents are chosen against the page a slide really shows, not a presumed
+light one.
 
 Each scheme below reproduces a shape seen in real templates. Expectations are slot names,
 never a contrast computed here.
@@ -7,9 +8,14 @@ never a contrast computed here.
 from __future__ import annotations
 
 import pytest
+from lxml import etree
 from pptx import Presentation
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
-from deckwright.conform.derive import _inverse, _inverse_ink, notes
+from deckwright.conform.derive import _inverse, _inverse_ink, derive, notes
+
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 
 
 def test_a_light_page_takes_the_brand_dark_over_plain_black():
@@ -108,3 +114,77 @@ def test_a_dark_inverse_keeps_the_default_ink_and_binds_nothing():
     """Every light-page theme already reads white on its dark inverse; binding one churns it."""
     scheme = {"dk1": "000000", "dk2": "1F497D", "lt1": "FFFFFF", "lt2": "EEECE1"}
     assert _inverse_ink(scheme, inverse="1F497D") is None
+
+
+@pytest.fixture
+def blue_page(tmp_path):
+    """A master painted 3282BE whose scheme spends accent1 on that blue and accent2 on a shade
+    of it. accent3 is 3.66:1 off the page; accent4, a yellow, is 2.81:1 but 129 ΔE away.
+    accent5 and accent6 keep Office's stock values."""
+    prs = Presentation()
+    master = prs.slide_masters[0]
+    csld = master._element.find(f"{{{_P}}}cSld")
+    old = csld.find(f"{{{_P}}}bg")
+    if old is not None:
+        csld.remove(old)
+    csld.insert(
+        0,
+        etree.fromstring(
+            f'<p:bg xmlns:p="{_P}" xmlns:a="{_A}"><p:bgPr>'
+            f'<a:solidFill><a:srgbClr val="3282BE"/></a:solidFill><a:effectLst/>'
+            f"</p:bgPr></p:bg>"
+        ),
+    )
+    part = master.part.part_related_by(RT.THEME)
+    root = etree.fromstring(part.blob)
+    slots = {"accent1": "3282BE", "accent2": "28608C", "accent3": "262626", "accent4": "FFD000"}
+    for slot, value in slots.items():
+        holder = root.find(f".//{{{_A}}}clrScheme/{{{_A}}}{slot}")
+        for child in list(holder):
+            holder.remove(child)
+        etree.SubElement(holder, f"{{{_A}}}srgbClr").set("val", value)
+    part._blob = etree.tostring(root)
+    path = tmp_path / "Blue.pptx"
+    prs.save(str(path))
+    return path
+
+
+def test_an_accent_the_painted_page_already_is_is_not_bound(blue_page):
+    """Bound, accent1 would paint every badge, dot and plate into the page it sits on."""
+    bind = derive(blue_page)["bind"]
+    assert bind["page"] == "3282BE"
+    assert {k: v for k, v in bind.items() if k.startswith("accent-")} == {
+        "accent-1": "accent3",
+        "accent-2": "accent4",
+    }
+
+
+def test_the_report_names_the_accents_the_page_hid(blue_page):
+    report = notes(blue_page, bind=derive(blue_page)["bind"])
+    assert (
+        "skipped 2 accent(s) that vanish into the page 3282BE: accent1=3282BE, accent2=28608C"
+        in report
+    ), report
+
+
+def test_a_kept_theme_that_still_binds_a_hidden_accent_is_called_out(blue_page):
+    """A sidecar adopted before the skip keeps its bind; the report says what it costs."""
+    report = notes(blue_page, bind={"page": "3282BE", "accent-1": "accent1", "accent-2": "accent3"})
+    assert "accent-1 is accent1=3282BE, which vanishes into the page 3282BE (1.00:1, 0 ΔE)" in (
+        report
+    ), report
+    assert "skipped 1 accent(s) that vanish into the page 3282BE: accent2=28608C" in report, report
+
+
+def test_two_accents_a_reader_cannot_tell_apart_are_named(stock):
+    """Adopted without a word, the pair paints two series of one chart as one."""
+    report = notes(stock, bind={"accent-1": "1F5FA8", "accent-2": "2361AA", "accent-3": "A8431C"})
+    assert [line for line in report if "ΔE apart" in line] == [
+        "accent-1 and accent-2 are 1 ΔE apart (1F5FA8, 2361AA) — two series in one chart "
+        "will read as one"
+    ]
+
+
+def test_accents_that_stand_apart_are_not_mentioned(stock):
+    report = notes(stock, bind={"accent-1": "1F5FA8", "accent-2": "0F6E63"})
+    assert [line for line in report if "ΔE apart" in line] == []

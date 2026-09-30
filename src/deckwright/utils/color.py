@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from deckwright.errors import ThemeError
 
@@ -11,6 +12,8 @@ AA_LARGE = 3.0
 LARGE_PT = 18.0
 """Point size at which WCAG's large-text allowance starts. AA also allows 14pt bold,
 which both the components and the QA check deliberately treat as normal."""
+DISTINCT_DELTA_E = 35.0
+"""Below this a fill differs from its ground in neither lightness nor colour."""
 
 _HEX = re.compile(r"^[0-9A-F]{6}$")
 
@@ -23,6 +26,8 @@ def normalize_hex(value: str) -> str:
     return text
 
 
+# Sorting sampled pixels by contrast asks for the same few hundred colours millions of times.
+@lru_cache(maxsize=65536)
 def relative_luminance(hex_colour: str) -> float:
     """WCAG relative luminance of a 6-digit hex colour."""
     value = normalize_hex(hex_colour)
@@ -72,4 +77,22 @@ def delta_e(a: str, b: str) -> float:
             for p, q in zip(_lab(normalize_hex(a)), _lab(normalize_hex(b)), strict=True)
         )
         ** 0.5
+    )
+
+
+def stands_off(fill: str, ground: str) -> bool:
+    """Whether a fill can be told from the ground it is laid on, by luminance or by colour.
+
+    WCAG 1.4.11's 3:1 alone would call yellow on white invisible, so a ΔE of
+    :data:`DISTINCT_DELTA_E` counts as well.
+    """
+    return contrast_ratio(fill, ground) >= AA_LARGE or delta_e(fill, ground) >= DISTINCT_DELTA_E
+
+
+def mix(colour: str, other: str, amount: float) -> str:
+    """``colour`` moved ``amount`` of the way to ``other``, per channel, as hex."""
+    a, b = normalize_hex(colour), normalize_hex(other)
+    return "".join(
+        f"{round(int(a[i : i + 2], 16) * (1 - amount) + int(b[i : i + 2], 16) * amount):02X}"
+        for i in (0, 2, 4)
     )

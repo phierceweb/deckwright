@@ -10,6 +10,7 @@ from typing import Any, Iterator
 from lxml import etree
 from pf_core.utils.env import resolve_int
 
+from deckwright.motion.read import sequences as _sequences
 from deckwright.qa.model import Finding, Severity
 from deckwright.theme.model import Theme
 from deckwright.utils.xml import fromstring as parse_xml
@@ -91,42 +92,6 @@ def _rhythm(kind: str, steps: list[list[str]], clicks: int) -> str:
             f"'motion.advance: after_previous'; {shapes} shapes, beats of {sizes}"
         )
     return f"{label} — {clicks} click(s), {shapes} shapes, beats of {sizes}"
-
-
-def _entrance_targets(node) -> set[int]:
-    """Shape ids an entrance effect under ``node`` makes visible."""
-    out: set[int] = set()
-    for ctn in node.iter(f"{{{_P}}}cTn"):
-        if ctn.get("presetClass") != "entr":
-            continue
-        for target in ctn.iter(f"{{{_P}}}spTgt"):
-            if (spid := str(target.get("spid", ""))).isdigit():
-                out.add(int(spid))
-    return out
-
-
-def _sequences(root) -> tuple[list[tuple[int | None, set[int]]], set[int]]:
-    """Each interactive ``(trigger, targets)``, and what the main sequence reveals."""
-    interactive: list[tuple[int | None, set[int]]] = []
-    main: set[int] = set()
-    for seq in root.iter(f"{{{_P}}}seq"):
-        ctn = seq.find(f"{{{_P}}}cTn")
-        if ctn is None:
-            continue
-        if ctn.get("nodeType") == "mainSeq":
-            main |= _entrance_targets(ctn)
-            continue
-        if ctn.get("nodeType") != "interactiveSeq":
-            continue
-        trigger = None
-        conds = ctn.find(f"{{{_P}}}stCondLst")
-        if conds is not None:
-            target = conds.find(f".//{{{_P}}}spTgt")
-            if target is not None and str(target.get("spid", "")).isdigit():
-                trigger = int(str(target.get("spid")))
-        body = ctn.find(f"{{{_P}}}childTnLst")
-        interactive.append((trigger, _entrance_targets(body) if body is not None else set()))
-    return interactive, main
 
 
 def _unreachable(interactive: list[tuple[int | None, set[int]]]) -> set[int]:

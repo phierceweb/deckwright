@@ -10,10 +10,13 @@ from __future__ import annotations
 import re
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from lxml import etree
 
+from deckwright.qa._parts import rels_part, resolve
 from deckwright.qa.model import Finding, Severity
+from deckwright.utils.mce import apart
 from deckwright.utils.xml import fromstring as parse_xml
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -21,6 +24,9 @@ _R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _SLIDE = re.compile(r"ppt/slides/slide(\d+)\.xml$")
 # Ids are unsigned 32-bit and 0 is reserved; PowerPoint rejects both ends.
 _MAX_ID = 2_147_483_647
+
+# A shape's id, its name, and the ``cNvPr`` that carries both.
+_Id = tuple[int, str, Any]
 
 
 def check_package(deck: str | Path) -> list[Finding]:
@@ -64,74 +70,83 @@ def check_package(deck: str | Path) -> list[Finding]:
     return findings
 
 
-def _shape_ids(root) -> list[tuple[int, str]]:
+def _shape_ids(root) -> list[_Id]:
     """Every drawn shape's id and name, in document order — repeats included.
 
     A dict would drop exactly the repeats this exists to find.
     """
-    out: list[tuple[int, str]] = []
+    out: list[_Id] = []
     for el in root.iter(f"{{{_P}}}cNvPr"):
         try:
-            out.append((int(el.get("id", "")), str(el.get("name", ""))))
+            out.append((int(el.get("id", "")), str(el.get("name", "")), el))
         except ValueError:
             continue
     return out
 
 
-def _duplicate_ids(ids: list[tuple[int, str]], index: int) -> list[Finding]:
+def _earlier(seen: list[tuple[Any, Any]], element) -> Any | None:
+    """The first of ``seen`` a reader could see beside ``element``.
+
+    The Choice and Fallback of an ``mc:AlternateContent`` are alternatives, so the two
+    copies of one shape PowerPoint writes there may share an id and a name.
+    """
+    return next((value for value, other in seen if not apart(other, element)), None)
+
+
+def _duplicate_ids(ids: list[_Id], index: int) -> list[Finding]:
     """Two shapes sharing an id — the classic fault in hand-built shape XML."""
-    seen: dict[int, str] = {}
+    seen: dict[int, list[tuple[str, Any]]] = {}
     findings = []
-    for value, name in ids:
-        if value in seen:
+    for value, name, element in ids:
+        first = _earlier(seen.get(value, []), element)
+        if first is not None:
             findings.append(
                 Finding(
                     slide=index,
                     check="shape-id",
                     severity=Severity.ERROR,
                     detail=(
-                        f"shape id {value} is used by both {seen[value]!r} and "
+                        f"shape id {value} is used by both {first!r} and "
                         f"{name!r}; PowerPoint repairs a slide with a duplicate id"
                     ),
                     shape=name,
                 )
             )
-        else:
-            seen[value] = name
+        seen.setdefault(value, []).append((name, element))
     return findings
 
 
-def _duplicate_names(ids: list[tuple[int, str]], index: int) -> list[Finding]:
+def _duplicate_names(ids: list[_Id], index: int) -> list[Finding]:
     """Two shapes sharing a name — legal and invisible, so nothing else catches it.
 
     Every shape a build names gets a distinct one, so a repeat means the naming rule
     has drifted.
     """
-    seen: dict[str, int] = {}
+    seen: dict[str, list[tuple[int, Any]]] = {}
     findings = []
-    for value, name in ids:
+    for value, name, element in ids:
         if not name:
             continue
-        if name in seen:
+        first = _earlier(seen.get(name, []), element)
+        if first is not None:
             findings.append(
                 Finding(
                     slide=index,
                     check="shape-name",
                     severity=Severity.WARN,
                     detail=(
-                        f"shape name {name!r} is used by both id {seen[name]} and "
+                        f"shape name {name!r} is used by both id {first} and "
                         f"id {value}; a hand-edited shape cannot be mapped back to the "
                         f"spec node that drew it"
                     ),
                     shape=name,
                 )
             )
-        else:
-            seen[name] = value
+        seen.setdefault(name, []).append((value, element))
     return findings
 
 
-def _out_of_range_ids(ids: list[tuple[int, str]], index: int) -> list[Finding]:
+def _out_of_range_ids(ids: list[_Id], index: int) -> list[Finding]:
     return [
         Finding(
             slide=index,
@@ -140,24 +155,25 @@ def _out_of_range_ids(ids: list[tuple[int, str]], index: int) -> list[Finding]:
             detail=f"shape id {value} is outside 1..{_MAX_ID}",
             shape=name,
         )
-        for value, name in ids
+        for value, name, _ in ids
         if value <= 0 or value > _MAX_ID
     ]
 
 
-def _dangling_animation_targets(root, ids: list[tuple[int, str]], index: int) -> list[Finding]:
+def _dangling_animation_targets(root, ids: list[_Id], index: int) -> list[Finding]:
     """An animation naming a shape the slide does not hold.
 
     Timing is the one tree deckwright writes as raw XML, so a renumbered shape leaves the
     build green and the file broken.
     """
+    drawn = {value for value, _, _ in ids}
     findings = []
     for target in root.iter(f"{{{_P}}}spTgt"):
         try:
             spid = int(target.get("spid", ""))
         except ValueError:
             continue
-        if spid not in {v for v, _ in ids}:
+        if spid not in drawn:
             findings.append(
                 Finding(
                     slide=index,
@@ -174,11 +190,11 @@ def _dangling_animation_targets(root, ids: list[tuple[int, str]], index: int) ->
 
 def _dangling_relationships(root, archive, part: str, names: set[str], index: int) -> list[Finding]:
     """An ``r:embed``/``r:id`` with no matching relationship, or one pointing nowhere."""
-    rels_part = f"{part.rsplit('/', 1)[0]}/_rels/{part.rsplit('/', 1)[1]}.rels"
+    rels = rels_part(part)
     targets: dict[str, str] = {}
     external: set[str] = set()
-    if rels_part in names:
-        for rel in parse_xml(archive.read(rels_part)):
+    if rels in names:
+        for rel in parse_xml(archive.read(rels)):
             targets[str(rel.get("Id"))] = str(rel.get("Target"))
             if rel.get("TargetMode") == "External":
                 external.add(str(rel.get("Id")))
@@ -205,7 +221,7 @@ def _dangling_relationships(root, archive, part: str, names: set[str], index: in
         # An external target is an address, not a part; `link` judges it.
         if rid in external or target.startswith(("http://", "https://", "mailto:", "../slide")):
             continue
-        resolved = _resolve(part, target)
+        resolved = resolve(part, target)
         if resolved not in names:
             findings.append(
                 Finding(
@@ -216,14 +232,3 @@ def _dangling_relationships(root, archive, part: str, names: set[str], index: in
                 )
             )
     return findings
-
-
-def _resolve(part: str, target: str) -> str:
-    """A relationship target, resolved against the part that declares it."""
-    base = part.rsplit("/", 1)[0].split("/")
-    for step in target.split("/"):
-        if step == "..":
-            base = base[:-1]
-        elif step not in ("", "."):
-            base = [*base, step]
-    return "/".join(base)

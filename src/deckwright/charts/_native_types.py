@@ -175,6 +175,12 @@ _STROKE_CHART_TYPES = frozenset(
 _RADAR_CHART_TYPES = frozenset({"radar", "radar-filled", "radar-markers"})
 _SMOOTH_CHART_TYPES = frozenset({"xy-scatter-smooth", "xy-scatter-smooth-no-markers"})
 _POINT_LABEL_CHART_TYPES = _STROKE_CHART_TYPES - _RADAR_CHART_TYPES
-# `inEnd` is a position only the bar family and a pie offer; written into any other chart
-# group it is a `c:dLblPos` PowerPoint asks to repair the file over.
-_INSIDE_END_CHART_TYPES = _GAP_WIDTH_CHART_TYPES | frozenset({"pie", "pie-exploded"})
+# `inEnd` is a position only the bar family offers on the theme's own say-so; written into
+# any other chart group it is a `c:dLblPos` PowerPoint asks to repair the file over. A pie
+# is pinned to `ctr` regardless (see `_CENTER_LABEL_CHART_TYPES`), never reaching this set.
+_INSIDE_END_CHART_TYPES = _GAP_WIDTH_CHART_TYPES
+# A pie tapers to a point at its centre, so `bestFit` — what an unset position falls back
+# to — can push a thin wedge's label past the rim and onto the slide behind it; pinned to
+# `ctr` it never leaves. A doughnut's ring never narrows to nothing the way a pie's does,
+# and takes no position at all — the same repair prompt `_INSIDE_END_CHART_TYPES` avoids.
+_CENTER_LABEL_CHART_TYPES = frozenset({"pie", "pie-exploded"})

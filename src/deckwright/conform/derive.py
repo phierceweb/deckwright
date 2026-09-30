@@ -7,31 +7,39 @@ into a template it is *told* about.
 from __future__ import annotations
 
 import collections
+import itertools
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from pptx.util import Emu
 
-from PIL import Image
 
+from deckwright.conform.chromeband import CHROME_BAND, clear_run, columns
 from deckwright.errors import ThemeError
 from deckwright.imagery.fit import ImageFit
-from deckwright.imagery.sample import cells, load, weakest
+from deckwright.imagery.sample import cells, weakest
 from deckwright.layouts.chrome import CHROME_ORDER
 from deckwright.layouts.resolve import pick_compose_layout
 from deckwright.theme.clrscheme import parse_color_scheme, parse_font_scheme, read_theme_xml
-from deckwright.theme.defaults import DEFAULT_RAMP, DEFAULT_ROLES, default_grid
+from deckwright.theme.defaults import DEFAULT_RAMP, DEFAULT_ROLES
 from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
 from deckwright.theme.palette import lum
-from deckwright.theme.scale import Scale
 from deckwright.theme.stock import is_stock_accent
 from deckwright.theme.surface import inherited_surface
-from deckwright.utils.color import AA_NORMAL, contrast_ratio, relative_luminance
+from deckwright.utils.color import (
+    AA_NORMAL,
+    DISTINCT_DELTA_E,
+    contrast_ratio,
+    delta_e,
+    relative_luminance,
+    stands_off,
+)
 from deckwright.utils.deck import open_presentation
 
 _DARK_SLOTS = ("dk1", "dk2")
 _LIGHT_SLOTS = ("lt1", "lt2")
+_ACCENT_SLOTS = tuple(f"accent{i}" for i in range(1, 7))
 # How far a measured rung may sit from a built-in one and still be worth restating.
 _RUNG_TOLERANCE = 0.15
 # How far secondary text and plate fills move from the ink toward the page.
@@ -45,16 +53,8 @@ _SURFACE_LIMIT = 0.60
 # Below this contrast the master's paint and the page slot are the same surface, and
 # restating every role as a literal would only churn the theme it writes.
 _SAME_PAGE = 1.2
-# The grid the background is probed on for artwork, and how far a column's pixels may
-# spread before it counts as decorated rather than free.
-_PROBE_COLS, _PROBE_ROWS = 48, 32
-_UNIFORM_SPREAD = 12
-# A run narrower than this much of the canvas is not worth steering a title into.
-_MIN_CLEAR_RUN = 0.3
 # Below this, a colour is a neutral: black, white, or a grey with no brand in it.
 _MIN_CHROMA = 0.08
-# The vertical slice of the canvas the chrome stack occupies.
-_CHROME_BAND = (0.0, 0.3)
 # OOXML lets a run's typeface attribute hold a reference to the theme's major or minor
 # font instead of a face name. Only the latin entries resolve to a face: '+mj-ea' and
 # '+mj-cs' name the scheme's own <a:ea> and <a:cs> elements.
@@ -225,68 +225,6 @@ def _inverse_ink(scheme: dict[str, str], *, inverse: str) -> str | None:
     return max(slots, key=lambda s: contrast_ratio(scheme[s], inverse))
 
 
-def _clear_run(path: Path, band: tuple[float, float]) -> tuple[float, float] | None:
-    """The widest horizontal run of ``band`` a background picture leaves uniform.
-
-    A column counts as decorated when it differs from the *typical* column of the
-    band, not when it varies down its own length — a banded background varies
-    everywhere and none of that is artwork.
-
-    Returns:
-        ``(start, end)`` as fractions of the width, or None when the whole band is
-        plain (nothing to avoid) or none of it is (nowhere to go).
-    """
-    top, bottom = band
-    image = load(path).convert("RGB").resize((_PROBE_COLS, _PROBE_ROWS), Image.Resampling.BOX)
-    rows = range(
-        max(0, int(top * _PROBE_ROWS)), max(1, min(_PROBE_ROWS, int(bottom * _PROBE_ROWS) + 1))
-    )
-    columns = [
-        [cast("tuple[int, int, int]", image.getpixel((x, y))) for y in rows]
-        for x in range(_PROBE_COLS)
-    ]
-    typical = [
-        tuple(sorted(channel)[len(channel) // 2] for channel in zip(*pixels, strict=True))
-        for pixels in zip(*columns, strict=True)
-    ]
-    quiet = [
-        max(
-            abs(a - b)
-            for pixel, ref in zip(column, typical, strict=True)
-            for a, b in zip(pixel, ref, strict=True)
-        )
-        <= _UNIFORM_SPREAD
-        for column in columns
-    ]
-    if all(quiet) or not any(quiet):
-        return None
-    best: tuple[int, int] | None = None
-    start = 0
-    run = 0
-    for x, free in (*enumerate(quiet), (_PROBE_COLS, False)):
-        if free:
-            start = x if run == 0 else start
-            run += 1
-            continue
-        if best is None or run > best[1] - best[0]:
-            best = (start, x) if run else best
-        run = 0
-    if best is None or (best[1] - best[0]) < _PROBE_COLS * _MIN_CLEAR_RUN:
-        return None
-    return best[0] / _PROBE_COLS, best[1] / _PROBE_COLS
-
-
-def _columns(run: tuple[float, float]) -> tuple[int, int]:
-    """A canvas-fraction run as a pair of grid column indices, clamped to the grid."""
-    grid = default_grid(Scale(slide_w=1.0, slide_h=1.0))
-    span = 1.0 - grid.left_frac - grid.right_frac
-    edges = [
-        min(grid.columns, max(0, round((frac - grid.left_frac) / span * grid.columns)))
-        for frac in run
-    ]
-    return edges[0], max(edges[0] + 1, edges[1])
-
-
 def _chroma(hex_colour: str) -> float:
     """How far a colour is from neutral, 0 (grey) to 1 (fully saturated)."""
     channels = [int(hex_colour[i : i + 2], 16) for i in (0, 2, 4)]
@@ -299,6 +237,11 @@ def _mix(colour: str, other: str, amount: float) -> str:
         f"{round(int(colour[i : i + 2], 16) * (1 - amount) + int(other[i : i + 2], 16) * amount):02X}"
         for i in (0, 2, 4)
     )
+
+
+def _branded(scheme: dict[str, str]) -> list[str]:
+    """Accent slots holding a colour of the brand's, not one Microsoft ships."""
+    return [s for s in _ACCENT_SLOTS if s in scheme and not is_stock_accent(scheme[s])]
 
 
 def master_scheme(prs, *, prefer: str | None = None) -> dict[str, str]:
@@ -332,16 +275,13 @@ def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]
     painted = _painted(surface, art, canvas, scheme)
     if painted is not None and contrast_ratio(painted, scheme[page_slot]) > _SAME_PAGE:
         bind.update(_over(painted, scheme))
-    # An accent still holding Microsoft's shipped value says nothing about the brand.
-    real = [
-        s
-        for s in (f"accent{i}" for i in range(1, 7))
-        if s in scheme and not is_stock_accent(scheme[s])
-    ]
+    # An accent the page already is would paint every plate and badge into the page.
+    page = scheme.get(bind["page"], bind["page"])
+    real = [s for s in _branded(scheme) if stands_off(scheme[s], page)]
     for i, slot in enumerate(real, start=1):
         bind[f"accent-{i}"] = slot
     if any(s in scheme for s in _DARK_SLOTS):
-        bind["inverse"] = _inverse(scheme, page=scheme.get(bind["page"], bind["page"]))
+        bind["inverse"] = _inverse(scheme, page=page)
         ink = _inverse_ink(scheme, inverse=scheme[bind["inverse"]])
         if ink is not None:
             bind["inverse-ink"] = ink
@@ -353,9 +293,9 @@ def derive(template: str | Path, *, prefer: str | None = None) -> dict[str, Any]
         "drop_template_slides": True,
         "bind": bind,
     }
-    clear = None if art is None else _clear_run(art, _CHROME_BAND)
+    clear = None if art is None else clear_run(art, CHROME_BAND)
     if clear is not None:
-        start, end = _columns(clear)
+        start, end = columns(clear)
         theme["chrome"] = {
             name: {"at": {"cols": {"from": start, "to": end}}} for name in CHROME_ORDER
         }
@@ -406,11 +346,31 @@ def notes(template: str | Path, *, bind: dict[str, str], prefer: str | None = No
         f"across {len(prs.slide_masters)} master(s)",
         grounds,
     ]
-    stock = [
-        s for s in (f"accent{i}" for i in range(1, 7)) if s in scheme and is_stock_accent(scheme[s])
-    ]
+    stock = [s for s in _ACCENT_SLOTS if s in scheme and is_stock_accent(scheme[s])]
     if stock:
         out.append(f"ignored {len(stock)} unedited stock accent(s): {', '.join(stock)}")
+    page = hex_of("page")
+    hidden = [s for s in _branded(scheme) if not stands_off(scheme[s], page)]
+    bound = {v: k for k, v in bind.items() if isinstance(v, str) and str(k).startswith("accent-")}
+    skipped = [f"{s}={scheme[s]}" for s in hidden if s not in bound]
+    if skipped:
+        out.append(
+            f"skipped {len(skipped)} accent(s) that vanish into the page {page}: "
+            f"{', '.join(skipped)}"
+        )
+    for s in (s for s in hidden if s in bound):
+        out.append(
+            f"{bound[s]} is {s}={scheme[s]}, which vanishes into the page {page} "
+            f"({contrast_ratio(scheme[s], page):.2f}:1, {delta_e(scheme[s], page):.0f} ΔE)"
+        )
+    accents = sorted(str(k) for k in bind if str(k).startswith("accent-"))
+    for a, b in itertools.combinations(accents, 2):
+        apart = delta_e(hex_of(a), hex_of(b))
+        if apart < DISTINCT_DELTA_E:
+            out.append(
+                f"{a} and {b} are {apart:.0f} ΔE apart ({hex_of(a)}, {hex_of(b)}) — two series "
+                f"in one chart will read as one"
+            )
     ink = bind.get("ink")
     if ink in _DARK_SLOTS and ink != "dk1":
         out.append(f"ink came from {ink}, not dk1 — dk1 is not this template's darkest")

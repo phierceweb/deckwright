@@ -15,15 +15,23 @@ from deckwright.layouts.components import (
     component,
 )
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import has_text
 from deckwright.theme.model import Rect
 from deckwright.utils.text import LINE_HEIGHT
 
-from deckwright.components._shape import ARROWS, anchored, choice, flag, known_fields, pair_named
+from deckwright.components._shape import (
+    ARROWS,
+    anchored,
+    choice,
+    flag,
+    known_fields,
+    known_item_fields,
+    pair_named,
+)
 from deckwright.components._shared import coerce_int, require_list, subcontext
 from deckwright.components.card import card, plate_height
 from deckwright.components.connector import connector
 from deckwright.components.ellipse import ellipse
-from deckwright.utils.keys import unknown_field
 
 _FIELDS = ("items", "direction", "numbered", "current", "pair", "arrow")
 _ITEM_FIELDS = frozenset({"head", "body", "icon"})
@@ -97,17 +105,7 @@ def _items(ctx: SlideCtx) -> list[dict]:
             raise LayoutError(
                 f"slide {ctx.spec.index} (component 'flow'): step {index} needs a 'head'"
             )
-        unknown = sorted(set(item) - _ITEM_FIELDS)
-        if unknown:
-            raise LayoutError(
-                unknown_field(
-                    unknown[0],
-                    sorted(_ITEM_FIELDS),
-                    where=f"slide {ctx.spec.index} (component 'flow')",
-                    lead=f"step {index} has the unknown field",
-                    label="a step reads",
-                )
-            )
+        known_item_fields(ctx, item, _ITEM_FIELDS, index=index, noun="step")
     return items
 
 
@@ -179,7 +177,7 @@ def _plate_depth(
             ctx,
             width=width,
             heading=str(item["head"]),
-            copy=str(item.get("body") or ""),
+            copy=str(item["body"]) if has_text(item.get("body")) else "",
             icon=bool(item.get("icon")),
         )
         for item in items
@@ -213,7 +211,7 @@ def _badge(ctx: SlideCtx, rect: Rect, index: int, *, current: bool) -> RevealIte
 
 def _plate(ctx: SlideCtx, rect: Rect, item: dict, *, pair: str) -> list[RevealItem]:
     fields: dict = {"heading": str(item["head"]), "pair": pair}
-    if item.get("body"):
+    if has_text(item.get("body")):
         fields["body"] = str(item["body"])
     if item.get("icon"):
         fields["icon"] = str(item["icon"])

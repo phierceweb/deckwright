@@ -124,6 +124,7 @@ class ShapeRecord:
     lines: list[str] = field(default_factory=list)
     font_pt: float | None = None  # the dominant size; see line_pt for a mixed shape
     line_pt: list[float] = field(default_factory=list)
+    space_after_pt: list[float] = field(default_factory=list)  # one per line, as line_pt
     fg: str | None = None
     bg: str | None = None
     rendered: Rendered = "native"
@@ -163,6 +164,7 @@ class SlideRecord:
     placements: list[PlacementRecord] = field(default_factory=list)
     shapes: list[ShapeRecord] = field(default_factory=list)
     animations: list[dict[str, Any]] = field(default_factory=list)
+    transition: str | None = None  # the kind the show arrives on; `none` for a hard cut
 
     def texts(self) -> list[str]:
         """Text a PDF extractor should be able to find — native records, one entry per line."""

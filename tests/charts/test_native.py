@@ -12,7 +12,6 @@ from pptx.util import Pt
 
 from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec, Series
 from deckwright.charts.native import add_native_chart
-from deckwright.errors import ThemeError
 from deckwright.theme.chartstyle import ChartStyle
 from deckwright.theme.palette import build_palette
 
@@ -236,8 +235,9 @@ def test_a_single_series_column_still_paints_accent(ctx_factory):
     )
 
 
-def test_highlight_wins_over_the_categorical_colour(ctx_factory):
-    ctx = ctx_factory({"title": "T"})
+def test_a_multi_series_highlight_fades_the_rest_toward_the_ground_the_chart_is_on(ctx_factory):
+    """On an inverse slide the ground is the fixture's inverse, 2D0937, not the page."""
+    ctx = ctx_factory({"title": "T"}, background="inverse")
     spec = ChartSpec(
         type="column",
         categories=("Q1", "Q2"),
@@ -245,14 +245,11 @@ def test_highlight_wins_over_the_categorical_colour(ctx_factory):
         highlight=1,
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
-    highlight = ctx.theme.palette.role(ctx.theme.palette.accents[1])
-    for series in chart.series:
-        assert str(series.points[1].format.fill.fore_color.rgb) == highlight
-    # Only of the first series: the second series' own cycle colour *is* the highlight.
-    assert str(chart.series[0].points[0].format.fill.fore_color.rgb) != highlight
+    fills = [[str(p.format.fill.fore_color.rgb) for p in s.points] for s in chart.series]
+    assert fills == [["2A6142", "27B94C"], ["226C88", "18CEDA"]]
 
 
-def test_highlight_wins_over_the_pie_palette_too(ctx_factory):
+def test_a_highlighted_pie_writes_its_isolated_wedge_fills(ctx_factory):
     ctx = ctx_factory({"title": "T"})
     spec = ChartSpec(
         type="pie",
@@ -261,13 +258,8 @@ def test_highlight_wins_over_the_pie_palette_too(ctx_factory):
         highlight=1,
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
-    points = chart.series[0].points
-    assert str(points[1].format.fill.fore_color.rgb) == ctx.theme.palette.role(
-        ctx.theme.palette.accents[1]
-    )
-    assert str(points[0].format.fill.fore_color.rgb) != ctx.theme.palette.role(
-        ctx.theme.palette.accents[1]
-    )
+    fills = [str(p.format.fill.fore_color.rgb) for p in chart.series[0].points]
+    assert fills == ["9EE0AE", "27B94C", "62CC7D"]
 
 
 def test_a_pie_chart_shows_category_name_labels(ctx_factory):
@@ -695,25 +687,6 @@ def test_a_bubble_point_takes_its_fill_from_the_theme(ctx_factory, chart_type):
     assert str(fill.fore_color.rgb) == ctx.theme.palette.role(ctx.theme.palette.accents[0])
 
 
-def test_a_highlighted_point_on_a_marker_chart_fills_its_marker(ctx_factory):
-    """The one dPt a stroke series may carry — and it wraps the fill in `c:marker`,
-    which is what keeps LibreOffice from misassigning it."""
-    ctx = ctx_factory({"title": "T"})
-    spec = ChartSpec(
-        type="line-markers",
-        categories=("a", "b", "c"),
-        series=(Series(name="A", values=(1.0, 2.0, 3.0)),),
-        highlight=1,
-    )
-    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
-    xml = chart.series[0]._element.xml
-    assert xml.count("<c:dPt>") == 1
-    import re
-
-    dpt = re.search(r"<c:dPt>.*?</c:dPt>", xml, re.S).group(0)
-    assert "<c:marker>" in dpt
-
-
 def test_y_min_and_y_max_set_the_value_axis_scale_on_an_xy_chart(ctx_factory):
     ctx = ctx_factory({"title": "T"})
     spec = ChartSpec(
@@ -1028,11 +1001,9 @@ def test_a_normal_type_still_honours_its_unit(ctx_factory):
     assert '"%"' in labels.number_format
 
 
-def test_a_one_accent_palette_refuses_to_paint_a_highlight(
-    ctx_factory, theme, chart_spec_highlighted
-):
-    """No theme YAML can reach this: ``theme/blocks.py`` always carries accent-1..4. The
-    library-consumer path — a Palette built in Python — can."""
+def _one_accent_ctx(ctx_factory, theme):
+    """No theme YAML can build this: ``theme/blocks.py`` always carries accent-1..4. The
+    library-consumer path, a Palette built in Python, can."""
     palette = build_palette(
         {
             "page": "FFFFFF",
@@ -1051,39 +1022,14 @@ def test_a_one_accent_palette_refuses_to_paint_a_highlight(
             "inverse": ("inverse-ink", "inverse"),
         },
     )
-    ctx = ctx_factory({"title": "T"}, theme_override=dataclasses.replace(theme, palette=palette))
-
-    with pytest.raises(ThemeError, match="declares 1 accent role"):
-        add_native_chart(ctx, chart_spec_highlighted, ctx.body_rect)
+    return ctx_factory({"title": "T"}, theme_override=dataclasses.replace(theme, palette=palette))
 
 
 def test_a_one_accent_palette_still_paints_a_chart_that_asked_for_no_highlight(
     ctx_factory, theme, chart_spec
 ):
-    """The refusal above is about `highlight:`, not about short palettes. Resolving the
-    highlight colour for every chart would let it refuse a chart nobody marked."""
-    palette = build_palette(
-        {
-            "page": "FFFFFF",
-            "ink": "2D0937",
-            "muted": "573C65",
-            "line": "EDEDED",
-            "surface": "F5F6F8",
-            "surface-ink": "2D0937",
-            "inverse": "2D0937",
-            "inverse-ink": "FFFFFF",
-            "accent-1": "27B94C",
-        },
-        pairs={
-            "page": ("ink", "page"),
-            "surface": ("surface-ink", "surface"),
-            "inverse": ("inverse-ink", "inverse"),
-        },
-    )
-    ctx = ctx_factory({"title": "T"}, theme_override=dataclasses.replace(theme, palette=palette))
-
+    ctx = _one_accent_ctx(ctx_factory, theme)
     chart = add_native_chart(ctx, chart_spec, ctx.body_rect).chart
-
     assert str(chart.series[0].format.fill.fore_color.rgb) == "27B94C"
 
 
@@ -1339,10 +1285,11 @@ def test_a_bar_legend_keeps_its_own_column(ctx_factory, theme):
 @pytest.mark.parametrize(
     "chart_type,expected",
     [
-        # `inEnd` is a position only the bar family and a pie offer.
+        # `inEnd` is a position only the bar family offers.
         ("column", "inEnd"),
         ("bar", "inEnd"),
-        ("pie", "inEnd"),
+        # A pie is pinned to `ctr` outright — it never reaches the theme's own setting.
+        ("pie", "ctr"),
         # These groups offer none; a `c:dLblPos` in one is what asks to repair the file.
         ("doughnut", None),
         ("area", None),
@@ -1357,7 +1304,7 @@ def test_a_theme_position_is_written_only_where_the_chart_group_offers_it(
     ctx_factory, theme, chart_type, expected
 ):
     """`label_position: inside_end` is authorable on any theme, but most chart groups offer
-    PowerPoint no position at all."""
+    PowerPoint no position at all — and a pie ignores it, always pinned to `ctr` instead."""
     styled = dataclasses.replace(
         theme, chart=ChartStyle(thousands_sep=False, label_position="inside_end")
     )
@@ -1537,6 +1484,35 @@ def test_each_wedge_label_is_inked_for_its_own_wedge(ctx_factory, theme):
     inks = [by_point.get(str(i), series_ink) for i in range(3)]
     assert inks == [["FFFFFF"], ["2D0937"], ["FFFFFF"]]
     assert all(d.find(qn("c:showCatName")).get("val") == "1" for d in own.findall(qn("c:dLbl")))
+    _assert_chart_valid(chart._chartSpace)
+
+
+def test_a_pie_labels_position_is_pinned_to_center(ctx_factory):
+    """`bestFit`, what an unset position falls back to, can push a small wedge's label past
+    the rim; `ctr` keeps every wedge's label on the wedge it names, whatever the theme asks
+    for elsewhere — a pie never reaches `_LABEL_POSITIONS` at all."""
+    ctx = ctx_factory({"title": "T"})
+    spec = ChartSpec(
+        type="pie",
+        categories=("Q1", "Q2", "Q3", "Q4", "Q5"),
+        series=(Series(name="Share", values=(30.0, 25.0, 20.0, 15.0, 10.0)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.position == XL_DATA_LABEL_POSITION.CENTER
+    _assert_chart_valid(chart._chartSpace)
+
+
+def test_a_doughnuts_labels_take_no_position_at_all(ctx_factory):
+    """Unlike a pie, a doughnut's ring never narrows to a point, and `c:dLblPos` is a
+    schema mismatch PowerPoint asks to repair the file over for this kind."""
+    ctx = ctx_factory({"title": "T"})
+    spec = ChartSpec(
+        type="doughnut",
+        categories=("Q1", "Q2", "Q3", "Q4", "Q5"),
+        series=(Series(name="Share", values=(30.0, 25.0, 20.0, 15.0, 10.0)),),
+    )
+    chart = add_native_chart(ctx, spec, ctx.body_rect).chart
+    assert chart.plots[0].data_labels.position is None
     _assert_chart_valid(chart._chartSpace)
 
 

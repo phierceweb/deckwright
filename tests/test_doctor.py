@@ -27,7 +27,7 @@ def test_a_missing_external_tool_warns_and_never_fails(monkeypatch):
     monkeypatch.setenv("DECKWRIGHT_PDFTOTEXT", "/nope/pdftotext")
     monkeypatch.setenv("DECKWRIGHT_FC_LIST", "/nope/fc-list")
     monkeypatch.setenv("DECKWRIGHT_CHROME", "")
-    monkeypatch.setattr("deckwright.services.htmlshot.os.path.exists", lambda _: False)
+    monkeypatch.setattr("deckwright.services.chrome.os.path.exists", lambda _: False)
 
     results = doctor.check_tools()
     assert {r.name for r in results} == {"soffice", "pdftoppm", "pdftotext", "fc-list", "chrome"}
@@ -37,7 +37,7 @@ def test_a_missing_external_tool_warns_and_never_fails(monkeypatch):
 def test_every_missing_tool_names_a_command_that_installs_it(monkeypatch):
     """A warning nobody can act on gets scrolled past."""
     monkeypatch.setattr(doctor.shutil, "which", lambda _: None)
-    monkeypatch.setattr("deckwright.services.htmlshot.os.path.exists", lambda _: False)
+    monkeypatch.setattr("deckwright.services.chrome.os.path.exists", lambda _: False)
     monkeypatch.setenv("DECKWRIGHT_CHROME", "")
     for result in doctor.check_tools():
         assert "brew " in result.detail or "apt-get " in result.detail, result.detail
@@ -190,6 +190,57 @@ def test_the_fonts_row_warns_and_names_the_face_this_machine_lacks(monkeypatch):
         ),
         pytest.param("name: base\nmotion: 5\n", "motion is a mapping", id="motion-not-a-mapping"),
         pytest.param("name: base\nchart: 5\n", "chart is a mapping", id="chart-not-a-mapping"),
+        pytest.param(
+            "name: base\nscale: {2021-01-01: x, zzz: y}\n",
+            "unknown key 2021-01-01",
+            id="scale-date-key",
+        ),
+        pytest.param(
+            "name: base\nchart: {gap_width: .inf}\n",
+            "chart.gap_width must be an int, got inf",
+            id="chart-gap-width-infinite",
+        ),
+        pytest.param(
+            "name: base\nchart: {shadow_blur_pt: .nan}\n",
+            "chart.shadow_blur_pt must be a finite number, got nan",
+            id="chart-float-nan",
+        ),
+        pytest.param('name: base\nicons: "a\\0b"\n', "icons 'a\\x00b' holds a NUL", id="icons-nul"),
+        pytest.param(
+            'name: base\ntemplate: "a\\0b.pptx"\n',
+            "template 'a\\x00b.pptx' holds a NUL",
+            id="template-nul",
+        ),
+        pytest.param(
+            f"name: base\nicons: {'x' * 300}\n",
+            "has a name longer than the filesystem allows",
+            id="icons-name-too-long",
+        ),
+        pytest.param(
+            "name: base\ntemplate: loop/brand.pptx\n",
+            "template 'loop/brand.pptx' runs into a symlink loop",
+            id="template-symlink-loop",
+        ),
+        pytest.param(
+            "name: base\ntype: {min_pt: -10.0}\n",
+            "type.min_pt is a point size above zero, got -10.0",
+            id="min-pt-negative",
+        ),
+        pytest.param(
+            "name: base\ntype: {reference_height: 5.0e-324}\n",
+            "type.reference_height is 5e-324, too small to divide by",
+            id="reference-height-too-small",
+        ),
+        pytest.param(
+            "name: base\nscale: {margin: {top: nan%}}\n",
+            "top is a percent of the canvas, got 'nan%'",
+            id="margin-nan",
+        ),
+        pytest.param(
+            "name: base\ntype: {ramp: {title: {pt: 34, face: [a]}}}\n",
+            "face is one typeface name, like 'Helvetica', got ['a']",
+            id="ramp-face-list",
+        ),
     ],
 )
 def test_a_base_theme_that_will_not_load_still_prints_a_table(
@@ -198,6 +249,7 @@ def test_a_base_theme_that_will_not_load_still_prints_a_table(
     """Every row after the theme check still prints, and the theme row says what is wrong."""
     monkeypatch.setattr("deckwright.doctor.installed_families", lambda: frozenset({"helvetica"}))
     monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
+    (tmp_path / "loop").symlink_to(tmp_path / "loop")
     (tmp_path / "base.theme.yaml").write_text(theme_yaml, encoding="utf-8")
 
     results = doctor.run_checks()

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 from deckwright.errors import LayoutError, ThemeError
 from deckwright.theme.model import Rect
 from deckwright.theme.scale import Grid, Scale
+from deckwright.utils.keys import refuse_unknown
 from deckwright.utils.poly import poly_hits_box, poly_x_span
 from deckwright.utils.spans import Share, divides, resolve as resolve_span
 
@@ -115,11 +116,9 @@ def resolve_at(at: dict, *, grid: Grid, area: Rect, where: str) -> Rect:
         raise LayoutError(
             f"{where}: 'at' must be a mapping with 'cols' or 'box', got {type(at).__name__}"
         )
-    unknown = sorted(set(at) - set(AT_KEYS))
-    if unknown:
-        raise LayoutError(
-            f"{where}: unknown 'at' key {unknown[0]!r}; known keys: {', '.join(AT_KEYS)}"
-        )
+    refuse_unknown(
+        at, AT_KEYS, error=LayoutError, where=where, lead="unknown 'at' key", label="known keys"
+    )
     if "box" in at:
         if "cols" in at or "rows" in at:
             raise LayoutError(f"{where}: 'box' cannot be combined with 'cols' or 'rows'")

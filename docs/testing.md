@@ -12,6 +12,7 @@ deck* — bounds, safe zones, min font size, contrast, render overflow — see
 
 ## Table of Contents
 
+- [Running the suite](#running-the-suite)
 - [Why these rules](#why-these-rules)
 - [The template test is the primary guard](#the-template-test-is-the-primary-guard)
 - [What only a unit test can guard](#what-only-a-unit-test-can-guard)
@@ -22,6 +23,29 @@ deck* — bounds, safe zones, min font size, contrast, render overflow — see
 - [Raw OOXML has its own gate](#raw-ooxml-has-its-own-gate)
 - [Adding a capability](#adding-a-capability)
 - [Adding a unit test](#adding-a-unit-test)
+
+## Running the suite
+
+`bin/test` runs pytest through the project's interpreter and passes its arguments on.
+
+- **A whole-suite run spreads across every core** when `pytest-xdist` is installed, as it is
+  with the `[dev]` extras: `bin/test` adds `-n auto --dist loadgroup`. Each brand template's
+  tests form one xdist group, so its `conform` run builds once, on one worker, and
+  `tests/test_templates.py` takes as long as its slowest template rather than the sum of all
+  of them.
+- **Selected tests run in one process**: a path or node id, `-k`, `--lf`. Starting a worker
+  per core costs more than a handful of tests take. `--pdb`, `--trace`, `--collect-only`,
+  and anything already passing `-n`, `-p` or `--dist` reach pytest untouched, so a selection
+  worth spreading takes the flags itself:
+  `bin/test tests/test_templates.py -n auto --dist loadgroup`.
+- **`bin/test -n0`** runs the whole suite serially, which is also what happens without
+  xdist installed.
+
+A test must stay safe beside a copy of itself on another worker: take paths from `tmp_path`,
+set environment through `monkeypatch`, and write a shared cache through an atomic replace, as
+the panel and media caches do. A new expensive module-scoped fixture gets an `xdist_group`
+per parameter, as the one in `tests/test_templates.py` does, or each worker that draws one of
+its tests builds it again.
 
 ## Why these rules
 
@@ -39,6 +63,10 @@ machinery agrees with itself.
 Do not add figures to this doc. Counts of tests, exercises, templates, or coverage rot
 on the next commit and settle nothing; the rules below are what survives, and each one
 names the mutation that defeats the test it argues against.
+
+To see which lines the suite never runs, install `coverage` and `pytest-cov` into a scratch
+directory on `PYTHONPATH` and pass `--cov=deckwright` to `bin/test`. The project pins
+neither, and a line that runs is not a line that is guarded: the mutation is still the test.
 
 ## The template test is the primary guard
 
@@ -96,10 +124,10 @@ Write one when the behaviour is unreachable from a successful build, or invisibl
 output:
 
 - **Guard clauses and their error type.** Every validation raise in `spec/parse.py`,
-  `theme/load.py`, `theme/chartstyle.py`, `charts/model.py` and the components is
-  unit-tested and only unit-tested. Neutering one to `if False:` passes the rest of the
-  suite. A `ThemeError` degrading into a raw `TypeError` is a real regression nothing
-  else sees.
+  `spec/_slide.py`, `spec/_checks.py`, `theme/load.py`, `theme/chartstyle.py`,
+  `charts/model.py` and the components is unit-tested and only unit-tested. Neutering
+  one to `if False:` passes the rest of the suite. A `ThemeError` degrading into a raw
+  `TypeError` is a real regression nothing else sees.
 - **Silent acceptance of unknown keys.** Replacing an `unknown = sorted(set(cfg) - set(_KEYS))`
   check with `unknown = []` is invisible everywhere except its own unit test — and a spec
   field silently dropped is the failure the parser exists to prevent.
@@ -226,6 +254,14 @@ schemas vendored in `tests/schemas/ooxml/`, and carries a negative control that 
 required attribute and asserts the gate reddens. Without that control, a validator that
 silently passed everything would look identical to one that works.
 
+`pml.xsd` has no `mc:AlternateContent`, so a slide carrying one never validates whole. A
+writer that emits one — an equation, a morph, a 3D model — validates through `_branch(root,
+"Choice")` and `_branch(root, "Fallback")`: each is the slide one reader sees, with the
+wrapper replaced by that branch. The vendored schemas carry no extension namespace, so
+`_branch` removes what the Choice's `Requires` names and validates the ISO structure around
+it. Its negative control breaks one branch at a time: that branch must redden and the other
+still pass. A harness that dropped the wrapper, or read one branch for both, fails it.
+
 **Schema-valid is a floor, not proof.** Only real PowerPoint says whether a file opens
 without a repair prompt. See [`motion.md`](motion.md#verification).
 
@@ -238,9 +274,9 @@ the family module in `src/deckwright/conform/` that owns the shape. That is the 
    use the feature. No brand words: the point is what the *template* can carry.
 2. Keep it minimal but representative. `conform` builds each exercise as its own one-slide
    deck so a failure names itself, then builds one whole deck from everything that passed.
-3. Run `bin/test tests/test_templates.py`. The feature is now driven against every
-   template you hold, and its geometry, contrast and reserved-region behaviour checked on
-   each.
+3. Run `bin/test tests/test_templates.py -n auto --dist loadgroup`. The feature is now
+   driven against every template you hold, and its geometry, contrast and reserved-region
+   behaviour checked on each.
 
 Do not follow this with a unit test for the same feature's arithmetic. It is redundant by
 construction — see [Redundant tests](#redundant-tests).

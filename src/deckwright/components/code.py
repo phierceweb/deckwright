@@ -15,7 +15,7 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.utils.shapes import para, rrect
 
-from deckwright.components._shape import known_fields, pair_named
+from deckwright.components._shape import flag, known_fields, pair_named
 from deckwright.components._shared import head as head_line
 
 _FIELDS = ("lines", "text", "heading", "pair", "accent", "wrap", "size")
@@ -58,7 +58,7 @@ def code(ctx: SlideCtx) -> BodyResult:
 
     plate = rrect(ctx.slide, rect.left, top, rect.width, plate_h, ctx.rgb(pair.bg), radius=0.04)
     frame = plate.text_frame
-    frame.word_wrap = bool(ctx.body.get("wrap", False))
+    frame.word_wrap = flag(ctx, "wrap")
     frame.vertical_anchor = MSO_ANCHOR.TOP
     frame.margin_left = frame.margin_right = Inches(_PAD_X)
     frame.margin_top = frame.margin_bottom = Inches(_PAD_Y)

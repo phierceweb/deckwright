@@ -170,6 +170,21 @@ def test_an_explicit_text_wins_over_the_join(slide):
     assert rec.text == "explicit"
 
 
+def test_the_space_after_each_line_is_written_into_the_manifest(slide):
+    m = ManifestRecorder(deck="d.pptx", theme="t")
+    m.begin_slide(1, background="page")
+    m.record(_box(slide), lines=["alpha", "beta"], space_after_pt=[8, 0])
+    assert m.to_dict()["slides"][0]["shapes"][0]["space_after_pt"] == [8, 0]
+
+
+def test_a_spacing_list_that_does_not_match_the_lines_is_refused(slide):
+    """`text-fit` pairs each spacing with its line; one short would shift every gap."""
+    m = ManifestRecorder(deck="d.pptx", theme="t")
+    m.begin_slide(1, background="page")
+    with pytest.raises(InvalidInputError, match="space_after_pt has 1 spacing"):
+        m.record(_box(slide), lines=["alpha", "beta"], space_after_pt=[8])
+
+
 def test_lines_default_to_empty(slide):
     m = ManifestRecorder(deck="d.pptx", theme="t")
     m.begin_slide(1, background="page")

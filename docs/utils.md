@@ -31,6 +31,7 @@ with teeth, and `bin/check-framework` is what enforces it.
 - [`mce.py` — shapes inside `mc:AlternateContent`](#mcepy--shapes-inside-mcalternatecontent)
 - [`a11y.py` — alternative text and the decorative flag](#a11ypy--alternative-text-and-the-decorative-flag)
 - [`links.py` — `[words](address)` in copy](#linkspy--wordsaddress-in-copy)
+- [`provenance.py` — which manifest describes a deck](#provenancepy--which-manifest-describes-a-deck)
 - [What was checked against pf-core](#what-was-checked-against-pf-core)
 - [Adding a helper here](#adding-a-helper-here)
 
@@ -59,10 +60,12 @@ Two consequences, both easy to break by habit:
 
 ## `color.py` — the WCAG maths
 
-`relative_luminance`, `contrast_ratio`, `required_ratio`, `delta_e` (CIE76 colour difference, which
-`qa`'s `fill-ground` pairs with luminance so a saturated accent on a pale page is not called
-invisible) and `normalize_hex`, plus the
-`AA_NORMAL` / `AA_LARGE` / `LARGE_PT` constants. `theme/palette.py`, every component that
+`relative_luminance`, `contrast_ratio`, `required_ratio`, `delta_e` (CIE76 colour difference)
+and `normalize_hex`, plus the `AA_NORMAL` / `AA_LARGE` / `LARGE_PT` / `DISTINCT_DELTA_E`
+constants. `stands_off(fill, ground)` is the rule for a fill against its ground: 3:1 apart
+in luminance, or `DISTINCT_DELTA_E` apart in colour, so a saturated accent on a pale page
+is not called invisible. `qa`'s `fill-ground` check, `conform`'s accent derivation and
+`diverge`'s bar colours all apply it. `theme/palette.py`, every component that
 picks ink against a fill, `imagery/scrim.py`'s auto-opacity solve and `qa/geometry.py`'s
 contrast check all decide against this one implementation, so a slide that passes at
 build time and a `deckwright qa` finding cannot disagree about what 4.5:1 means.
@@ -199,18 +202,23 @@ the caller passed a `fallback`.
 
 ## `keys.py` — one wording for an unknown key
 
-`unknown_field(key, known, *, where=, lead=, label=, suggest=)` is the sentence every
-"you named a key nobody declared" error ends in, and `prose_hint(key)` is the clause it
-appends when the key holds a space. Spec parsing, placement, charts, the shape
-components and the theme's chart block all raise through it, so `docs/errors.md` can
-document one shape and an author sees the same wording from every layer.
+`refuse_unknown(keys, known, *, error=, where=, lead=, label=, suggest=)` raises the
+caller's `error` naming the first key outside `known`; `unknown_field(...)` is the sentence
+it raises with, and `prose_hint(key)` the clause appended when the key holds a space. Every
+unknown-key refusal in the spec, the components, charts, layouts and the theme goes through
+`refuse_unknown`, so `docs/errors.md` can document one shape and an author sees the same
+wording from every layer.
 
-Two behaviours to keep when touching it:
+Three behaviours to keep when touching it:
 
 - **A key with a space in it is an unquoted comma.** Every declared field is snake_case,
   so a space means YAML split a flow mapping and truncated the value with it. The hint
   says to quote the value, and the "did you mean" suggestion is suppressed for that key:
   the nearest spelling of `items: one, two` is never the answer.
+- **A key that is not a string is YAML's reading of it.** `on:` loads as `True`,
+  `2021-01-01:` as a date, `~:` as `None`. Keys sort as text before the first is named,
+  since those types do not order against a string, and the message names the key as YAML
+  read it (`true`, `2021-01-01`, `null`) with a note to quote it — never a "did you mean".
 - **The caller owns the sentence around it.** Pass `where=` for a full message, or
   leave it off for a fragment the caller prefixes; `lead=` and `label=` are the only
   wording that differs between callers. Do not build a second unknown-key message by
@@ -317,9 +325,24 @@ the same proxies with each wrapper replaced by one branch: the `mc:Fallback`, or
 `mc:Choice` when there is none. That is the branch ISO/IEC 29500-3 §7.5 gives a reader that
 understands none of the extension namespaces, which deckwright is.
 
+`alternate(fallback, choice, requires=, namespace=)` writes one: it puts the two branches
+where `fallback` stood, the way `equation:` stores its maths. `unread(element)` says whether
+an element sits in a branch that reader passes over, so a check can ignore what the render
+never draws.
+
 `qa/inspect.py` and `compile/readback.py` read through it, so `inspect` lists the shape and
-`diff` stops reporting it `gone`. `spec/_tree.py` (`extract`) and `qa/package.py` do not:
-extract names the wrapper in `dropped`, and the package check walks both branches.
+`diff` stops reporting it `gone`. `resolved_children(tree)` is the same walk over every
+child, shape or not; `spec/_tree.py` reads through it, so `extract` harvests the branch and
+still names anything in it python-pptx cannot build.
+
+Two callers ask which branch an element sits in rather than reading one:
+
+- `apart(first, second)` says whether no reader sees both elements, because an
+  `mc:AlternateContent` holds them in different branches. `qa/package.py` uses it so a
+  Choice and its Fallback may share an id and a name while two shapes one reader sees may not.
+- `in_fallback(element)` says whether the element sits in an `mc:Fallback`.
+  `motion/_tree.py` skips those when deciding which shapes earn a `<p:bldP>`, because
+  PowerPoint reads the Choice.
 
 ## `a11y.py` — alternative text and the decorative flag
 
@@ -336,11 +359,20 @@ through the first, and `qa`'s `alt-text` check, which has no shape proxies, thro
 and `addresses(text)` lists where it links. `text.py` and `versus`'s word floor measure
 `plain`, so an address never widens a line, and `figure_text` stores `alt:` as `plain`.
 `shapes.para()` writes one run per span, a link through `link_run`; `ManifestRecorder.record`
-stores the words and the addresses; `spec/parse.py` refuses a bad address before anything is
+stores the words and the addresses; `spec/_checks.py` refuses a bad address before anything is
 drawn; and `spec/_tree.py` writes a hyperlinked run back as markup for `extract`.
 `para(links=False)` and `record(literal=True)` keep markup as written, which is what `code`
 asks for. `web_address_problem` is the one test of an address, shared by the spec check,
 `para()` and `qa`'s `link` check.
+
+## `provenance.py` — which manifest describes a deck
+
+A built deck carries its build id in `dc:identifier`, after `BUILD_PREFIX`.
+`find_manifest(deck, identifier)` returns the manifest beside the deck under its own name,
+else the one beside it recording that build id — so a copy saved under another name still
+finds its build. `diff` reads a copy back through it, and `extract` takes a placement's
+box from the manifest it finds. It lives here rather than in `compile/` because `spec/`
+sits below `compile/` and cannot import it.
 
 ## What was checked against pf-core
 

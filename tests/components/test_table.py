@@ -380,6 +380,24 @@ def test_banding_fills_alternate_body_rows_only(ctx_factory):
     assert first == third, "and the third body row returns to the first's fill"
 
 
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ({"banding": "no"}, r"'banding' must be true or false, got 'no'"),
+        (
+            {"rows": [[{"text": "a", "emphasis": "no"}, "b"]]},
+            r"row 1 cell 1 'emphasis' must be true or false, got 'no'",
+        ),
+    ],
+    ids=["banding", "emphasis"],
+)
+def test_a_flag_that_is_no_boolean_is_refused(ctx_factory, body, message):
+    """A quoted `"no"` is text, and every string is truthy: it would turn the flag on."""
+    ctx = ctx_factory({"table": {"rows": [["a", "b"]], **body}})
+    with pytest.raises(LayoutError, match=message):
+        get_component("table")(ctx)
+
+
 def test_without_banding_every_body_row_shares_a_surface(ctx_factory):
     ctx = ctx_factory({"table": {"header": ["A", "B"], "rows": [["1", "2"], ["3", "4"]]}})
     get_component("table")(ctx)

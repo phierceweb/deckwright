@@ -7,6 +7,7 @@ from pptx.util import Inches
 from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
+from deckwright.spec._scalars import has_text
 from deckwright.theme.model import Rect, TypeStyle
 from deckwright.utils.shapes import ANCHOR, para, rrect, textbox
 from deckwright.utils.text import estimate_caveat, overlong_word
@@ -52,7 +53,7 @@ def stats(ctx: SlideCtx) -> BodyResult:
     tile_h += mark
     rows = -(-len(items) // columns)
     extent = (rows - 1) * (tile_h + gutter) + tile_h
-    if ctx.body.get("caption"):
+    if has_text(ctx.body.get("caption")):
         extent = rows * (tile_h + gutter) + caption_gap + caption_h
     if extent > rect.height:
         raise LayoutError(
@@ -86,7 +87,7 @@ def stats(ctx: SlideCtx) -> BodyResult:
             shapes.append((place_mark(ctx, str(item["icon"]), box), "figure"))
         for text, style in (
             (str(item["value"]), value_style),
-            (str(item.get("label") or ""), label_style),
+            (str(item["label"]) if has_text(item.get("label")) else "", label_style),
         ):
             _refuse_overlong(ctx, text, width=tile_w - 2 * _MARGIN_X, style=style)
         tf = tile.text_frame
@@ -105,7 +106,7 @@ def stats(ctx: SlideCtx) -> BodyResult:
             space_after=0,
             font=ctx.theme.font_for(value_style),
         )
-        if item.get("label"):
+        if has_text(item.get("label")):
             para(
                 tf,
                 str(item["label"]),
@@ -117,9 +118,11 @@ def stats(ctx: SlideCtx) -> BodyResult:
             )
         ctx.manifest.record(
             tile,
-            lines=[str(item["value"])] + ([str(item["label"])] if item.get("label") else []),
+            lines=[str(item["value"])]
+            + ([str(item["label"])] if has_text(item.get("label")) else []),
             font_pt=value_style.size,
-            line_pt=[value_style.size] + ([label_style.size] if item.get("label") else []),
+            line_pt=[value_style.size]
+            + ([label_style.size] if has_text(item.get("label")) else []),
             # Dominant colour is the value's (it matches font_pt); bg is the tile's own
             # fill, not the page background — that's what the text sits on.
             fg=value_ink,
@@ -128,7 +131,7 @@ def stats(ctx: SlideCtx) -> BodyResult:
         groups.append(shapes)
 
     caption = ctx.body.get("caption")
-    if caption and groups:
+    if has_text(caption) and groups:
         y = rect.top + rows * (tile_h + gutter) + caption_gap
         tf = textbox(ctx.slide, rect.left, y, rect.width, caption_h)
         caption_style = ctx.style("body")

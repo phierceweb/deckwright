@@ -93,6 +93,31 @@ def motion_slides() -> dict[str, dict[str, Any]]:
             }
         ],
     }
+    # Adjacent on purpose: alone each is one slide with nothing to pair, and the pair
+    # exists only where the two follow one another.
+    slides["morph-from"] = {
+        "title": "A card, before",
+        "subtitle": "The next slide carries the same card, larger",
+        "place": [
+            {
+                "at": {"cols": {"from": 0, "to": 5}, "rows": {"from": 0, "to": 6}},
+                "morph": "figure",
+                "card": {"heading": "Revenue", "body": "Up 12% on the year"},
+            }
+        ],
+    }
+    slides["morph-to"] = {
+        "title": "The same card, after",
+        "subtitle": "A Morph transition, with a fade as its fallback",
+        "transition": "morph",
+        "place": [
+            {
+                "at": {"cols": {"from": 3, "to": 12}, "rows": {"from": 0, "to": 8}},
+                "morph": "figure",
+                "card": {"heading": "Revenue", "body": "Up 12% on the year"},
+            }
+        ],
+    }
     return slides
 
 

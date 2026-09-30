@@ -20,6 +20,7 @@ Add a rule when a review finds the same hand-roll twice — not the first time.
     bin/check-framework            # the whole package
     bin/check-framework a.py b.py  # just these
 """
+
 from __future__ import annotations
 
 import ast
@@ -34,14 +35,20 @@ SRC = ROOT / "src" / "deckwright"
 
 # Modules pf-core replaces outright. {import: (what to use instead, what it buys)}
 BANNED_IMPORTS = {
-    "logging": ("pf_core.log.get_logger(__name__)",
-                "structured events, and the project's log level and file wiring"),
-    "dotenv": ("pf_core.config.load_env",
-               "entry points already load .env; a second loader fights the first"),
+    "logging": (
+        "pf_core.log.get_logger(__name__)",
+        "structured events, and the project's log level and file wiring",
+    ),
+    "dotenv": (
+        "pf_core.config.load_env",
+        "entry points already load .env; a second loader fights the first",
+    ),
     "requests": ("pf_core.clients", "timeouts, retries and usage tracking"),
     "httpx": ("pf_core.clients", "timeouts, retries and usage tracking"),
-    "concurrent.futures": ("pf_core.parallel.run_parallel",
-                           "a reporter, resilient failure collection, one cap on width"),
+    "concurrent.futures": (
+        "pf_core.parallel.run_parallel",
+        "a reporter, resilient failure collection, one cap on width",
+    ),
     "multiprocessing": ("pf_core.parallel.run_parallel", "the same, without the process cost"),
 }
 
@@ -54,27 +61,48 @@ BANNED_RAISES = {
 
 # (name, pattern, what to use, why). `name` is what an exemption refers to.
 BANNED_CALLS = [
-    ("env-read", re.compile(r"\bos\.(environ|getenv)\b"),
-     "pf_core.utils.env.resolve_int/resolve_str/resolve_bool",
-     "malformed values warn and fall back instead of crashing"),
-    ("print", re.compile(r"(?<![\w.])print\s*\("),
-     "pf_core.log.get_logger(__name__), or typer.echo at the CLI boundary",
-     "print() in a service is output nobody can level, filter or redirect"),
-    ("logger-exception", re.compile(r"\blogger\.exception\s*\("), "pf_core.log.log_exception",
-     "it carries the structured context and the project's event prefix"),
-    ("atomic-write", re.compile(r"\bos\.replace\s*\("),
-     "pf_core.utils.io.atomic_write_text / _json / _bytes",
-     "the temp-file-then-rename dance is already written and tested"),
+    (
+        "env-read",
+        re.compile(r"\bos\.(environ|getenv)\b"),
+        "pf_core.utils.env.resolve_int/resolve_str/resolve_bool",
+        "malformed values warn and fall back instead of crashing",
+    ),
+    (
+        "print",
+        re.compile(r"(?<![\w.])print\s*\("),
+        "pf_core.log.get_logger(__name__), or typer.echo at the CLI boundary",
+        "print() in a service is output nobody can level, filter or redirect",
+    ),
+    (
+        "logger-exception",
+        re.compile(r"\blogger\.exception\s*\("),
+        "pf_core.log.log_exception",
+        "it carries the structured context and the project's event prefix",
+    ),
+    (
+        "atomic-write",
+        re.compile(r"\bos\.replace\s*\("),
+        "pf_core.utils.io.atomic_write_text / _json / _bytes",
+        "the temp-file-then-rename dance is already written and tested",
+    ),
 ]
 
 # {(rule, path relative to SRC): why it does not apply}. Every entry is a claim someone
 # can check — and the path is the whole path, because two files can share a basename and
 # an exemption written for one of them must not cover the other.
 EXEMPT = {
-    ("print", "cli.py"): "the CLI entry point is where user-facing output belongs",
-    ("atomic-write", "panels/cache.py"):
-        "an external renderer writes the cache's bytes; we never hold them, so there "
-        "is nothing in hand for an atomic write to write",
+    ("print", "cli/__init__.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/__main__.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/_app.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/build.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/glyphs.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/onboarding.py"): "the CLI entry point is where user-facing print output belongs",
+    ("print", "cli/reading.py"): "the CLI entry point is where user-facing print output belongs",
+    (
+        "atomic-write",
+        "panels/cache.py",
+    ): "an external renderer writes the cache's bytes; we never hold them, so there "
+    "is nothing in hand for an atomic write to write",
 }
 
 

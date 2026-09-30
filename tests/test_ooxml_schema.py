@@ -5,6 +5,7 @@ what says whether a file opens without a repair prompt. See `docs/pptx-deck-buil
 
 from __future__ import annotations
 
+import copy
 import io
 import pathlib
 import re
@@ -28,6 +29,10 @@ from deckwright.motion.transition import EFFECTS, SPEEDS
 
 SCHEMA = pathlib.Path(__file__).parent / "schemas" / "ooxml" / "pml.xsd"
 _PML = "http://schemas.openxmlformats.org/presentationml/2006/main"
+_DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+_A14 = "http://schemas.microsoft.com/office/drawing/2010/main"
+_OMML = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 
 @pytest.fixture(scope="module")
@@ -64,6 +69,110 @@ def _validate(schema, prs) -> list[str]:
     if schema.validate(doc):
         return []
     return [e.message for e in schema.error_log]
+
+
+def _branch(root, which: str):
+    """A copy of ``root`` with every ``mc:AlternateContent`` replaced by the children of its
+    ``which`` branch, ``"Choice"`` or ``"Fallback"`` — the slide one reader sees.
+
+    The vendored schemas carry no extension namespace, so what a Choice ``Requires`` is
+    removed and the ISO structure around it is what gets validated.
+    """
+    tree = copy.deepcopy(root)
+    for alternate in list(tree.iter(f"{{{_MC}}}AlternateContent")):
+        parent = alternate.getparent()
+        at = parent.index(alternate)
+        parent.remove(alternate)
+        chosen = alternate.find(f"{{{_MC}}}{which}")
+        if chosen is None:
+            continue
+        required = {chosen.nsmap[prefix] for prefix in chosen.get("Requires", "").split()}
+        for el in list(chosen.iter(tag=etree.Element)):
+            if etree.QName(el).namespace in required:
+                el.getparent().remove(el)
+                continue
+            for name in [n for n in el.attrib if etree.QName(n).namespace in required]:
+                del el.attrib[name]
+        for offset, child in enumerate(list(chosen)):
+            parent.insert(at + offset, child)
+    return tree
+
+
+def _equation_slide():
+    """A slide whose text box is stored as PowerPoint stores an equation: the Choice holds
+    the maths in an a14 extension element, the Fallback the same box as plain text."""
+    prs, slide, text, blank, chart = _deck()
+    root = etree.fromstring(_slide_xml(prs))
+    sp = next(
+        el
+        for el in root.iter(f"{{{_PML}}}sp")
+        if el.find(f".//{{{_PML}}}cNvPr").get("id") == str(text)
+    )
+    alternate = etree.Element(f"{{{_MC}}}AlternateContent", nsmap={"mc": _MC})
+    sp.addprevious(alternate)
+    choice = etree.SubElement(alternate, f"{{{_MC}}}Choice", nsmap={"a14": _A14}, Requires="a14")
+    maths = copy.deepcopy(sp)
+    paragraph = maths.find(f".//{{{_DML}}}p")
+    for child in list(paragraph):
+        paragraph.remove(child)
+    paragraph.append(
+        etree.fromstring(
+            f'<a14:m xmlns:a14="{_A14}" xmlns:m="{_OMML}"><m:oMathPara><m:oMath>'
+            "<m:r><m:t>x²</m:t></m:r></m:oMath></m:oMathPara></a14:m>"
+        )
+    )
+    choice.append(maths)
+    etree.SubElement(alternate, f"{{{_MC}}}Fallback").append(sp)
+    return root
+
+
+@pytest.mark.parametrize("which", ["Choice", "Fallback"])
+def test_each_branch_of_markup_compatibility_validates_on_its_own(schema, which):
+    """`pml.xsd` has no `mc:AlternateContent`, so the wrapper itself never validates; a reader
+    only ever sees one branch, and each has to be valid on its own."""
+    root = _equation_slide()
+    assert not schema.validate(root)
+
+    assert schema.validate(_branch(root, which)), [e.message for e in schema.error_log]
+
+
+@pytest.mark.parametrize("broken, sound", [("Choice", "Fallback"), ("Fallback", "Choice")])
+def test_the_branch_gate_catches_a_fault_inside_one_branch(schema, broken, sound):
+    """The negative control for the case above. A harness that dropped the wrapper, or read
+    one branch for both, would pass a fault confined to a single branch."""
+    root = _equation_slide()
+    sp = root.find(f".//{{{_MC}}}{broken}/{{{_PML}}}sp")
+    sp.remove(sp.find(f"{{{_PML}}}spPr"))
+
+    assert schema.validate(_branch(root, sound)), [e.message for e in schema.error_log]
+    assert not schema.validate(_branch(root, broken))
+    assert "spPr" in schema.error_log[0].message
+
+
+def _morph_slide():
+    """A slide that arrives by morph and also carries a build, so the wrapper has a
+    `p:timing` to sit in front of."""
+    prs, slide, text, blank, chart = _deck()
+    add_click_build(slide, [text])
+    add_transition(slide, "morph", speed="slow")
+    return etree.fromstring(_slide_xml(prs))
+
+
+@pytest.mark.parametrize("which", ["Choice", "Fallback"])
+def test_each_branch_of_a_morph_transition_validates_on_its_own(schema, which):
+    assert schema.validate(_branch(_morph_slide(), which)), [e.message for e in schema.error_log]
+
+
+def test_the_gate_catches_a_morph_wrapper_after_the_timing_tree(schema):
+    """The negative control: `CT_Slide` orders the transition before the timing, and a branch
+    keeps the place its wrapper had."""
+    root = _morph_slide()
+    wrapper = root.find(f"{{{_MC}}}AlternateContent")
+    root.remove(wrapper)
+    root.append(wrapper)
+
+    assert not schema.validate(_branch(root, "Fallback"))
+    assert "transition" in schema.error_log[0].message
 
 
 def test_the_vendored_schema_is_present():
@@ -143,6 +252,71 @@ def test_two_triggers_onto_one_target_stay_siblings_under_the_root(schema):
     seqs = list(etree.fromstring(_slide_xml(prs)).iter(f"{{{_PML}}}seq"))
     assert len(seqs) == 2
     assert {s.getparent().getparent().get("nodeType") for s in seqs} == {"tmRoot"}
+
+
+# PowerPoint for Mac 16's own trigger, saved onto the confirmation kit's deck 04: ids dropped,
+# trigger spid `T`, target spid `R`, and without the `grpId`/`bldP` it adds for a worded target.
+_POWERPOINT_TRIGGER = (
+    f'<p:seq xmlns:p="{_PML}" concurrent="1" nextAc="seek">'
+    '<p:cTn restart="whenNotActive" fill="hold" evtFilter="cancelBubble" nodeType="interactiveSeq">'
+    '<p:stCondLst><p:cond evt="onClick" delay="0"><p:tgtEl><p:spTgt spid="T"/></p:tgtEl></p:cond></p:stCondLst>'
+    '<p:endSync evt="end" delay="0"><p:rtn val="all"/></p:endSync>'
+    '<p:childTnLst><p:par><p:cTn fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
+    '<p:par><p:cTn fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
+    '<p:par><p:cTn presetID="1" presetClass="entr" presetSubtype="0" fill="hold" nodeType="clickEffect">'
+    '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:set><p:cBhvr>'
+    '<p:cTn dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>'
+    '<p:tgtEl><p:spTgt spid="R"/></p:tgtEl>'
+    "<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst>"
+    '</p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set></p:childTnLst></p:cTn></p:par>'
+    "</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn>"
+    '<p:nextCondLst><p:cond evt="onClick" delay="0"><p:tgtEl><p:spTgt spid="T"/></p:tgtEl></p:cond></p:nextCondLst>'
+    "</p:seq>"
+)
+
+
+def _skeleton(node, spids: dict[str, str]) -> list[tuple[str, tuple[tuple[str, str], ...], str]]:
+    """Every element under ``node`` in document order as (tag, attributes, text), with ``id``
+    dropped and each ``spid`` renamed through ``spids``."""
+    out = []
+    for el in node.iter():
+        attrs = tuple(
+            sorted(
+                (k, spids.get(v, v) if k == "spid" else v)
+                for k, v in el.attrib.items()
+                if k != "id"
+            )
+        )
+        out.append((etree.QName(el).localname, attrs, (el.text or "").strip()))
+    return out
+
+
+def test_a_trigger_is_shaped_like_powerpoints_own(schema):
+    """`cancelBubble`, an `endSync`, a next-condition on the trigger's own click and no
+    previous-condition: a click anywhere else on the slide advances it instead of stepping
+    every trigger forward. The shape is PowerPoint's, learned back from its save."""
+    prs, slide, text, blank, chart = _deck()
+    add_click_reveals(slide, [(text, blank)])
+
+    assert _validate(schema, prs) == []
+    seq = etree.fromstring(_slide_xml(prs)).find(f".//{{{_PML}}}seq")
+    expected = etree.fromstring(_POWERPOINT_TRIGGER.encode())
+    assert _skeleton(seq, {str(text): "T", str(blank): "R"}) == _skeleton(expected, {})
+
+
+def test_the_gate_catches_an_end_sync_out_of_order(schema):
+    """The negative control for the case above: `endSync` after `childTnLst` breaks
+    `CT_TLCommonTimeNodeData`'s sequence, which LibreOffice repairs without a word."""
+    prs, slide, text, blank, chart = _deck()
+    add_click_reveals(slide, [(text, blank)])
+    root = etree.fromstring(_slide_xml(prs))
+    ctn = root.find(f".//{{{_PML}}}seq/{{{_PML}}}cTn")
+    sync = ctn.find(f"{{{_PML}}}endSync")
+    ctn.remove(sync)
+    ctn.append(sync)
+
+    assert not schema.validate(root)
+    assert "endSync" in schema.error_log[0].message
 
 
 @pytest.mark.parametrize("kind", sorted(EFFECTS))
@@ -273,3 +447,81 @@ def test_a_cjk_run_marked_with_its_language_and_face_validates(schema):
     run.hyperlink.address = "https://example.com"
     mark_east_asian(slide, ea={"ja": "Hiragino Sans"}, lang=None, where="s")
     assert _validate(schema, prs) == []
+
+
+_MATH_SCHEMA = SCHEMA.parent / "shared-math.xsd"
+# wml.xsd names ../mce/mc.xsd for one attribute; this is that attribute, and nothing more.
+_IGNORABLE = (
+    b'<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+    b'targetNamespace="http://schemas.openxmlformats.org/markup-compatibility/2006">'
+    b'<xsd:attribute name="Ignorable" type="xsd:string"/></xsd:schema>'
+)
+
+
+class _Ignorable(etree.Resolver):
+    def resolve(self, url, pubid, context):
+        if url.endswith("mce/mc.xsd"):
+            return self.resolve_string(_IGNORABLE, context)
+        return None
+
+
+@pytest.fixture(scope="module")
+def math_schema():
+    parser = etree.XMLParser(no_network=True)
+    parser.resolvers.add(_Ignorable())
+    return etree.XMLSchema(etree.parse(str(_MATH_SCHEMA), parser))
+
+
+_EVERY_NODE = (
+    r"\left( \sum_{i=1}^{n} x_i^2 \right) + \sqrt[3]{\frac{a}{b}} - \lim_{x \to 0} y_j"
+    r" + \int_0^1 z^2 + \prod w + \sqrt{q} + \text{if } p \leq \infty"
+)
+
+
+def _math(tex: str):
+    """The `m:oMathPara` an equation writes, less the DrawingML run properties PowerPoint
+    keeps where the ISO schema has Word's: those are DrawingML's to validate, not Office
+    Math's."""
+    from deckwright.components._omml import omml
+    from deckwright.components._tex import parse
+
+    root = etree.fromstring(omml(parse(tex, where="t"), size_pt=24, ink="1A1D21").encode())
+    for props in list(root.iter(f"{{{_DML}}}rPr")):
+        props.getparent().remove(props)
+    return root.find(f"{{{_OMML}}}oMathPara")
+
+
+def test_every_node_an_equation_writes_is_valid_office_math(math_schema):
+    assert math_schema.validate(_math(_EVERY_NODE)), [e.message for e in math_schema.error_log]
+
+
+def test_the_math_gate_catches_a_fraction_written_upside_down(math_schema):
+    """The negative control: `CT_F` is `num` then `den`."""
+    para = _math(_EVERY_NODE)
+    fraction = para.find(f".//{{{_OMML}}}f")
+    num, den = fraction.find(f"{{{_OMML}}}num"), fraction.find(f"{{{_OMML}}}den")
+    fraction.remove(num)
+    fraction.append(num)
+
+    assert den is not None
+    assert not math_schema.validate(para)
+    assert "num" in math_schema.error_log[0].message
+
+
+@pytest.mark.parametrize("which", ["Choice", "Fallback"])
+def test_a_slide_carrying_an_equation_validates_in_each_branch(
+    schema, math_schema, which, ctx_factory
+):
+    """The component wraps the whole shape, so each reader sees a complete, valid slide."""
+    from deckwright.layouts.components import get_component
+
+    ctx = ctx_factory({"equation": {"tex": r"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"}})
+    get_component("equation")(ctx)
+    root = etree.fromstring(etree.tostring(ctx.slide._element))
+
+    assert schema.validate(_branch(root, which)), [e.message for e in schema.error_log]
+    if which == "Choice":
+        (para,) = root.iter(f"{{{_OMML}}}oMathPara")
+        for props in list(para.iter(f"{{{_DML}}}rPr")):
+            props.getparent().remove(props)
+        assert math_schema.validate(para), [e.message for e in math_schema.error_log]

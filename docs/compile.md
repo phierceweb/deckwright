@@ -50,6 +50,20 @@ A name that resolves to nothing raises `ThemeError` naming the directory searche
 `DECKWRIGHT_THEME_DIR` that moves it, and the `deckwright conform … --adopt` that creates the
 file; a path that does not exist is reported as a path, not as an unknown name.
 
+A caller building many decks on one theme can load it once and hand it to every build, which
+skips re-reading the theme file and re-parsing its template each time. `conform` builds its
+exercises this way:
+
+```python
+path = "templates/brand.theme.yaml"
+theme = deckwright.load_theme(path)
+for spec in specs:
+    deckwright.build_deck(spec, theme_path=path, theme=theme)
+```
+
+`theme_path` stays required alongside `theme`, because the manifest records the file `qa`
+reloads the theme from. `build_deck` raises `ThemeError` when `theme` arrives without it.
+
 There is no Python API for *composing* a slide. Components are chosen by name in the
 spec, and one the format cannot express is added by registering it — see
 [`extending.md`](extending.md) — never by calling into the layout engine, whose
@@ -80,7 +94,8 @@ place by the one after it:
    around it, and a same-named file in the theme directory always wins. `theme_dir()`
    reads `DECKWRIGHT_THEME_DIR` at call time, never at import — copy that shape for a new
    knob. Both resolvers live beside `load_theme`, one layer below the compiler, so a
-   caller can load a theme by name without importing the build.
+   caller can load a theme by name without importing the build. A `theme` handed in
+   already loaded skips the load, and `theme_path` still names its file.
 2. **Open the starting presentation, drop the template's slides, flatten the master
    background, pick the compose layout.** All four before the first slide is added,
    because a slide added first would be deleted by step two and would inherit the
@@ -116,7 +131,9 @@ background *picture* onto the page pair's background colour, and only where that
 has real transparency. Transparent pixels are composited over white by PowerPoint and
 LibreOffice and over black by Keynote; nothing in the file says which is right, and a
 slide-level `<p:bg>` cannot be inserted beneath an inherited one. Only the built deck's
-copy of the image is rewritten — the template on disk is never modified.
+copy of the image is rewritten — the template on disk is never modified. The result is
+kept per picture and colour for the life of the process, so a run that builds many decks on
+one template flattens its picture once.
 
 **The compose layout is resolved twice**, and deliberately. `theme/load.py` resolves one on
 its own `Presentation` to read the master's theme XML for fonts and colours; `build_deck`
@@ -168,13 +185,15 @@ records each cell through a `_CellBox` standing in for one, because a cell has n
 position of its own and QA would otherwise see a table as a single box and never measure a
 column.
 
-Three refusals, all `InvalidInputError` or `PreconditionError`:
+Four refusals, all `InvalidInputError` or `PreconditionError`:
 
 - `rendered` outside `native` / `image` / `picture`.
 - `record()` before `begin_slide()`.
 - a `line_pt` whose length does not match `lines`. It is one size per recorded line, for a
   shape mixing rungs; a mismatch would make `text-fit` measure a body line at its heading's
   size, so the two are not allowed to drift.
+- a `space_after_pt` whose length does not match `lines`, for the same reason: `text-fit`
+  pairs each spacing with its line.
 
 Two flags are set around a call rather than passed to it. `bleeding` is set by
 `layouts/compose.py`'s `_draw` for the duration of a placement the author declared
@@ -313,8 +332,9 @@ hash differs but no shape does.
 
 A component records through `ctx.manifest.record(...)`. What to pass:
 
-- **A text shape** — `lines=` (one entry per rendered line) plus `font_pt`, and `line_pt`
-  when the lines sit at different rungs. Pass `fg` and `bg`, both resolved: `contrast`
+- **A text shape** — `lines=` (one entry per rendered line) plus `font_pt`, `line_pt`
+  when the lines sit at different rungs, and `space_after_pt` when its paragraphs are
+  spaced apart, or `text-fit` measures them touching. Pass `fg` and `bg`, both resolved: `contrast`
   skips any record missing either, silently, so an unpassed colour is not a neutral
   default but a check that never ran.
 - **A picture** — `rendered="picture"` when it is a photograph text may sit on, and

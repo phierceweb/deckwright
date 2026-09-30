@@ -94,6 +94,15 @@ def test_label_width_is_a_fraction(ctx_factory):
         get_component("diverge")(_ctx(ctx_factory, label_width=3))
 
 
+def test_a_label_width_that_is_not_a_number_names_the_value(ctx_factory):
+    with pytest.raises(
+        LayoutError,
+        match=r"^slide 1 \(component 'diverge'\): 'label_width' is a fraction of the "
+        r"placement's width, got 'wide'$",
+    ):
+        get_component("diverge")(_ctx(ctx_factory, label_width="wide"))
+
+
 def test_align_is_refused(ctx_factory):
     ctx = _ctx(ctx_factory)
     ctx.align = "center"
@@ -116,3 +125,82 @@ def test_diverge_is_registered():
     from deckwright.layouts.components import registered_components
 
     assert "diverge" in registered_components()
+
+
+def _bar_fills(ctx):
+    """``{sign: fill}`` for each bar, off the shapes the build wrote. The rule and any plate
+    span the placement's full height; a bar never does."""
+    shapes = _plain(ctx.slide)
+    full = max(s.height for s in shapes)
+    rule = min((s for s in shapes if s.height == full), key=lambda s: s.width)
+    return {
+        "+" if s.left >= rule.left else "-": str(s.fill.fore_color.rgb)
+        for s in shapes
+        if s.height < full
+    }
+
+
+# accent-1 is the blue ground and accent-2 a shade of it, so the bars move on to accent-3,
+# and the away bar to accent-4: a yellow only colour separates from the blue.
+_BLUE_GROUND = {
+    "ink": "000000",
+    "inverse": "3282BE",
+    "inverse-ink": "000000",
+    "accent-1": "3282BE",
+    "accent-2": "28608C",
+    "accent-3": "262626",
+    "accent-4": "FFD000",
+}
+
+
+def _built_on(ctx_factory, theme, roles, **body):
+    """A diverge of ``ITEMS`` built under the fixture theme with ``roles`` laid over it."""
+    import dataclasses
+
+    from deckwright.theme.palette import build_palette
+
+    palette = build_palette(
+        {**theme.palette.roles, **roles},
+        pairs={"page": ("ink", "page"), "inverse": ("inverse-ink", "inverse")},
+    )
+    ctx = ctx_factory(
+        {"diverge": {"items": ITEMS, **body}},
+        theme_override=dataclasses.replace(theme, palette=palette),
+    )
+    get_component("diverge")(ctx)
+    return ctx
+
+
+@pytest.mark.parametrize(
+    ("page", "body"),
+    [("3282BE", {}), ("FFFFFF", {"pair": "inverse"})],
+    ids=["on-a-blue-page", "on-its-own-blue-plate"],
+)
+def test_bars_take_the_first_accents_that_stand_off_what_they_sit_on(
+    ctx_factory, theme, page, body
+):
+    """On the plate, accent-1 reads 4.14:1 off the white page, so a choice made against the
+    slide's pair rather than what is behind the bars keeps it."""
+    ctx = _built_on(ctx_factory, theme, {**_BLUE_GROUND, "page": page}, **body)
+    assert _bar_fills(ctx) == {"+": "262626", "-": "FFD000"}
+    recorded = [(s.fill, s.ground) for s in ctx.manifest.slides[0].shapes if s.fill]
+    assert recorded == [("262626", "3282BE"), ("FFD000", "3282BE")]
+
+
+def test_bars_keep_the_first_two_accents_where_both_stand_off(ctx_factory):
+    ctx = _ctx(ctx_factory)
+    get_component("diverge")(ctx)
+    assert _bar_fills(ctx) == {"+": "27B94C", "-": "18CEDA"}
+
+
+def test_the_away_bar_passes_over_an_accent_it_could_not_be_told_from(ctx_factory, theme):
+    """2262AB is a different hex from 1F5FA8 and the same blue to anyone looking."""
+    roles = {"page": "FFFFFF", "ink": "000000", "accent-1": "1F5FA8", "accent-2": "2262AB"}
+    ctx = _built_on(ctx_factory, theme, {**roles, "accent-3": "A8431C", "accent-4": "6A3FA0"})
+    assert _bar_fills(ctx) == {"+": "1F5FA8", "-": "A8431C"}
+
+
+def test_with_one_colour_that_stands_off_both_directions_share_it(ctx_factory, theme):
+    """The ink 000000 stands off the page but not the 262626 already taken."""
+    roles = {**_BLUE_GROUND, "page": "3282BE", "accent-4": "3282BE"}
+    assert _bar_fills(_built_on(ctx_factory, theme, roles)) == {"+": "262626", "-": "262626"}

@@ -228,3 +228,26 @@ def test_a_literal_accent_is_kept_even_when_it_equals_a_stock_office_colour(
     body = BASE.replace("      page: lt1", "      page: lt1\n      accent-1: '4472C4'")
     theme = load_theme(_write(tmp_path, synthetic_template, body))
     assert theme.palette.role("accent-1") == "4472C4"
+
+
+def test_a_dark_page_that_binds_no_line_gets_one_a_step_off_the_page(tmp_path, synthetic_template):
+    """The built-in line is a light-page hairline; on black it would be the loudest thing on the
+    slide. The page moved 12% toward its ink is the same quiet step the default takes."""
+    body = BASE.replace("      page: lt1\n      ink:  dk1\n", "      page: dk1\n      ink:  lt1\n")
+    theme = load_theme(_write(tmp_path, synthetic_template, body))
+    assert theme.palette.roles["page"] == "000000"
+    assert theme.palette.roles["line"] == "1F1F1F"
+
+
+def test_a_line_the_theme_binds_is_kept_whatever_the_page(tmp_path, synthetic_template):
+    body = BASE.replace(
+        "      page: lt1\n      ink:  dk1\n",
+        "      page: dk1\n      ink:  lt1\n      line: FF00FF\n",
+    )
+    theme = load_theme(_write(tmp_path, synthetic_template, body))
+    assert theme.palette.roles["line"] == "FF00FF"
+
+
+def test_the_default_page_keeps_the_default_line(tmp_path, synthetic_template):
+    theme = load_theme(_write(tmp_path, synthetic_template, BASE))
+    assert theme.palette.roles["line"] == "E3E6EA"

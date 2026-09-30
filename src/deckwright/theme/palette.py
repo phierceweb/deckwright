@@ -24,14 +24,18 @@ _INK_CANDIDATES = ("ink", "page")
 _FALLBACK_INK_CANDIDATES = ("inverse", "surface-ink", "inverse-ink", "surface")
 
 
-def _rank_inks(resolve, background: str, roles) -> list[tuple[float, str, str]]:
-    """``(ratio, label, hex)`` by contrast on ``background``, best first.
+def _rank_inks(resolve, backgrounds: tuple[str, ...], roles) -> list[tuple[float, str, str]]:
+    """``(ratio, label, hex)`` by contrast, best first — the worst of ``backgrounds`` when
+    there is more than one, since a gradient's stops all need the same ink to read.
 
     Only colours the theme declares — a brand's ink is never invented here.
     """
 
     def rank(names):
-        return [(contrast_ratio(resolve(n), background), n, resolve(n)) for n in names]
+        return [
+            (min(contrast_ratio(resolve(n), bg) for bg in backgrounds), n, resolve(n))
+            for n in names
+        ]
 
     ranked = sorted(rank(_INK_CANDIDATES), reverse=True)
     if ranked and ranked[0][0] >= AA_NORMAL:
@@ -139,27 +143,34 @@ class Palette:
                 f"no colour pair {name!r}; declared pairs: {', '.join(sorted(self.pairs))}"
             ) from None
 
-    def ink_for(self, background: str) -> str:
-        """Whichever declared ink reads on an arbitrary fill.
+    def ink_for(self, *backgrounds: str) -> str:
+        """Whichever declared ink reads on an arbitrary fill, judged by its weakest stop
+        when ``backgrounds`` names more than one — a gradient's two stops, say.
 
         The same choice :data:`AUTO_INK` makes, for a fill no pair names.
 
         Raises:
             ThemeError: the theme declares no ink role at all.
         """
-        bg = normalize_hex(background)
-        ranked = _rank_inks(self.role, bg, self.roles)
+        bgs = tuple(normalize_hex(bg) for bg in backgrounds)
+        ranked = _rank_inks(self.role, bgs, self.roles)
         ratio, ink, hex_ = ranked[0]
         if ratio < AA_NORMAL:
             logger.warning(
                 "fill_ink_below_aa",
-                fill=bg,
+                fill="/".join(bgs),
                 ink=ink,
                 hex=hex_,
                 ratio=round(ratio, 2),
                 minimum=AA_NORMAL,
             )
         return hex_
+
+    def has_ink_for(self, *backgrounds: str) -> bool:
+        """Whether :meth:`ink_for` finds an ink reading at AA across every one of
+        ``backgrounds``, asked without its warning when none does."""
+        bgs = tuple(normalize_hex(bg) for bg in backgrounds)
+        return _rank_inks(self.role, bgs, self.roles)[0][0] >= AA_NORMAL
 
     def tint(self, name: str, pct: int) -> str:
         """Lighten a role ``pct`` of the way to white — OOXML ``lumMod``+``lumOff``."""
@@ -198,7 +209,7 @@ def build_palette(roles: dict[str, str], *, pairs: dict[str, tuple[str, str]]) -
         if fg != AUTO_INK:
             built[name] = Pair(role(fg, pair=name), background)
             continue
-        ranked = _rank_inks(partial(role, pair=name), background, resolved)
+        ranked = _rank_inks(partial(role, pair=name), (background,), resolved)
         built[name] = Pair(ranked[0][2], background)
 
     numbered = sorted(

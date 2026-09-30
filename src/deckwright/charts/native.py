@@ -34,6 +34,7 @@ from deckwright.charts._native_types import (
     _STRUCTURAL_GRIDLINE_CHART_TYPES,
 )
 from deckwright.charts._shared import lighten
+from deckwright.charts.fills import chart_fills
 from deckwright.charts.labels import label_format, style_data_labels
 from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartSpec
 from deckwright.errors import LayoutError, ThemeError
@@ -81,13 +82,13 @@ def add_native_chart(ctx: SlideCtx, spec: ChartSpec, rect: Rect) -> GraphicFrame
     chart.has_title = False
     # Inked for what the frame sits on: a chart laid over a panel is on the panel.
     caption = ctx.style("caption").size
-    ink, _ = ctx.text_ink(rect, size_pt=caption)
+    ink, ground = ctx.text_ink(rect, size_pt=caption)
     muted, _ = ctx.text_ink(rect, size_pt=caption, muted=True)
     if spec.type in _RADAR_CHART_TYPES:
         _drop_smooth(chart)
     elif spec.type in _SMOOTH_CHART_TYPES:
         _smooth(chart)
-    _style_series(ctx, chart, spec)
+    _style_series(ctx, chart, spec, ground=ground)
     if spec.type not in _NO_DATA_LABEL_CHART_TYPES:
         style_data_labels(ctx, chart, spec, frame_width=rect.width, ink=ink)
     if spec.type in _AXIS_CHART_TYPES:
@@ -140,47 +141,44 @@ def _build_chart_data(spec: ChartSpec) -> CategoryChartData | XyChartData | Bubb
     return category_data
 
 
-def _series_colors(ctx: SlideCtx) -> tuple[RGBColor, ...]:
-    """The palette's accent ramp, resolved to colours in cycle order.
+def _accents(ctx: SlideCtx) -> tuple[str, ...]:
+    """The palette's accent ramp as hex, in cycle order.
 
     Raises:
         ThemeError: the palette declares no accent roles, so there is nothing to
             colour a series with.
     """
     palette = ctx.theme.palette
-    accents = tuple(RGBColor.from_string(palette.role(name)) for name in palette.accents)
+    accents = tuple(palette.role(name) for name in palette.accents)
     if not accents:
         raise ThemeError(f"theme {ctx.theme.name!r} declares no accent roles")
     return accents
 
 
-def _highlight_color(ctx: SlideCtx) -> RGBColor:
-    """The colour that marks ``highlight:`` — the second accent.
-
-    Raises:
-        ThemeError: the palette has fewer than two accents, so the marked point
-            would be painted the same colour as its neighbours.
-    """
-    accents = _series_colors(ctx)
-    if len(accents) < 2:
-        raise ThemeError(
-            f"theme {ctx.theme.name!r} declares {len(accents)} accent role(s); "
-            f"'highlight' marks a point with the second accent, so a palette with "
-            f"fewer cannot show one"
-        )
-    return accents[1]
-
-
-def _style_series(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
-    """Cycle the theme's palette by point (pie family) or by series (else); highlight wins.
+def _style_series(ctx: SlideCtx, chart: Chart, spec: ChartSpec, *, ground: str) -> None:
+    """Fill every series and point with the colour ``chart_fills`` resolves for it.
 
     Series-level fill stays solid regardless of ``theme.chart.gradient``: it is what a
     legend swatch reads, and a swatch has no point to gradient.
     """
-    palette = _series_colors(ctx)
-    highlight = _highlight_color(ctx) if spec.highlight is not None else None
     style = ctx.theme.chart
     solid_only = spec.type in _STROKE_CHART_TYPES
+    gradient = style.gradient and not solid_only
+
+    def legible(fill: str) -> bool:
+        """Whether a label reads on ``fill`` as ``_fill_point`` actually paints it: gradient
+        stop and all, since a fade legible flat can still lighten past its label's ink."""
+        if not gradient:
+            return ctx.theme.palette.has_ink_for(fill)
+        return ctx.theme.palette.has_ink_for(fill, str(lighten(RGBColor.from_string(fill))))
+
+    fills = chart_fills(
+        spec,
+        accents=_accents(ctx),
+        muted=ctx.theme.palette.role("muted"),
+        ground=ground,
+        legible=legible,
+    )
     angle = (
         (style.gradient_angle - 90) % 360
         if spec.type in _HORIZONTAL_BAR_CHART_TYPES
@@ -188,17 +186,12 @@ def _style_series(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
     )
 
     if spec.type in _PIE_FAMILY_CHART_TYPES:
-        for index, point in enumerate(chart.series[0].points):
-            colour = (
-                highlight
-                if highlight is not None and index == spec.highlight
-                else palette[index % len(palette)]
-            )
-            _fill_point(point, colour, style, angle=angle, solid_only=solid_only)
+        for point, hex_ in zip(chart.series[0].points, fills.points[0], strict=True):
+            _fill_point(point, ctx.rgb(hex_), style, angle=angle, solid_only=solid_only)
         return
 
-    for series_index, series in enumerate(chart.series):
-        colour = palette[series_index % len(palette)]
+    for series, hex_, point_fills in zip(chart.series, fills.series, fills.points, strict=True):
+        colour = ctx.rgb(hex_)
         if spec.type in _SERIES_FILL_CHART_TYPES:
             _fill_series(series, colour, style, angle=angle)
         else:
@@ -212,23 +205,9 @@ def _style_series(ctx: SlideCtx, chart: Chart, spec: ChartSpec) -> None:
         if spec.type in _STROKE_CHART_TYPES:
             # A point here has no fillable shape, and a bare `c:dPt` fill on a stroke
             # series is what LibreOffice misassigns to the neighbouring series' marks.
-            if highlight is not None and spec.type in _MARKER_CHART_TYPES:
-                for index, point in enumerate(series.points):
-                    if index == spec.highlight:
-                        point.marker.format.fill.solid()
-                        point.marker.format.fill.fore_color.rgb = highlight
             continue
-        # One series mutes every other point, since a second hue reads as a second
-        # category; with several, muting would erase the series distinction.
-        mute = ctx.color("muted") if highlight is not None and len(spec.series) == 1 else None
-        for index, point in enumerate(series.points):
-            if mute is not None:
-                point_colour = colour if index == spec.highlight else mute
-            else:
-                point_colour = (
-                    highlight if highlight is not None and index == spec.highlight else colour
-                )
-            _fill_point(point, point_colour, style, angle=angle, solid_only=solid_only)
+        for point, point_hex in zip(series.points, point_fills, strict=True):
+            _fill_point(point, ctx.rgb(point_hex), style, angle=angle, solid_only=solid_only)
 
 
 def _style_marker(

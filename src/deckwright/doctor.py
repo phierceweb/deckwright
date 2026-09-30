@@ -177,11 +177,11 @@ def check_tools() -> list[CheckResult]:
                 )
             )
     from deckwright.errors import MissingToolError
-    from deckwright.services.htmlshot import _resolve_chrome
+    from deckwright.services.chrome import resolve_chrome
 
     chrome_needs = "needed by shot and any 'document:' slide"
     try:
-        chrome = _resolve_chrome(None)
+        chrome = resolve_chrome(None)
     except MissingToolError:
         out.append(
             CheckResult(
