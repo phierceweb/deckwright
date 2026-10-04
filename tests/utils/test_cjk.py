@@ -44,6 +44,14 @@ def test_korean_breaks_at_spaces():
     assert atoms("한국어 문장은") == ["한국어", " ", "문장은"]
 
 
+def test_a_no_break_space_holds_the_ideographs_either_side_of_it_together():
+    """Pinned against a LibreOffice render: in a box four ideographs wide, ``日日日日 本本本本``
+    with a no-break space sets ``日日日`` above ``日 本本``, where a plain space breaks it."""
+    assert atoms("日日\u00a0本本") == ["日", "日\u00a0本", "本"]
+    width_in = (4 * 1.04 + 0.001) * 12 / 72
+    assert wrapped_lines("日日日日\u00a0本本本本", width_in=width_in, size_pt=12) == 3
+
+
 def test_a_full_stop_at_the_end_of_a_full_line_hangs_instead_of_carrying_a_character_down():
     """Ten kana then `。`: LibreOffice sets all eleven on one line."""
     assert _lines("あいうえおかきくけこ。") == 1

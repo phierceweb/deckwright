@@ -296,7 +296,22 @@ Code, a config fragment, a schema — set in the theme's mono face on a plate of
 its pairs. The other way to put a listing on a slide is `document:`, which renders
 markdown through a headless browser and returns a picture; this draws **real text**, so
 it is selectable in PowerPoint, recoloured by the theme, and present in the manifest as
-lines `qa` can measure for overflow.
+lines `qa`'s `overflow` check must find inside the plate.
+
+Every line is measured in the theme's `mono` face against the width the plate really sets
+it in — inside its padding and its rounded corners — so the build refuses a listing that
+would run off its plate rather than drawing it. Courier New and its clones carry accents,
+Greek, Cyrillic, arrows and the box-drawing glyphs a file tree is drawn in, each one column
+wide. A `mono` face with no width table of its own is charged the widest monospace advance
+measured for Latin, and the widest glyph of its class for anything beyond — Greek,
+Cyrillic, arrows, box drawing — since such a face may not carry it, so its estimate errs
+wide. A tab is drawn as spaces to the next multiple of four columns, and
+trailing spaces are not charged. A space the face may not carry — an em, figure or narrow
+no-break space — is charged a full em. Rows are set exactly 1.55 times the type size apart,
+wrapped rows included — the advance the plate is sized for — and the leading over single
+spacing above the first row is moved from the plate's top margin to its bottom one.
+LibreOffice fills the plate with even padding; PowerPoint's spacing of the rows is awaiting
+its first check.
 
 | Field | Required | Default | What it does |
 |---|---|---|---|
@@ -305,7 +320,7 @@ lines `qa` can measure for overflow.
 | `heading` | no | — | A label above the plate, set in the `head` rung, like `bullets`. |
 | `pair` | no | `surface` | Any declared palette pair. The plate takes that pair's background, and the text the ink that reads on it. |
 | `accent` | no | — | Line prefixes to emphasise. A line starting with one is drawn bold in the accent that reads on the plate. |
-| `wrap` | no | `false` | Whether a long line wraps. Off by default — a wrapped listing lies about its own indentation. |
+| `wrap` | no | `false` | Whether a long line wraps. Off by default — a wrapped listing lies about its own indentation. Off, a line wider than the plate is refused; on, the plate is as deep as the rows the lines wrap to, broken where LibreOffice breaks them — at spaces and after hyphens, not at a no-break space or inside `-1` or `--` — indentation included. |
 | `size` | no | the `caption` rung | Point size. Refused below the theme's minimum. |
 
 ```yaml

@@ -5,6 +5,7 @@ A string is measured as it shows, so a ``[words](address)`` link counts its word
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Iterable, Iterator
 from difflib import get_close_matches
@@ -16,7 +17,17 @@ from deckwright.utils._metrics import (  # noqa: F401 — re-exported; _metrics 
     measured,
     table_for,
 )
-from deckwright.utils._cjk import CJK_EM, HANG, atoms, carries_cjk, is_cjk, is_hangul
+from deckwright.utils._cjk import (
+    CJK_EM,
+    HANG,
+    NO_BREAK_SPACE,
+    atoms,
+    breakable,
+    carries_cjk,
+    glue,
+    is_cjk,
+    is_hangul,
+)
 from deckwright.utils.links import plain
 
 LINE_HEIGHT = 1.2
@@ -30,6 +41,9 @@ _MARGIN = 1.04
 
 _BREAK_AFTER = frozenset("-‐–—")
 _WIDE = ("W", "F")
+_BREAKABLE_SPACE = re.compile("[^\\S%s]+" % "".join(sorted(NO_BREAK_SPACE)))
+# No space is wider than an em, and one a monospaced table lacks may come from another face.
+_WIDEST_SPACE = 1.0
 
 
 def closest_match(name: str, options: Iterable[str]) -> str | None:
@@ -68,7 +82,7 @@ def wrapped_lines(
         return _cjk_lines(shown, capacity=capacity, face=face)
     space = _MARGIN * advance_em(" ", table_for(face))
     lines, used = 1, 0.0
-    for word in shown.split():
+    for word in filter(None, _BREAKABLE_SPACE.split(shown)):
         width = _em(word, face)
         need = width if used == 0.0 else used + space + width
         if need <= capacity:
@@ -109,41 +123,58 @@ def _cjk_lines(text: str, *, capacity: float, face: str | None) -> int:
     return lines
 
 
-def estimate_caveat(*faces: str | None) -> str:
-    """The clause a fit refusal ends with when its estimate ran on a face with no table."""
-    unmeasured = list(dict.fromkeys(f for f in faces if f and not measured(f)))
+def estimate_caveat(*faces: str | None, mono: bool = False) -> str:
+    """The clause a fit refusal ends with when its estimate ran on a face with no table.
+
+    ``mono`` says the faces set a listing, where only a monospaced table counts.
+    """
+    unmeasured = list(dict.fromkeys(f for f in faces if f and not measured(f, mono=mono)))
     if not unmeasured:
         return ""
     names = ", ".join(repr(f) for f in unmeasured)
     return f" ({names} has no width table, so this estimate errs wide)"
 
 
-def _unbreakable_runs(text: str) -> Iterator[str]:
-    """The runs of ``text`` no line break can fall inside.
-
-    A renderer breaks at a space, after a hyphen or dash, and on either side of a wide or
-    CJK character other than hangul, since Korean breaks at spaces. Not after a slash:
-    LibreOffice sets a URL broken mid-word. Where a CJK line really breaks, kinsoku
-    included, is ``_cjk.atoms``.
-    """
-    run = ""
-    for ch in text:
-        if ch.isspace():
-            if run:
-                yield run
-            run = ""
-        elif (unicodedata.east_asian_width(ch) in _WIDE or is_cjk(ch)) and not is_hangul(ch):
-            if run:
-                yield run
-            yield ch
-            run = ""
+def spaced_runs(text: str) -> Iterator[tuple[str, str]]:
+    """The runs of ``text`` no line break can fall inside, each with the whitespace before it;
+    trailing whitespace hangs and is not yielded. The break rules are in ``docs/utils.md``."""
+    gap = ""
+    for piece in glue(list(_pieces(text))):
+        if breakable(piece):
+            gap += piece
         else:
-            run += ch
-            if ch in _BREAK_AFTER:
+            yield gap, piece
+            gap = ""
+
+
+def _pieces(text: str) -> Iterator[str]:
+    """``text`` cut at every break, each breakable whitespace, wide or CJK character a piece
+    of its own."""
+    run = ""
+    for index, ch in enumerate(text):
+        wide = (unicodedata.east_asian_width(ch) in _WIDE or is_cjk(ch)) and not is_hangul(ch)
+        if wide or (ch.isspace() and ch not in NO_BREAK_SPACE):
+            if run:
                 yield run
                 run = ""
+            yield ch
+            continue
+        run += ch
+        if _breaks_after(run, text[index + 1 : index + 2]):
+            yield run
+            run = ""
     if run:
         yield run
+
+
+def _breaks_after(run: str, following: str) -> bool:
+    """Whether a line may break after ``run``, the character after it being ``following``."""
+    last = run[-1]
+    if last not in _BREAK_AFTER or following in _BREAK_AFTER:
+        return False
+    if last == "-" and following.isdecimal():
+        return False
+    return not (run in ("-", "\u2010") and following.isalpha())
 
 
 def overlong_word(
@@ -155,8 +186,40 @@ def overlong_word(
     ``_MARGIN``: a sizing allowance would refuse runs that fit.
     """
     table = table_for(face)
-    for word in _unbreakable_runs(plain(text)):
+    for _, word in spaced_runs(plain(text)):
         need = sum(advance_em(ch, table) for ch in word) * size_pt / 72
         if need > width_in:
             return word, need
     return None
+
+
+def listing_em(line: str, face: str | None) -> float:
+    """Width of a listing ``line`` in ems, set in ``face`` as monospace, trailing whitespace
+    hung. No ``_MARGIN``: a monospaced advance has no kerning to allow for."""
+    table = table_for(face, mono=True)
+    return sum(_column_em(ch, table) for gap, run in spaced_runs(line) for ch in gap + run)
+
+
+def listing_rows(line: str, *, width_in: float, size_pt: float, face: str | None) -> int:
+    """Rows a listing ``line`` wraps to at ``width_in``, measured as ``listing_em`` measures;
+    the spaces before a run stay on the row they end, so indentation is charged."""
+    table = table_for(face, mono=True)
+    capacity = width_in * 72 / size_pt
+    rows, used = 1, 0.0
+    for gap, run in spaced_runs(line):
+        width = sum(_column_em(ch, table) for ch in gap + run)
+        if used + width <= capacity:
+            used += width
+            continue
+        if used > 0.0 or gap:
+            rows, used = rows + 1, 0.0
+        for ch in run:
+            advance = _column_em(ch, table)
+            if used > 0.0 and used + advance > capacity:
+                rows, used = rows + 1, 0.0
+            used += advance
+    return rows
+
+
+def _column_em(ch: str, table: dict[str, float]) -> float:
+    return _WIDEST_SPACE if ch.isspace() and ch not in table else advance_em(ch, table)

@@ -172,3 +172,100 @@ def test_no_word_is_named_when_every_word_fits():
         overlong_word("An Internationalization plan", width_in=5.0, size_pt=22.0, face="Helvetica")
         is None
     )
+
+
+def _runs(text):
+    from deckwright.utils.text import spaced_runs
+
+    return [run for _, run in spaced_runs(text)]
+
+
+@pytest.mark.parametrize(
+    "text,runs",
+    [
+        ("aaaa-bbbb", ["aaaa-", "bbbb"]),
+        ("aaaa–111", ["aaaa–", "111"]),
+        ("aaaa-(bbb", ["aaaa-", "(bbb"]),
+        ("aaaa-1111", ["aaaa-1111"]),
+        ("aaaa--bbb", ["aaaa--", "bbb"]),
+        ("x -vvvv", ["x", "-vvvv"]),
+        ("aaaa bbbb", ["aaaa bbbb"]),
+        ("aaaa bbbb", ["aaaa bbbb"]),
+        ("aaaa bbbb", ["aaaa bbbb"]),
+    ],
+    ids=[
+        "hyphen",
+        "en-dash-digit",
+        "hyphen-bracket",
+        "hyphen-digit",
+        "hyphen-hyphen",
+        "opening-hyphen",
+        "no-break-space",
+        "narrow-no-break-space",
+        "figure-space",
+    ],
+)
+def test_a_line_breaks_where_libreoffice_breaks_it(text, runs):
+    """Each pinned against a LibreOffice render of a monospace box too narrow for the run."""
+    assert _runs(text) == runs
+
+
+def test_text_carrying_cjk_keeps_its_kinsoku():
+    """A full stop never starts a line, so it stays with the character before it, and a
+    no-break space holds its words together there as it does in Latin text."""
+    assert _runs("日本。語") == ["日", "本。", "語"]
+    assert _runs("日本 a\u00a0b") == ["日", "本", "a\u00a0b"]
+
+
+def test_text_carrying_cjk_still_breaks_after_a_hyphen_and_beside_a_wide_character():
+    """Each run pinned against a LibreOffice render. Read as one run, the identifier needs
+    3.10in; its widest piece, ``hyphenated-``, 1.10."""
+    from deckwright.utils.text import overlong_word
+
+    assert _runs("日本 aaaa-bbbb") == ["日", "本", "aaaa-", "bbbb"]
+    assert _runs("日本 aaaa-1234") == ["日", "本", "aaaa-1234"]
+    assert _runs("日本😀😀") == ["日", "本", "😀", "😀"]
+    assert _runs("가-나다라마바사아자") == ["가-", "나다라마바사아자"]
+    assert _runs("가나 다라마바사") == ["가나", "다라마바사"]
+    text = "日本 very-long-hyphenated-identifier"
+    assert overlong_word(text, width_in=1.5, size_pt=12, face="Courier New") is None
+
+
+def test_a_no_break_space_binds_except_after_a_hyphen():
+    """Both pinned against a LibreOffice render: ideographs either side of a no-break space
+    stay together, and a line still breaks after a hyphen before one (UAX #14 LB12a)."""
+    assert _runs("日日\u00a0本本") == ["日", "日\u00a0本", "本"]
+    assert _runs("xxxx aaaa-\u00a0bbbb") == ["xxxx", "aaaa-", "\u00a0bbbb"]
+
+
+def test_spaces_before_a_run_ride_with_it_and_trailing_ones_hang():
+    from deckwright.utils.text import spaced_runs
+
+    assert list(spaced_runs("  ab  cd   ")) == [("  ", "ab"), ("  ", "cd")]
+
+
+def test_a_no_break_space_joins_the_words_it_sits_between_when_wrapping():
+    """Five Courier columns a line: broken at every space, four short words take two lines;
+    joined by the no-break space, the middle pair moves whole and pushes the last down."""
+    width_in = 5 * 0.6001 * 1.04 + 0.001
+    spaced = wrapped_lines("aa bb cc dd", width_in=width_in, size_pt=72, face="Courier New")
+    joined = wrapped_lines("aa bb cc dd", width_in=width_in, size_pt=72, face="Courier New")
+    assert (spaced, joined) == (2, 3)
+
+
+def test_a_listing_line_is_as_wide_as_its_columns_without_its_trailing_spaces():
+    from deckwright.utils.text import listing_em
+
+    assert listing_em("  ab c   ", "Courier New") == pytest.approx(6 * 0.6001)
+
+
+@pytest.mark.parametrize("face,column", [("Courier New", 0.6001), ("Menlo", 0.6182)])
+def test_a_space_the_listing_face_may_lack_is_charged_an_em(face, column):
+    """An em, a figure and a narrow no-break space: no monospaced table carries them, so
+    each may be drawn from another face, where an em space is a full em."""
+    from deckwright.utils.text import listing_em, listing_rows
+
+    line = "a\u2003b\u2007c\u202fd"
+    assert listing_em(line, face) == pytest.approx(4 * column + 3.0)
+    width_in = (4 * column + 3.0 - 0.01) * 12 / 72
+    assert listing_rows(line, width_in=width_in, size_pt=12, face=face) == 2

@@ -194,6 +194,7 @@ place:
   - code:
       heading: my_components.py
       accent: ['@component']
+      size: 12
       lines:
       - from deckwright.layouts.components import component
       - ''

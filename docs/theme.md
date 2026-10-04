@@ -362,25 +362,32 @@ per-character advances. deckwright ships those advances for these families:
 | Family | Covers |
 |---|---|
 | Calibri / Carlito | Calibri, and the metric clone LibreOffice substitutes for it |
-| Arial / Helvetica / Liberation | Arial, Helvetica, and the clone that stands in for both |
+| Arial / Helvetica / Liberation | Arial, Helvetica, and Liberation Sans, the clone that stands in for both |
+| Courier New / Liberation Mono / Cousine | the default `mono` face and its two metric clones |
 | Poppins, Open Sans, Montserrat | the families of those names |
 | Amatic | Amatic and Amatic SC |
 | Sniglet, Bebas Neue | the families of those names |
 | Barlow Semi Condensed | that cut only — plain Barlow is wider and is not covered |
 
 A face outside those is laid out against `CEILING`, the widest advance measured across
-Carlito, Liberation Sans, Verdana and DejaVu Sans, per character. For a face no wider than
-those it is safe: a box is never sized *short* of its text. A wide display face can outrun
-it (Sniglet's ExtraBold does, which is why it has a table), and for every face it is loose
-in a way nothing downstream reveals, so the theme loader says so:
+Carlito, Liberation Sans, Verdana and DejaVu Sans, per character. A `mono` face setting a
+`code` listing is the exception: one without the Courier table — unmeasured, or named like
+a proportional family, as `Helvetica Monospaced` is — gets `MONO`, the widest monospace
+advance measured, for every Latin glyph, since `CEILING` charges `i`, `.` and the space far
+under a monospaced column. Beyond Latin such a face may draw a glyph from another face, so
+Greek, Cyrillic, arrows and box drawing are charged the widest glyph of their class. For a
+face no wider than those it is safe: a box is never sized *short* of its text. A wide
+display face can outrun it (Sniglet's ExtraBold does, which is why it has a table), and for
+every face it is loose in a way nothing downstream reveals, so the theme loader says so for
+`face` and `heading_face`:
 
 ```
 warning  theme_face_unmeasured  theme=brand role=heading_face face='Aptos Display'
 ```
 
 A fit refusal built on that estimate — `prose`, `card`, `versus`, an `ellipse` label, a
-chrome box too short for its text — ends by saying so, so a refusal of copy that would have
-fitted names its reason:
+chrome box too short for its text, a `code` listing in an unmeasured `mono` face — ends by
+saying so, so a refusal of copy that would have fitted names its reason:
 
 ```
 ... split the slide or shorten the copy ('Segoe UI' has no width table, so this estimate errs wide)

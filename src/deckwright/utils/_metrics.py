@@ -15,6 +15,8 @@ from deckwright.utils._metrics_faces import (
     AMATIC,
     BARLOW_SEMI_CONDENSED,
     BEBAS_NEUE,
+    COURIER,
+    MONO,
     MONTSERRAT,
     OPEN_SANS,
     POPPINS,
@@ -362,6 +364,8 @@ _FALLBACK_LOWER = max(v for k, v in CEILING.items() if k.islower())
 _FALLBACK_ANY = max(CEILING.values())
 
 _CALIBRI_FACES = ("calibri", "carlito")
+# Ahead of Arial's, which "liberation" alone would claim Liberation Mono for.
+_COURIER_FACES = ("courier", "liberation mono", "cousine")
 _ARIAL_FACES = ("arial", "helvetica", "liberation")
 # Plain "Barlow" is wider than its semi-condensed cut, so only the cut itself matches.
 _FACE_TABLES = (
@@ -396,6 +400,7 @@ def advance_em(ch: str, table: dict[str, float]) -> float:
 MEASURED_FAMILIES = (
     "Calibri / Carlito",
     "Arial / Helvetica / Liberation",
+    "Courier New / Liberation Mono / Cousine",
     "Poppins",
     "Open Sans",
     "Montserrat",
@@ -407,19 +412,28 @@ MEASURED_FAMILIES = (
 """The families with their own advance tables. Anything else gets ``CEILING``."""
 
 
-def measured(face: str | None) -> bool:
-    """Whether ``face`` has its own advances, or is laid out against ``CEILING``."""
-    return table_for(face) is not CEILING
+def measured(face: str | None, *, mono: bool = False) -> bool:
+    """Whether ``face`` has its own advances, or is laid out against a fallback table."""
+    table = table_for(face, mono=mono)
+    return table is not CEILING and table is not MONO
+
+
+def table_for(face: str | None, *, mono: bool = False) -> dict[str, float]:
+    """The advance table for ``face``: its family's, or ``CEILING`` when unmeasured. With
+    ``mono``, a face whose family has no monospaced table gets ``MONO``."""
+    table = _routed(face)
+    return MONO if mono and table is not COURIER else table
 
 
 @lru_cache(maxsize=None)
-def table_for(face: str | None) -> dict[str, float]:
-    """The advance table for ``face``: its family's, or ``CEILING`` when unmeasured."""
+def _routed(face: str | None) -> dict[str, float]:
     lowered = (face or "").lower()
     if any(cut in lowered for cut in _HEAVY):
         return CEILING
     if any(family in lowered for family in _CALIBRI_FACES):
         return CALIBRI
+    if any(family in lowered for family in _COURIER_FACES):
+        return COURIER
     if any(family in lowered for family in _ARIAL_FACES):
         return ARIAL
     for names, table in _FACE_TABLES:

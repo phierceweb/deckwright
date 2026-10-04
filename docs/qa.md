@@ -68,7 +68,7 @@ therefore converts the deck once. Any edit to the deck starts a fresh render.
 | `text-fit` | manifest only | A shape whose own recorded text needs more height than the box it declared — text running past its own frame, which `bounds` structurally cannot see. Each line is measured at its own recorded size, and the space recorded after each paragraph but the last is added to it, so a list whose items wrap past the bottom of their column is reported. |
 | `fill-ground` | manifest only | A shape filled to stand off what is behind it — an inverse or accent `panel`, `card` or `ellipse`, a `versus` plate, a `diverge` bar, a callout's dot, a `fanout` source — that neither luminance (under 3:1) nor colour (under 35 ΔE) separates from the ground it was laid on, so it all but vanishes: an `inverse` bound to the page's own colour, an accent the page already is. A `surface` fill is a recess by design and records no fill to judge. WARN. |
 | `placeholder` | manifest only | Recorded text that reads like copy nobody meant to ship — four phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`, `FIXME`, `[insert`, and a run of three or more `x` in either case. Bare capitalised `TODO` fires unless whitespace and two more capitals follow it — the one exception, and what spares the Spanish *TODO EL MUNDO*; *TODO el mundo* and *TODO, EL MUNDO* are both reported, the second because a comma is not whitespace. `TODO:` fires unconditionally. Lowercase `todo` fires only as `todo:` opening a line, or as `@todo` anywhere. Every recorded row is read — its `lines`, or its `text` where it records none — and so are the slide's speaker notes. `TBD` is deliberately not matched: a deck may legitimately say it. WARN. |
-| `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. A line the whole page does not hold is asked for again inside the shape's own box, because pdftotext merges side-by-side placements row by row and splices one column's line into the other's. |
+| `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. A line the whole page does not hold is asked for again inside the shape's own box, because pdftotext merges side-by-side placements row by row and splices one column's line into the other's. A line on a `plate` — a `code` listing — is asked for inside that plate only, since text run off its plate is still on the page. Every box is read from one `pdftotext -bbox` pass over the render, made the first time a box is needed; where that pass fails no box holds anything, and a plated line is asked for on the page like any other. |
 | `render-contrast` | **the render's pixels** | Text on a slide showing a picture — one this deck placed, or one the template paints behind every slide — whose *rendered* surroundings fall below WCAG AA. Measured in three horizontal bands per shape, so a gradient scrim is judged where it is weakest. |
 | `font-substituted` | **the render's PDF**, else this machine | A face the deck's runs name that the render did not embed, so it is set in something else and every finding drawn from it — `overflow`, `render-contrast` — judged type the deck does not carry. Read from the fonts the rendered PDF embeds (`pdffonts`), matched through the PostScript names fontconfig gives each family; where `pdffonts` cannot run, from `fc-list`'s installed families instead. The render hands LibreOffice every installed family the deck names (see [`cli.md`](cli.md#render--deck-to-images)), so on a machine with fontconfig a finding means the face is not installed there under that name. A run the render never draws — an equation's maths, set in the Choice branch PowerPoint reads — is not counted. One finding per face, on slide `0`. Runs only when `qa` renders. WARN. |
 | `cjk-unrendered` | **the render's PDF** | A slide carrying Chinese, Japanese or Korean text whose page embeds no font fontconfig lists as covering those languages. LibreOffice drew the words blank or as empty boxes, while `pdftotext` still extracts them, so `overflow` passes on text nobody can see. The render links the font `fc-match` picks for each CJK language into LibreOffice's profile whenever the deck carries such text, so this fires where that lookup failed or found no CJK font. Silent when fontconfig or `pdffonts` cannot run. ERROR. |
@@ -216,7 +216,8 @@ records no `placements` key.
 
 `plate` on a shape marks a surface the compiler painted so something else could be read
 on it. It is deliberately larger than the text it sits behind, so `placement-fit` skips
-it; it is the one overhang the compiler chooses rather than the author.
+it; it is the one overhang the compiler chooses rather than the author. A plate that
+records `lines` sets them itself, and `overflow` looks for them inside the plate alone.
 
 ### Sizes, when a shape sets more than one
 
@@ -564,13 +565,14 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   hyphen) or `non- text` (`-layout` keeps it at the row break), and neither
   is loss — but that same leniency means a garbled or reordered rendering of
   the right characters would not be flagged either.
-- **A line whose own box crop also fails still reports a false `overflow`.** Both
+- **A line its own box cannot be read for still reports a false `overflow`.** Both
   whole-page extractions read a page row by row, so where two columns sit side by
   side the neighbouring column's text lands *between* the halves of a line the
   renderer wrapped. The check answers that by asking again inside the shape's own
   box, which resolves the ordinary two-column case — but only when `qa` renders,
-  and a crop that errors is logged and treated as a miss, so the finding comes
-  back. On a single `[error] overflow` it is still worth a look at the render.
+  and a `pdftotext -bbox` pass that errors is logged and treated as a miss, so the
+  finding comes back. On a single `[error] overflow` it is still worth a look at the
+  render.
 - **None of these checks are a design review.** Visual hierarchy,
   alignment, spacing balance, and "does this look intentional" are out of
   scope entirely — closing that gap is separate work, not this one.

@@ -1,7 +1,9 @@
-"""Advance tables for common brand faces, one number per glyph in ``GLYPHS`` order.
+"""Advance tables for faces the themes name: the brand faces one number per glyph in
+``GLYPHS`` order, the monospaced ``COURIER`` and ``MONO`` one advance for all they cover.
 
-Baked like ``_metrics``' own tables, from Google Fonts' OFL files; regenerate with
-``bin/py tests/utils/test_metrics.py``.
+Baked like ``_metrics``' own tables: the brand faces from Google Fonts' OFL files,
+``COURIER`` from LibreOffice's Liberation Mono, the monospaced coverage from fontconfig's
+reading of each cut. Regenerate with ``bin/py tests/utils/test_metrics.py``.
 """
 
 from __future__ import annotations
@@ -40,3 +42,37 @@ BEBAS_NEUE = _packed(
 BARLOW_SEMI_CONDENSED = _packed(
     "0.2 0.311 0.352 0.651 0.508 0.815 0.654 0.169 0.329 0.329 0.38 0.471 0.238 0.37 0.247 0.444 0.511 0.319 0.499 0.487 0.544 0.488 0.488 0.451 0.49 0.482 0.319 0.274 0.471 0.471 0.471 0.479 0.794 0.577 0.545 0.536 0.547 0.517 0.49 0.54 0.563 0.246 0.518 0.558 0.499 0.631 0.59 0.547 0.531 0.527 0.543 0.52 0.526 0.562 0.555 0.783 0.553 0.546 0.485 0.381 0.444 0.381 0.448 0.472 0.226 0.487 0.505 0.486 0.505 0.492 0.342 0.498 0.497 0.237 0.235 0.491 0.227 0.755 0.497 0.503 0.508 0.508 0.354 0.457 0.335 0.496 0.478 0.698 0.488 0.464 0.416 0.36 0.194 0.36 0.512 0.196 0.196 0.358 0.358 0.428 0.639 0.78 0.567 0.565 0.37 0.422 0.311"
 )
+
+
+def _spans(spans: str) -> str:
+    """The characters ``spans`` names: hex code points and inclusive ``lo-hi`` ranges."""
+    chars: list[str] = []
+    for token in spans.split():
+        lo, _, hi = token.partition("-")
+        chars.extend(chr(code) for code in range(int(lo, 16), int(hi or lo, 16) + 1))
+    return "".join(chars)
+
+
+# Liberation Mono Regular+Bold, metric clone of Courier New: one advance for every glyph,
+# and for every character beyond GLYPHS that both families carry one column wide in both cuts.
+COURIER = dict.fromkeys(
+    GLYPHS
+    + _spans(
+        "a0-a2 a4-ac ae-af b1-d6 d8-236 238-241 250-2e4 2ec-2ff 37e 384-38a 38c 38e-3a1 3a3-3ce "
+        "3d0-482 48a-4ce 4d0-4f9 500-50f 5be 5c0 5c6 5d0-5ea 5f0-5f4 1d00-1dbf 1e00-1e95 "
+        "1e97-1e9b 1ea0-1ef9 1f00-1f15 1f18-1f1d 1f20-1f45 1f48-1f4d 1f50-1f57 1f59 1f5b 1f5d "
+        "1f5f-1f7d 1f80-1fb4 1fb6-1fc4 1fc6-1fd3 1fd6-1fdb 1fdd-1fef 1ff2-1ff4 1ff6-1ffe 2012 "
+        "2015 2017 201a-201b 201e-2021 2030 2032-2034 2039-203a 203c 203e 2044 205e 207f "
+        "2090-2094 20a0-20ab 20ad-20b5 2105 2113 2116 2122 2126 212e 2153-2154 215b-215e "
+        "2190-2195 21a8 2202 2206 220f 2211-2212 2215 2219-221a 221e-221f 2229 222b 2248 "
+        "2260-2261 2264-2265 2302 2310 2320-2321 2500 2502 250c 2510 2514 2518 251c 2524 252c "
+        "2534 253c 2550-256c 2580 2584 2588 258c 2590-2593 25a0-25a1 25aa-25ac 25b2 25ba 25bc "
+        "25c4 25ca-25cc 25cf 25d8-25d9 25e6 263a-263c 2640 2642 2660 2663 2665-2666 266a-266b "
+        "266f 2e17 fb01-fb02 fb1d fb1f-fb36 fb38-fb3c fb3e fb40-fb41 fb43-fb44 fb46-fb4f"
+    ),
+    0.6001,
+)
+
+# SF Mono's advance, the widest monospace one measured, for each Latin glyph of a mono face
+# with no table; it may lack anything beyond Latin, so that gets the widest of its class.
+MONO = dict.fromkeys(GLYPHS + _spans("a0-a2 a4-ac ae-af b1-d6 d8-137 139-148 14c-17e"), 0.6182)

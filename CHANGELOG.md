@@ -3,6 +3,37 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.6.0 — 2026-10-04
+
+- On pf-core 0.25.
+
+### Components
+
+- `code` measures its lines in the theme's mono face, inside the plate's padding and
+  rounded corners. **A listing with a line wider than its plate is refused** unless it sets
+  `wrap: true`, and a wrapped listing's plate is as deep as the rows its lines wrap to.
+- `code` draws a tab as spaces to the next multiple of four columns, does not charge a
+  line's trailing spaces, and charges a space its face may lack a full em.
+- `code` sets its rows exactly 1.55 times the type size apart, the advance its plate is
+  sized for, and moves the leading above its first row from the plate's top margin to its
+  bottom one.
+- Courier New, Liberation Mono and Cousine have a width table of their own, covering
+  accents, Greek, Cyrillic, arrows and box drawing. A `mono` face without it is charged the
+  widest monospace advance measured for Latin, and the widest glyph of its class beyond it.
+- `code` refuses a placement too narrow for its plate's padding to leave room for a line.
+
+### Type
+
+- Fit estimates break a line where LibreOffice does: never beside a no-break, figure or
+  narrow no-break space unless a hyphen or en dash comes before it, nor after a hyphen before
+  a digit, between two hyphens, or after a hyphen opening a word. An overlong word in text
+  carrying CJK keeps its kinsoku.
+
+### Render and QA
+
+- `overflow` reports a line set on a plate — a `code` listing — that the render does not
+  hold inside that plate.
+
 ## v0.5.0 — 2026-09-30
 
 - On pf-core 0.24.

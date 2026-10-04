@@ -8,7 +8,10 @@ Config (env, read at call time, so ``.env`` changes take effect between runs):
 
 from __future__ import annotations
 
+import re
 import subprocess
+from functools import cached_property
+from html import unescape
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +29,13 @@ _PDFTOTEXT_DEFAULT = "pdftotext"
 _TIMEOUT_S_DEFAULT = 60
 _PT_PER_IN = 72.0
 # The renderer may set a glyph a hair past the box the shape was measured for.
-_CROP_PAD_PT = 4
+_BOX_PAD_PT = 4
+_WORD = re.compile(
+    r'<word xMin="(-?[\d.]+)" yMin="(-?[\d.]+)" xMax="(-?[\d.]+)" yMax="(-?[\d.]+)">(.*?)</word>'
+)
+
+Word = tuple[float, float, float, float, str]
+"""``(x0, y0, x1, y1, text)``: one word pdftotext found, in points from the page's top left."""
 
 
 def _run_pdftotext(argv: list[str], pdf_path: Path, timeout_s: int) -> str:
@@ -73,40 +82,47 @@ def extract_pages(
     return pages
 
 
-def crop_text(
-    pdf_path: str | Path,
-    page: int,
-    box: tuple[float, float, float, float],
-    *,
-    pdftotext: str | None = None,
-    timeout: int | None = None,
-) -> str:
-    """The text inside *box* — inches from the slide's top left — on 1-based *page*.
+def page_words(
+    pdf_path: str | Path, *, pdftotext: str | None = None, timeout: int | None = None
+) -> list[list[Word]]:
+    """Every word of ``pdf_path``, page by page and in reading order, from one pdftotext run.
 
     Raises:
         RenderError: pdftotext failed or timed out.
     """
-    left, top, width, height = box
     binary = env_str(pdftotext, "DECKWRIGHT_PDFTOTEXT", default=_PDFTOTEXT_DEFAULT)
     timeout_s = resolve_int(timeout, "DECKWRIGHT_PDFTOTEXT_TIMEOUT_S", default=_TIMEOUT_S_DEFAULT)
-    argv = [
-        binary,
-        "-f",
-        str(page),
-        "-l",
-        str(page),
-        "-x",
-        str(max(0, int(left * _PT_PER_IN) - _CROP_PAD_PT)),
-        "-y",
-        str(max(0, int(top * _PT_PER_IN) - _CROP_PAD_PT)),
-        "-W",
-        str(int(width * _PT_PER_IN) + 2 * _CROP_PAD_PT),
-        "-H",
-        str(int(height * _PT_PER_IN) + 2 * _CROP_PAD_PT),
-        str(pdf_path),
-        "-",
+    html = _run_pdftotext([binary, "-bbox", str(pdf_path), "-"], Path(pdf_path), timeout_s)
+    return [
+        [
+            (float(x0), float(y0), float(x1), float(y1), unescape(text))
+            for x0, y0, x1, y1, text in _WORD.findall(page)
+        ]
+        for page in html.split("<page ")[1:]
     ]
-    return _run_pdftotext(argv, Path(pdf_path), timeout_s)
+
+
+def text_within(words: list[Word], box: tuple[float, float, float, float]) -> str:
+    """The text of ``words`` inside ``box`` — inches from the slide's top left.
+
+    A glyph counts if any of it is inside, a line if its middle is. pdftotext gives words
+    rather than glyphs, so each glyph takes an equal share of its word: exact in a monospace
+    listing, close in anything else.
+    """
+    left, top, width, height = (v * _PT_PER_IN for v in box)
+    x0, x1 = left - _BOX_PAD_PT, left + width + _BOX_PAD_PT
+    y0, y1 = top - _BOX_PAD_PT, top + height + _BOX_PAD_PT
+    kept = []
+    for wx0, wy0, wx1, wy1, text in words:
+        if not text or not y0 <= (wy0 + wy1) / 2 <= y1:
+            continue
+        step = (wx1 - wx0) / len(text)
+        inside = "".join(
+            ch for k, ch in enumerate(text) if wx0 + k * step < x1 and wx0 + (k + 1) * step > x0
+        )
+        if inside:
+            kept.append(inside)
+    return " ".join(kept)
 
 
 def normalise(text: str) -> str:
@@ -124,26 +140,28 @@ def _matchable(text: str) -> str:
     return normalise(text).replace(" ", "").replace("-", "")
 
 
-def _own_box_holds(
-    pdf_path: str | Path,
-    page: int,
-    box: tuple[float, float, float, float],
-    needle: str,
-    cache: dict[tuple[int, tuple[float, float, float, float]], str],
-) -> bool:
-    """Whether *needle* is in the shape's own frame, cropped out of the page.
+class _Boxes:
+    """The text inside a shape's box, every page read from one ``pdftotext -bbox`` pass made
+    the first time a box is asked for."""
 
-    pdftotext merges side-by-side placements row by row, so one shape's wrapped line
-    arrives with a neighbour's spliced into it and no longer reads contiguously.
-    """
-    key = (page, box)
-    if key not in cache:
+    def __init__(self, pdf_path: str | Path) -> None:
+        self._pdf_path = pdf_path
+
+    @cached_property
+    def _pages(self) -> list[list[Word]] | None:
         try:
-            cache[key] = _matchable(crop_text(pdf_path, page, box))
+            return page_words(self._pdf_path)
         except RenderError as e:
-            log_exception(e, message_prepend="overflow crop failed", log_level="warning")
-            cache[key] = ""
-    return bool(cache[key]) and needle in cache[key]
+            log_exception(e, message_prepend="overflow word boxes failed", log_level="warning")
+            return None
+
+    def text(self, page: int, box: tuple[float, float, float, float]) -> str | None:
+        """The matchable text inside ``box`` on 1-based ``page``, or ``None`` if the words
+        could not be read."""
+        pages = self._pages
+        if pages is None or not 0 < page <= len(pages):
+            return None
+        return _matchable(text_within(pages[page - 1], box))
 
 
 def check_overflow(
@@ -157,8 +175,8 @@ def check_overflow(
 
     Text is missing only if absent from *both* extractions (see :func:`extract_pages`).
     ``rendered="image"`` records are skipped: a PDF extractor cannot see text in a picture.
-    Given *pdf_path*, a line the whole page does not hold is asked for again inside the
-    shape's own box, which is what a multi-column slide needs.
+    Given *pdf_path*, a line the page does not hold is asked for inside the shape's own box,
+    and a line on a ``plate`` inside the plate only; ``docs/qa.md`` has why.
     """
     slides = manifest.get("slides", [])
     if len(slides) != len(pages):
@@ -173,31 +191,38 @@ def check_overflow(
 
     alt = alt_pages if alt_pages and len(alt_pages) == len(pages) else [""] * len(pages)
     findings: list[Finding] = []
-    cropped: dict[tuple[int, tuple[float, float, float, float]], str] = {}
+    boxes = _Boxes(pdf_path) if pdf_path is not None else None
     for page_no, (slide, page, alt_page) in enumerate(zip(slides, pages, alt, strict=True), 1):
         haystack = _matchable(page)
         alt_haystack = _matchable(alt_page)
         for shape in slide.get("shapes", []):
             if shape.get("rendered", "native") != "native":
                 continue
+            box = box_of(shape)
+            plate = boxes.text(page_no, box) if boxes and box and shape.get("plate") else None
+            own: str | None = None
             lines = shape.get("lines") or ([shape["text"]] if shape.get("text") else [])
             for line in lines:
                 needle = _matchable(str(line))
-                if not needle or needle in haystack or needle in alt_haystack:
+                if not needle:
                     continue
-                box = box_of(shape)
-                if (
-                    pdf_path is not None
-                    and box
-                    and _own_box_holds(pdf_path, page_no, box, needle, cropped)
-                ):
+                if plate is not None:
+                    if needle in plate:
+                        continue
+                elif needle in haystack or needle in alt_haystack:
                     continue
+                elif boxes and box:
+                    if own is None:
+                        own = boxes.text(page_no, box) or ""
+                    if needle in own:
+                        continue
+                where = "inside its plate" if plate is not None else "in the rendered slide"
                 findings.append(
                     Finding(
                         slide=slide["index"],
                         check="overflow",
                         severity=Severity.ERROR,
-                        detail=f"{str(line)[:70]!r} was not found in the rendered slide",
+                        detail=f"{str(line)[:70]!r} was not found {where}",
                         box=box,
                         shape=shape.get("name"),
                     )

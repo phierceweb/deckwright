@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deckwright"
-version = "0.5.0"
+version = "0.6.0"
 description = "Compile declarative deck specs into branded PowerPoint files — themes, native charts, icons, imagery, animation and QA on python-pptx"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,8 +20,8 @@ license-files = [
 authors = [{ name = "Mike Farr" }]
 dependencies = [
     # pf-core foundation + the extras this project uses, pinned to a compatible
-    # release (picks up patch releases of 0.24, never 0.25).
-    "pf-core[cli]~=0.24.0",
+    # release (picks up patch releases of 0.25, never 0.26).
+    "pf-core[cli]~=0.25.0",
     # deck/slide generation + native charts (pulls lxml); compatible-release pinned
     # because chart styling reaches into its oxml element classes.
     "python-pptx~=1.0.2",

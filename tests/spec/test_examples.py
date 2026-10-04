@@ -1,5 +1,5 @@
-"""Every deck shipped under examples/ must parse — nothing else in the suite reads them,
-so a broken demo deck otherwise ships with the suite green."""
+"""Every deck shipped under examples/ must parse and build — nothing else in the suite
+reads them, so a broken demo deck otherwise ships with the suite green."""
 
 import pathlib
 
@@ -18,6 +18,23 @@ def test_there_are_example_decks_to_check():
 @pytest.mark.parametrize("deck", DECKS, ids=lambda p: p.name)
 def test_a_shipped_example_deck_parses(deck):
     assert parse_deck(deck).slides
+
+
+@pytest.mark.parametrize("deck", DECKS, ids=lambda p: p.name)
+def test_a_shipped_example_deck_builds(deck, tmp_path, monkeypatch):
+    """What only a build refuses — a listing wider than its plate, a body taller than its
+    rect — parses clean. A `document:` slide needs a browser; without one the deck skips."""
+    from deckwright.compile import build_deck
+    from deckwright.errors import MissingToolError
+
+    # An empty theme dir, so a local `base.theme.yaml` cannot stand in for the built-in.
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path / "themes"))
+    monkeypatch.setenv("DECKWRIGHT_CACHE_DIR", str(tmp_path / "cache"))
+    try:
+        result = build_deck(deck, out=tmp_path / "out.pptx")
+    except MissingToolError as e:
+        pytest.skip(str(e))
+    assert result.slides == len(parse_deck(deck).slides)
 
 
 TREATMENTS = EXAMPLES / "title-treatments.deck.yaml"

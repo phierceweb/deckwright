@@ -89,7 +89,12 @@ template's colour scheme, so one class is right for all of them.
 ## `text.py` and `_metrics.py` — measuring a string
 
 `text_em(text, face)` returns a width in ems; `wrapped_lines(text, width_in=, size_pt=,
-face=)` returns how many lines it takes in a box. `LINE_HEIGHT` (1.2) is the line advance
+face=)` returns how many lines it takes in a box. A `code` listing has its own pair, since a
+listing keeps its spacing where prose collapses it: `listing_em(line, face)` is a line's
+width in the `mono` face, its trailing spaces hung, and `listing_rows(line, width_in=,
+size_pt=, face=)` the rows it wraps to, the spaces before each run charged on the row they
+end. Both charge a space the monospaced table lacks — an em, figure or narrow no-break
+space — a full em, since the face may not carry it and another face's em space is that wide. `LINE_HEIGHT` (1.2) is the line advance
 those lines are multiplied by. Chrome band heights (`layouts/chrome.py`), card and table
 geometry (`components/_tablegeom.py`, `components/card.py`), category-label room in
 `charts/native.py` and QA's own geometry check all size off this pair, so a change here
@@ -100,30 +105,55 @@ moves the whole build at once.
 across Carlito, Liberation Sans, Verdana and DejaVu Sans. `_metrics_faces.py` holds the
 brand families the bundled themes name (Poppins, Open Sans, Montserrat, Amatic, Sniglet,
 Bebas Neue, Barlow Semi Condensed), each packed as one string of advances in `GLYPHS`
-order so seven tables stay a few dozen lines; `CEILING` does not fold them in, so adding a
-family never moves the estimate for a face that has none. **No font file ships and none is
-read at runtime** — that is
+order so seven tables stay a few dozen lines, and `COURIER` — Liberation Mono, the metric
+clone of the default `mono` face, one advance for every glyph. `MONO` is the widest
+monospace advance measured (SF Mono), and `table_for(face, mono=True)` gives it to any face
+setting a listing that has no monospaced table of its own — an unmeasured one, and one whose
+name merely contains a proportional family's (`Helvetica Monospaced` would otherwise get
+Arial's) — since every proportional table charges `i`, `.` and the space far under a
+monospaced advance. Both monospaced tables also cover glyphs beyond `GLYPHS`, one column
+each: `COURIER` every character Liberation Mono and Courier New both carry in Regular and
+Bold, box drawing included, and `MONO` only the Latin every monospace cut measured carries
+— Basic, Latin-1 and Extended-A — since an unmeasured face may lack anything beyond it, and
+a glyph borrowed from another face can be wider. `CEILING` does not fold the family tables in, so
+adding a family never moves the estimate for a face that has none. **No font
+file ships and none is read at runtime** — that is
 the point of baking them. Each family table is itself a max over its Regular and Bold
 cuts, so no caller passes a bold flag, and `table_for` routes a heavy or black cut to
 `CEILING` rather than its family, those being wider than the Bold folded in.
 `theme/load.py` warns `theme_face_unmeasured` when a theme's face has no table of its
 own, and every fit refusal built on the estimate appends `estimate_caveat(face)` — the
 fallback is loose, a wide display face can outrun it, and nothing downstream can see either.
+A listing passes `mono=True` to both `measured` and `estimate_caveat`, so a face that only
+`MONO` measures is named as unmeasured.
 
-Three traps for anyone editing this pair:
+**A line breaks where LibreOffice breaks it.** `spaced_runs` cuts text where a renderer may
+break it: at a space other than a no-break, figure or narrow no-break one, after a hyphen
+or dash, and on either side of a wide character. Not after a slash, since LibreOffice sets
+a URL broken mid-word. Not after a hyphen before a digit or another dash, nor after one
+opening a word (`-v`): UAX #14's LB25, LB21 and LB20a, each pinned in
+`tests/utils/test_text.py` against a LibreOffice render of a box too narrow for the run. A CJK character breaks on either side, a hangul run only where Latin text would,
+since Korean breaks at spaces, and `_cjk.glue` keeps a mark that may not start or end a line
+with its neighbour (kinsoku), and a no-break space with the characters either side of it
+unless a hyphen or en dash comes before it (LB12a).
 
-- **`measured()` compares tables by identity** (`table_for(face) is not CEILING`). Return
-  a copy from `table_for` and it silently reports every face as measured. `table_for` is
-  `lru_cache`d and returns the module-level dicts; keep it that way.
+Five traps for anyone editing this pair:
+
+- **`table_for` matches Courier's names before Arial's.** Arial's list carries
+  `liberation`, which would claim Liberation Mono and measure a listing proportionally.
+- **`measured()` compares tables by identity** (`is not CEILING`, `is not MONO`). Return
+  a copy from `table_for` and it silently reports every face as measured. `_routed`, behind
+  `table_for`, is `lru_cache`d and returns the module-level dicts; keep it that way.
 - **`_MARGIN` in `utils/text.py` errs long by design.** It covers what
   per-character summation cannot see — kerning, hinting, a renderer's own spacing.
   Lowering it is not tuning: a band sized one line short of its text draws straight
   through what sits below it, and neither QA's `bounds` check nor its `overflow` check
   can see a doubled-up chrome stack.
-- **A lone word is measured without `_MARGIN`.** `overlong_word` refuses a build rather
-  than sizing a box, and `wrapped_lines` breaks a word too long for its line where the
-  real width does; an allowance in either refuses, or reserves a second line for, a word
-  that fits its widest cut.
+- **A lone word and a listing are measured without `_MARGIN`.** `overlong_word` refuses a
+  build rather than sizing a box, and `wrapped_lines` breaks a word too long for its line
+  where the real width does; an allowance in either refuses, or reserves a second line for,
+  a word that fits its widest cut. `listing_em` and `listing_rows` measure monospaced
+  columns, which have no kerning to allow for, so the two agree on every line.
 - **`advance_em` over-counts every character no table carries**, charging it the widest
   measured glyph of its class, so an accented run is never under-counted. CJK is the
   exception: `_cjk.py` charges every ideograph, kana, hangul syllable and fullwidth form
