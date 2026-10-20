@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterator
 
-from pf_core.utils.io import atomic_write_text
+from pw_foundation.utils.io import atomic_write_text
 
 _CHROME_ORDER = ("kicker", "title", "subtitle")
 # Components that hold no words and are not worth naming: the slide's own paint, a
@@ -20,8 +20,9 @@ _CELL = re.compile(r"^r(\d+)c(\d+)$")
 
 def split_name(name: str) -> tuple[str, str | None]:
     """A shape name as ``(origin, part)`` — ``s2.p1.table.r1c1`` is that table's ``r1c1``."""
-    if "#" in name:
-        return name.split("#", 1)[0], None
+    head, mark, counter = name.rpartition("#")
+    if mark and counter.isdigit():
+        return head, None
     origin, _, part = name.rpartition(".")
     return (origin, part) if origin else (name, None)
 

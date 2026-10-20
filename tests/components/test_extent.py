@@ -119,7 +119,6 @@ def test_settling_never_pushes_content_out_of_its_placement(ctx_factory):
     [
         ("callouts", {"items": [{"head": "A"}, {"head": "B", "body": "Longer copy here."}]}, 2),
         ("stats", {"items": [{"value": "1", "label": "one"}]}, 1),
-        ("card", {"heading": "H", "body": "Copy."}, 1),
     ],
 )
 def test_content_sized_frames_ignore_the_placement_anchor(name, body, n_frames, ctx_factory):

@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import RenderError
 from deckwright.panels.model import Panel

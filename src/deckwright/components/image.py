@@ -29,7 +29,7 @@ _FIELDS = ("src", "alt", "decorative", "fit", "crop", "mask", "radius", "inset",
 _OVER_KEYS = ("text", "rung", "align")
 _MAX_RADIUS = 0.5
 _INSET_DEFAULT = 0.025  # fraction of canvas width between the picture and its text
-_OVER_RUNG_DEFAULT = "title"
+OVER_RUNG_DEFAULT = "title"
 _OVER_PAIR_DEFAULT = "inverse"
 
 
@@ -147,7 +147,7 @@ def _over(ctx: SlideCtx) -> tuple[tuple[str, str, str], ...]:
                 f"{_where(ctx)}: an 'over' line's align must be one of "
                 f"{', '.join(ALIGN)}, got {align!r}"
             )
-        out.append((str(entry["text"]), str(entry.get("rung", _OVER_RUNG_DEFAULT)), align))
+        out.append((str(entry["text"]), str(entry.get("rung", OVER_RUNG_DEFAULT)), align))
     return tuple(out)
 
 
@@ -222,6 +222,7 @@ def _write(ctx: SlideCtx, *, path, fit, lines, scrim: Scrim | None):
             else weakest(sampled, ink=ink)
         )
     tf = textbox(ctx.slide, rect.left, rect.top, rect.width, rect.height, anchor=ANCHOR[ctx.anchor])
+    sizes = []
     for i, (text, rung, align) in enumerate(lines):
         style = ctx.style(rung)
         para(
@@ -236,5 +237,15 @@ def _write(ctx: SlideCtx, *, path, fit, lines, scrim: Scrim | None):
             space_after=0,
             font=ctx.theme.font_for(style),
         )
-        ctx.manifest.record(tf._parent, text=text, font_pt=style.size, fg=ink, bg=bg)
+        sizes.append(style.size)
+    # One frame, one record, so read-back finds the frame under one name. The smallest size
+    # is the one the scrim was solved for.
+    ctx.manifest.record(
+        tf._parent,
+        lines=[text for text, _, _ in lines],
+        font_pt=min(sizes),
+        line_pt=sizes,
+        fg=ink,
+        bg=bg,
+    )
     return tf._parent

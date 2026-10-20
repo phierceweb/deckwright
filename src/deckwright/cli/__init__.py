@@ -1,7 +1,7 @@
 """deckwright command-line entry point.
 
-Wired through pf-core's CLI scaffold, so ``--verbose`` logging and
-exception-to-exit-code mapping work out of the box.
+``_app.py`` holds the Typer app and its ``--verbose`` / ``--version`` callback;
+``_run.py`` maps what a command raises to a message and an exit code.
 """
 
 from __future__ import annotations
@@ -9,9 +9,8 @@ from __future__ import annotations
 import io
 import sys
 
-from pf_core.cli import run_cli
-
 from deckwright.cli._app import app
+from deckwright.cli._run import run_cli
 from deckwright.cli import build, glyphs, onboarding, reading  # noqa: F401 — import registers the commands
 from deckwright.config import load_env
 

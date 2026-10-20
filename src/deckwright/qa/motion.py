@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from lxml import etree
-from pf_core.utils.env import resolve_int
+from pw_foundation.utils.env import resolve_int
 
 from deckwright.motion.read import sequences as _sequences
 from deckwright.qa.model import Finding, Severity
@@ -28,6 +28,7 @@ _LABEL = {
     "click_sequence": "animate: one_at_a_time",
     "click_reveals": "reveals:",
     "chart_build": "a chart's own build",
+    "line_build": "build: last",
 }
 
 

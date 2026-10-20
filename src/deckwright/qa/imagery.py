@@ -12,7 +12,7 @@ from typing import Any, Iterable, Sequence, cast
 
 from PIL import Image
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.compile.record import box_of, canvas_of
 from deckwright.qa.model import Finding, Severity

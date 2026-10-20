@@ -6,7 +6,6 @@ fill rather than against the slide's.
 
 from __future__ import annotations
 
-import math
 
 from pptx.util import Inches
 
@@ -18,9 +17,10 @@ from deckwright.theme.media import resolve_media
 from deckwright.theme.model import Rect
 from deckwright.utils.a11y import describe
 from deckwright.utils.shapes import ANCHOR, para, rrect, textbox
-from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, overlong_word, wrapped_lines
+from deckwright.utils.text import estimate_caveat, inches_apart, overlong_word
 
 from deckwright.components._shape import (
+    anchored,
     figure_text,
     _where,
     known_fields,
@@ -29,14 +29,18 @@ from deckwright.components._shape import (
     shadow,
     visible_edge,
 )
+from deckwright.components._cardgeom import (
+    RADIUS_DEFAULT,
+    copy_height,
+    corner_reach,
+    icon_side,
+)
 from deckwright.components._shared import HEAD_SPACE_AFTER_PT, mark_colour
 
 _FIELDS = ("pair", "heading", "body", "icon", "alt", "decorative", "radius", "shadow")
 _PAIR_DEFAULT = "surface"
-_RADIUS_DEFAULT = 0.06
 _MAX_RADIUS = 0.5
 # The icon is a mark beside the copy, not an illustration: two heading line-heights square.
-_ICON_LINES = 2.0
 
 
 @component("card")
@@ -77,7 +81,7 @@ def card(ctx: SlideCtx) -> BodyResult:
     shapes: list[RevealItem] = [(plate.shape_id, "surface")]
 
     inset = ctx.grid.gutter
-    side = inset + _corner_reach(rect, radius, depth=inset)
+    side = inset + corner_reach(rect, radius, depth=inset)
     area = Rect(rect.left + side, rect.top + inset, rect.width - 2 * side, rect.height - 2 * inset)
     if area.width <= 0 or area.height <= 0:
         raise LayoutError(
@@ -85,6 +89,7 @@ def card(ctx: SlideCtx) -> BodyResult:
             f"the {inset:.2f}in the theme's gutter insets a card by on every side"
         )
     if icon:
+        area = _settled(ctx, area, heading=heading, copy=copy)
         area = _icon(ctx, area, str(icon), shapes, worded=bool(heading or copy))
     elif "alt" in ctx.body or "decorative" in ctx.body:
         raise LayoutError(
@@ -92,37 +97,35 @@ def card(ctx: SlideCtx) -> BodyResult:
         )
     if heading or copy:
         shapes.append(
-            (_copy(ctx, area, heading=heading, copy=copy, ink=pair.fg, bg=pair.bg), "text")
+            (
+                _copy(
+                    ctx,
+                    area,
+                    heading=heading,
+                    copy=copy,
+                    ink=pair.fg,
+                    bg=pair.bg,
+                    anchor="top" if icon else ctx.anchor,
+                ),
+                "text",
+            )
         )
     return BodyResult(groups=[shapes], height=rect.height)
 
 
-def copy_height(ctx: SlideCtx, *, width: float, heading: str, copy: str) -> float:
-    """The height a card's type needs set to ``width``, in inches."""
-    head_style, body_style = ctx.style("head"), ctx.style("body")
-    needed = 0.0
-    if heading:
-        needed += (
-            wrapped_lines(
-                heading,
-                width_in=width,
-                size_pt=head_style.size,
-                face=ctx.theme.font_for(head_style),
-            )
-            * head_style.size
-            * LINE_HEIGHT
-            + HEAD_SPACE_AFTER_PT
-        ) / 72
-    if copy:
-        needed += (
-            wrapped_lines(
-                copy, width_in=width, size_pt=body_style.size, face=ctx.theme.font_for(body_style)
-            )
-            * body_style.size
-            * LINE_HEIGHT
-            / 72
+def _settled(ctx: SlideCtx, area: Rect, *, heading: str, copy: str) -> Rect:
+    """What is left of ``area`` once ``anchor:`` has moved an icon and its type down
+    together; the type's own frame anchor cannot move the icon drawn above it."""
+    depth = icon_side(ctx.theme)
+    if heading or copy:
+        depth += ctx.grid.gutter + copy_height(
+            ctx.theme, width=area.width, heading=heading, copy=copy
         )
-    return needed
+    slack = area.height - depth
+    if ctx.anchor == "top" or slack <= 0:
+        return area
+    drop = slack / 2 if ctx.anchor == "middle" else slack
+    return Rect(area.left, area.top + drop, area.width, area.height - drop)
 
 
 def _refuse_overlong(ctx: SlideCtx, text: str, *, width: float, size_pt: float, face: str) -> None:
@@ -137,47 +140,13 @@ def _refuse_overlong(ctx: SlideCtx, text: str, *, width: float, size_pt: float, 
     )
 
 
-def icon_side(ctx: SlideCtx) -> float:
-    """The side of a card's icon: two heading line-heights, in inches."""
-    return ctx.style("head").size * LINE_HEIGHT / 72 * _ICON_LINES
-
-
-def plate_height(
-    ctx: SlideCtx,
-    *,
-    width: float,
-    heading: str,
-    copy: str,
-    icon: bool = False,
-    radius: float = _RADIUS_DEFAULT,
-) -> float:
-    """The plate a card of this content fills at ``width``: its parts plus the inset.
-
-    ``icon`` counts, or a caller sizes its steps by their copy and then has no room for
-    the mark above it.
-    """
-    inset = ctx.grid.gutter
-    mark = icon_side(ctx) + inset if icon else 0.0
-
-    def depth(side: float) -> float:
-        return (
-            copy_height(ctx, width=width - 2 * side, heading=heading, copy=copy) + mark + 2 * inset
-        )
-
-    # The corner reach needs the plate's height, so size once against the square corner
-    # and again against the curve that height earns — the same rule `card()` insets by.
-    height = depth(inset)
-    side = inset + _corner_reach(Rect(0.0, 0.0, width, height), radius, depth=inset)
-    return height if side == inset else depth(side)
-
-
 def _text(ctx: SlideCtx, key: str) -> str:
     value = ctx.body.get(key)
     return "" if value is None else str(value)
 
 
 def _radius(ctx: SlideCtx) -> float:
-    value = number(ctx, "radius", default=_RADIUS_DEFAULT)
+    value = number(ctx, "radius", default=RADIUS_DEFAULT)
     if not 0.0 <= value <= _MAX_RADIUS:
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'card'): 'radius' is a fraction of the "
@@ -187,32 +156,20 @@ def _radius(ctx: SlideCtx) -> float:
     return value
 
 
-def _corner_reach(rect: Rect, radius: float, *, depth: float) -> float:
-    """How far the corner arc cuts in horizontally, ``depth`` below the plate's top edge.
-
-    The corner is a quarter-circle of radius ``r = radius * min(w, h)`` centred at
-    ``(r, r)``, so its edge at height ``d`` sits at ``r - sqrt(r^2 - (r - d)^2)``.
-    """
-    r = radius * min(rect.width, rect.height)
-    if depth >= r:
-        return 0.0
-    return r - math.sqrt(r * r - (r - depth) * (r - depth))
-
-
 def _icon(ctx: SlideCtx, area: Rect, name: str, shapes: list[RevealItem], *, worded: bool) -> Rect:
     """Place the icon at the top of the card's inner area; return what is left below it.
 
     A bare name is a glyph, drawn as vector and painted from the palette; anything
     carrying a suffix or a path separator is a picture file, placed as it is.
     """
-    side = icon_side(ctx)
-    if side >= area.height:
+    side = icon_side(ctx.theme)
+    if side > area.height:
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'card'): the icon alone wants "
             f"{side:.2f}in of the {area.height:.2f}in inside the plate — grow the "
             f"placement or drop the icon"
         )
-    box = Rect(area.left, area.top, side, side)
+    box = anchored(area, side, side, align=ctx.align, anchor="top")
     if _is_file(name):
         media = resolve_media(name, template=ctx.theme.template, roots=ctx.media_roots)
         shape = ctx.slide.shapes.add_picture(
@@ -238,22 +195,25 @@ def _is_file(name: str) -> bool:
     return "." in name or "/" in name or "\\" in name
 
 
-def _copy(ctx: SlideCtx, area: Rect, *, heading: str, copy: str, ink: str, bg: str) -> int:
+def _copy(
+    ctx: SlideCtx, area: Rect, *, heading: str, copy: str, ink: str, bg: str, anchor: str
+) -> int:
     """Set the card's type in one frame, refusing copy that will not fit the plate."""
     head_style, body_style = ctx.style("head"), ctx.style("body")
     for text, style in ((heading, head_style), (copy, body_style)):
         _refuse_overlong(
             ctx, text, width=area.width, size_pt=style.size, face=ctx.theme.font_for(style)
         )
-    needed = copy_height(ctx, width=area.width, heading=heading, copy=copy)
+    needed = copy_height(ctx.theme, width=area.width, heading=heading, copy=copy)
     if needed > area.height:
+        wants, left = inches_apart(needed, area.height)
         raise LayoutError(
             f"{_where(ctx)}: the card's type wants "
-            f"{needed:.2f}in but only {area.height:.2f}in is left inside the plate — "
+            f"{wants} but only {left} is left inside the plate — "
             f"shorten the copy or grow the placement"
             f"{estimate_caveat(ctx.theme.font_for(head_style), ctx.theme.font_for(body_style))}"
         )
-    tf = textbox(ctx.slide, area.left, area.top, area.width, area.height, anchor=ANCHOR["top"])
+    tf = textbox(ctx.slide, area.left, area.top, area.width, area.height, anchor=ANCHOR[anchor])
     lines: list[str] = []
     if heading:
         para(

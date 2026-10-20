@@ -1,6 +1,6 @@
 import pytest
 
-from deckwright.utils.text import closest_match, text_em, wrapped_lines
+from deckwright.utils.text import closest_match, inches_apart, text_em, wrapped_lines
 
 # The band a 13.333x7.5in deck gives a chrome line, and the title rung on it.
 WIDTH_IN = 11.87
@@ -231,6 +231,29 @@ def test_text_carrying_cjk_still_breaks_after_a_hyphen_and_beside_a_wide_charact
     assert overlong_word(text, width_in=1.5, size_pt=12, face="Courier New") is None
 
 
+@pytest.mark.parametrize(
+    "text,runs",
+    [
+        ("京京京京-大大大", ["京", "京", "京", "京-", "大", "大", "大"]),
+        ("😀😀😀😀-abc", ["😀", "😀", "😀", "😀-", "abc"]),
+        ("ＡＢＣＤ-abc", ["Ａ", "Ｂ", "Ｃ", "Ｄ-", "abc"]),
+        ("京京京京 -大大大", ["京", "京", "京", "京", "-", "大", "大", "大"]),
+    ],
+    ids=["ideograph", "emoji", "fullwidth", "spaced"],
+)
+def test_a_hyphen_stays_with_the_wide_character_before_it(text, runs):
+    """Pinned against a LibreOffice render of each in boxes 20–120pt wide: no line starts with
+    a hyphen that follows a wide character (UAX #14 LB21), a line may break after one, and a
+    hyphen after a space opens its word as usual."""
+    assert _runs(text) == runs
+
+
+def test_text_carrying_cjk_is_not_sized_short_by_a_break_before_a_hyphen():
+    """2.1 ems hold ``京京`` but not ``京京-``: with ``京-`` kept together, ``京京-京`` takes three
+    lines; broken before the hyphen, it would take two."""
+    assert wrapped_lines("京京-京", width_in=2.1 * 20 / 72, size_pt=20, face="Courier New") == 3
+
+
 def test_a_no_break_space_binds_except_after_a_hyphen():
     """Both pinned against a LibreOffice render: ideographs either side of a no-break space
     stay together, and a line still breaks after a hyphen before one (UAX #14 LB12a)."""
@@ -269,3 +292,24 @@ def test_a_space_the_listing_face_may_lack_is_charged_an_em(face, column):
     assert listing_em(line, face) == pytest.approx(4 * column + 3.0)
     width_in = (4 * column + 3.0 - 0.01) * 12 / 72
     assert listing_rows(line, width_in=width_in, size_pt=12, face=face) == 2
+
+
+def test_a_long_word_wraps_after_its_hyphens_as_libreoffice_wraps_it():
+    """Measured in LibreOffice at 4 lines: each hyphenated run moves down whole, where breaking
+    the 113 characters only where they run out would take 3."""
+    word = "a" * 10 + "-" + "b" * 45 + "-" + "c" * 45 + "-" + "d" * 10
+    assert wrapped_lines(word, width_in=5.25, size_pt=12, face="Courier New") == 4
+
+
+def test_a_hyphen_break_is_not_charged_a_space():
+    """``aaaa-bbbb`` is nine columns: a line holding exactly nine sets it whole, so the two
+    runs either side of the hyphen are joined with no space between them."""
+    width_in = (9 * 0.6001 * 1.04 + 0.001) * 12 / 72
+    assert wrapped_lines("aaaa-bbbb", width_in=width_in, size_pt=12, face="Courier New") == 1
+    assert wrapped_lines("aaaa-bbbbb", width_in=width_in, size_pt=12, face="Courier New") == 2
+
+
+def test_two_lengths_that_round_alike_get_the_decimals_that_tell_them_apart():
+    assert inches_apart(0.5312, 0.5288) == ("0.531in", "0.529in")
+    assert inches_apart(0.53121, 0.53082) == ("0.5312in", "0.5308in")
+    assert inches_apart(1.234, 0.5) == ("1.23in", "0.50in")

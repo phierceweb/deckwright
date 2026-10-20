@@ -6,7 +6,6 @@ cannot hold is named in a comment rather than dropped.
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from deckwright.spec._fit import column_up, content_band, lay_out, loose
+from deckwright.spec._themeback import _background, _box, _chrome, _inked, _pair, _rungs_over
 from deckwright.theme.load import load_theme
 from deckwright.theme.model import Rect, Theme
 from deckwright.utils.naming import NO_FOLD, deck_filename, slug_and_title
@@ -25,9 +25,14 @@ if TYPE_CHECKING:
 _UNNAMEABLE = "deck"
 
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
+_CHART_BUILDS = ("by_category", "by_series")
 
 _SPILLED = "# more than one slide holds — these did not fit, and are yours to place:\n"
 _PAINTED = "# this slide was painted {rgb}; name a background pair\n"
+_ELSEWHERE = (
+    "#\n# Built with theme '{built}' and drafted against '{drafted}', which stacks its chrome\n"
+    "# elsewhere: no slide's moved chrome is drafted. Draft against '{built}' to keep it.\n"
+)
 
 _HEADER = """\
 # Drafted by `deckwright extract` from {source}.
@@ -56,6 +61,7 @@ class _SlideDoc:
     doc: dict
     spilled: _Lines
     painted: str | None = None
+    remarks: _Lines = ()
 
 
 def _comment(text: str) -> str:
@@ -83,37 +89,25 @@ def _losses(dropped: _Lines) -> list[str]:
     ]
 
 
-def _hex(colour: str) -> str:
-    return colour.strip().lstrip("#").upper()
-
-
-def _background(rgb: str | None, theme: Theme) -> str | None:
-    """The pair whose surface this fill is, or None when it is not one of them.
-
-    Exact matches only: a near-miss would set the words on a surface the theme never
-    contrast-checked them against. The page colour is ``page`` whichever other pairs
-    share its surface, since those pairs differ only in the ink they set on it.
-    """
-    if not rgb:
-        return None
-    wanted = _hex(rgb)
-    matches = [name for name, pair in theme.palette.pairs.items() if _hex(pair.bg) == wanted]
-    if not matches:
-        return None
-    return "page" if "page" in matches else matches[0]
-
-
-def _slide_doc(slide: SlideContent, *, theme: Theme, rect: Rect) -> _SlideDoc:
+def _slide_doc(slide: SlideContent, *, theme: Theme, rect: Rect, frames: bool) -> _SlideDoc:
     doc: dict = {}
+    if slide.section:
+        doc["section"] = slide.section
     pair = _background(slide.background_rgb, theme)
     if pair and pair != "page":  # page is the default and stays unwritten
         doc["background"] = pair
-    for key in ("kicker", "title", "subtitle", "notes", "animate", "transition"):
+    for key in ("kicker", "title", "subtitle", "notes", "animate", "transition", "lang"):
         value = getattr(slide, key)
         if value:
             doc[key] = value
+    chrome = _chrome(slide, theme) if frames else {}
+    if slide.chrome_preset:
+        doc["chrome"] = slide.chrome_preset
+    elif chrome:
+        doc["chrome"] = chrome
+    remarks: list[str] = []
     if slide.placed:
-        place = [_entry(item, theme=theme) for item in slide.placed]
+        place = [_entry(item, theme=theme, remarks=remarks) for item in slide.placed]
         # What no placement drew was added by hand: named, since there is no band to set
         # it in that the placements read back do not already use.
         spilled = loose(slide) + column_up(place, theme=theme, band=rect)
@@ -121,51 +115,35 @@ def _slide_doc(slide: SlideContent, *, theme: Theme, rect: Rect) -> _SlideDoc:
         place, spilled = lay_out(slide, theme=theme, area=rect)
     if place:
         doc["place"] = place
+    if doc.get("animate") in _CHART_BUILDS and not any(
+        "chart" in entry and entry.get("animate") != "none" for entry in place
+    ):
+        remarks.append(
+            f"animate: {doc['animate']} built a chart that was not read back; "
+            f"the rest builds one_at_a_time"
+        )
+        doc["animate"] = "one_at_a_time"
     painted = slide.background_rgb if slide.background_rgb and pair is None else None
-    return _SlideDoc(doc or {"title": "(empty slide)"}, spilled, painted)
+    return _SlideDoc(doc or {"title": "(empty slide)"}, spilled, painted, tuple(remarks))
 
 
-def _entry(item: Recovered, *, theme: Theme) -> dict:
+def _entry(item: Recovered, *, theme: Theme, remarks: list[str]) -> dict:
     """A placement read back, at the box it sat in, named as it was."""
     entry: dict = {"at": {"box": _box(*item.box)}}
+    if item.bleed:
+        entry["bleed"] = True
     for key in ("id", "morph", "reveals"):
         if getattr(item, key):
             entry[key] = getattr(item, key)
+    if item.still:
+        entry["animate"] = "none"
+    if item.sizes:
+        item = _rungs_over(item, theme=theme, remarks=remarks)
     pair = _pair(item.painted, theme)
     if pair is None:
-        return {**entry, **item.body}
+        return {**entry, **_inked(item, theme)}
     ((component, fields),) = item.body.items()
     return {**entry, component: {"pair": pair, **fields}}
-
-
-def _pair(painted: tuple[str, str | None] | None, theme: Theme) -> str | None:
-    """The pair a plate was painted in, when the theme declares one; ``surface`` is the
-    default and stays unwritten. Its words' ink tells apart pairs sharing a ground."""
-    if painted is None:
-        return None
-    fill, ink = painted
-    grounds = [n for n, p in theme.palette.pairs.items() if _hex(p.bg) == fill]
-    found = [n for n in grounds if ink is None or _hex(theme.palette.pairs[n].fg) == ink]
-    return None if not found or "surface" in found else found[0]
-
-
-def _box(x: float, y: float, w: float, h: float) -> dict[str, str]:
-    """A box in percent of the canvas, rounded outward so a box drawn tight around its
-    words still holds them."""
-    left, top = math.floor(_milli(x)), math.floor(_milli(y))
-    # A rule's line is zero across, and a box may not be; the line draws at its top-left.
-    right = max(math.ceil(_milli(x + w)), left + 1)
-    bottom = max(math.ceil(_milli(y + h)), top + 1)
-    return {"x": _pct(left), "y": _pct(top), "w": _pct(right - left), "h": _pct(bottom - top)}
-
-
-def _milli(fraction: float) -> float:
-    """Thousandths of a percent, float noise shed so an exact edge is not pushed outward."""
-    return round(fraction * 100_000, 6)
-
-
-def _pct(thousandths: int) -> str:
-    return f"{thousandths / 1000:.3f}".rstrip("0").rstrip(".") + "%"
 
 
 def draft_spec(
@@ -187,8 +165,15 @@ def draft_spec(
         ThemeError: ``theme`` names no theme file and no packaged theme.
     """
     loaded = load_theme(theme)
-    config = {"theme": theme, "title": title, "out": out or _default_out(title)}
-    parts = [_HEADER.format(source=source) + _dump(config)]
+    config: dict = {"theme": theme, "title": title, "out": out or _default_out(title)}
+    sections = list(dict.fromkeys(s.section for s in slides if s.section))
+    if sections:
+        config["sections"] = sections
+    other = next((s.built_with for s in slides if s.built_with not in (None, loaded.name)), None)
+    header = _HEADER.format(source=source)
+    if other:
+        header += _ELSEWHERE.format(built=_comment(other), drafted=_comment(loaded.name))
+    parts = [header + _dump(config)]
     unplaced = 0
     folder = media or f"{slug_and_title(title, fallback=_UNNAMEABLE)[0]}.media"
     files: dict[str, bytes] = {}
@@ -196,11 +181,11 @@ def draft_spec(
         slide, found = _filed(harvested, folder=folder)
         files.update(found)
         rect = content_band(slide, loaded)
-        drafted = _slide_doc(slide, theme=loaded, rect=rect)
+        drafted = _slide_doc(slide, theme=loaded, rect=rect, frames=other is None)
         unplaced += len(drafted.spilled)
         comments = "".join(f"# not converted: {_comment(it)}\n" for it in _losses(slide.dropped))
         comments += "".join(f"# alt text on {_comment(it)}\n" for it in slide.alt)
-        comments += "".join(f"# {_comment(it)}\n" for it in slide.remarks)
+        comments += "".join(f"# {_comment(it)}\n" for it in slide.remarks + drafted.remarks)
         if drafted.painted:
             comments += _PAINTED.format(rgb=_comment(drafted.painted))
         if drafted.spilled:
@@ -277,6 +262,9 @@ def render_markdown(slides: list[SlideContent], *, title: str) -> str:
         for placed in slide.placed:
             if "image" in placed.body:
                 lines += [_picture(placed.body["image"].get("alt")), ""]
+            if placed.body.get("icon", {}).get("alt"):
+                icon = placed.body["icon"]
+                lines += [f"*alt text on icon {icon['name']}: {icon['alt']}*", ""]
             if placed.words:
                 lines += [f"- {word}" for word in placed.words] + [""]
             grids += _grids(placed)

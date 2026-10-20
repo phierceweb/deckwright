@@ -6,7 +6,7 @@ field path in the message itself.
 
 from __future__ import annotations
 
-from pf_core.exceptions import ClientError, ConfigurationError, InvalidInputError
+from pw_foundation.exceptions import ClientError, ConfigurationError, InvalidInputError
 
 
 class SpecError(InvalidInputError):

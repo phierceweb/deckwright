@@ -9,7 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from pf_core.utils.env import resolve_bool
+from pw_foundation.utils.env import resolve_bool
 
 from deckwright.errors import MissingToolError, RenderError
 from deckwright.services.render import install_hint

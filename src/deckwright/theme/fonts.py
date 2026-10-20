@@ -5,7 +5,7 @@ fontconfig is asked through :mod:`deckwright.utils.fontconfig`, which lists its 
 
 from __future__ import annotations
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.theme.model import Theme
 from deckwright.utils.env import env_str

@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 from typing import Sequence
 
-from pf_core.utils.io import atomic_write_bytes
+from pw_foundation.utils.io import atomic_write_bytes
 
 from deckwright.errors import ThemeError
 from deckwright.utils.env import env_str

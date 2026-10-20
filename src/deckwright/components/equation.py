@@ -60,7 +60,9 @@ def equation(ctx: SlideCtx) -> BodyResult:
             f"the placement is {rect.height:.2f}in — give it more rows, or a smaller 'rung'"
         )
 
-    box = anchored(rect, width, height, align=ctx.align, anchor=ctx.anchor)
+    # Framed at the placement's width, a substituted face a little wider still sets one line;
+    # the paragraph's alignment places it, as `m:jc` places the maths.
+    box = anchored(rect, rect.width, height, align=ctx.align, anchor=ctx.anchor)
     tf = textbox(ctx.slide, box.left, box.top, box.width, box.height, ANCHOR["middle"], wrap=False)
     ink, paper = ctx.text_ink(box, size_pt=style.size)
     para(

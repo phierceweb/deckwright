@@ -451,6 +451,10 @@ read-backs are inches. Horizontal fractions are of the width, vertical of the he
 | `body_top` | 0.22 of height | 1.650in |
 | columns | 12 | `col_w` 0.818in |
 
+The inch column is the built-in canvas. A theme's canvas is its template's slide size —
+`chalkboard` is 10 x 5.625in — and `deckwright new` writes it into the scaffold's header,
+so read a theme's inches there, not here.
+
 Corpus margins run 4.4%–14.6% of slide width, so no universal value exists; the
 system default sits near the low end and a theme's `scale:` block overrides it.
 Doubling the canvas doubles every inch — a change of slide size is a no-op.
@@ -475,7 +479,8 @@ chrome:
 
 The keys are `at`, `align`, `anchor`, `rung`, `pair` and `ink`, documented for authors under
 [Moving the chrome](authoring.md#moving-the-chrome) — a slide's own `chrome:` block
-takes the same keys and merges over the theme's, key by key.
+takes the same keys and merges over the theme's, key by key. A slide's block also takes
+`build`, which a theme's refuses: it would hold back that line on every slide.
 
 **Fractions only.** A `box` outside 0..1 on either axis is a `ThemeError`, because a
 theme declaring inches is a transcription of one deck at one canvas size, which is
@@ -599,6 +604,10 @@ reveals it.
 motion:
   transition: {kind: fade, speed: fast}    # dir: only where the effect takes one
 ```
+
+The built-in `base` theme carries exactly this block, so a deck with no template fades
+between slides. `conform` derives no transition from a template, so a brand theme moves
+only if you add this block to its sidecar.
 
 **A transition belongs to the slide it arrives at** — it says how the show moves *to*
 this slide from the one before it. Every slide gets the theme's; a slide writes

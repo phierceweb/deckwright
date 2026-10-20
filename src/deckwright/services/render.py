@@ -19,9 +19,9 @@ from deckwright.errors import MissingToolError, RenderError
 from deckwright.services.render_fonts import deck_font_files, seed_fonts
 from deckwright.services.render_stamp import matching_render, write_stamp
 from deckwright.utils.env import env_str
-from pf_core.log import get_logger
-from pf_core.utils.env import resolve_int
-from pf_core.utils.hashing import content_hash
+from pw_foundation.log import get_logger
+from pw_foundation.utils.env import resolve_int
+from pw_foundation.utils.hashing import content_hash
 
 logger = get_logger(__name__)
 

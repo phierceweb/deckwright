@@ -525,3 +525,22 @@ def test_a_slide_carrying_an_equation_validates_in_each_branch(
         for props in list(para.iter(f"{{{_DML}}}rPr")):
             props.getparent().remove(props)
         assert math_schema.validate(para), [e.message for e in math_schema.error_log]
+
+
+@pytest.mark.parametrize("kind", ["fade", "wipeup", "wiperight"])
+@pytest.mark.parametrize("by", ["category", "series", "all"])
+def test_a_chart_build_then_a_click_sequence_validates(schema, by, kind):
+    """The bars, then the claim: one timeline, the chart's `bldGraphic` and the claim's
+    `bldP` in one build list."""
+    prs, slide, text, blank, chart = _deck()
+    add_chart_build(slide, chart, by, parts=3, kind=kind, then=[[(text, kind)], [(blank, "fade")]])
+    assert _validate(schema, prs) == []
+
+
+def test_a_chart_build_then_a_click_sequence_numbers_every_node_once(schema):
+    """The schema does not hold `cTn` ids unique; the chart's numbering and the sequence's
+    must not meet, or PowerPoint has two nodes under one id."""
+    prs, slide, text, blank, chart = _deck()
+    add_chart_build(slide, chart, "category", parts=3, then=[[(text, "fade")], [(blank, "fade")]])
+    ids = [n.get("id") for n in etree.fromstring(_slide_xml(prs)).iter(f"{{{_PML}}}cTn")]
+    assert len(ids) == len(set(ids)) == 4 + 3 * 4 + 2 * (2 + 3)

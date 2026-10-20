@@ -11,6 +11,7 @@ from deckwright.layouts.components import RevealItem, shape_id
 from deckwright.layouts.registry import SlideCtx
 from deckwright.motion.transition import MORPH
 from deckwright.motion import (
+    add_chart_build,
     add_click_build,
     add_click_reveals,
     add_click_sequence,
@@ -104,13 +105,14 @@ def _reveal_cycle(reveals: dict[str, str]) -> list[str] | None:
     return None
 
 
-def apply_reveal(ctx: SlideCtx, groups: list[list[RevealItem]]) -> None:
+def apply_reveal(
+    ctx: SlideCtx, groups: list[list[RevealItem]], last: list[list[RevealItem]] | None = None
+) -> None:
     """Turn reveal groups into a PowerPoint click build.
 
-    ``by_category``/``by_series`` are chart-only: the chart component emits its own
-    ``<p:bldGraphic>`` and reports back empty groups, so empty groups here mean that
-    build already happened. Non-empty groups with one of those values means some
-    other component reached for chart vocabulary.
+    ``last`` is the chrome lines that ask to arrive on the slide's final clicks, after
+    everything else. A chart building by category or series has left its build pending on
+    ``ctx``; it is written here so that what follows it shares its one timeline.
     """
     animate = ctx.spec.animate
     if animate is not None and animate not in _ANIMATIONS:
@@ -118,24 +120,76 @@ def apply_reveal(ctx: SlideCtx, groups: list[list[RevealItem]]) -> None:
             f"slide {ctx.spec.index}: unknown animate {animate!r}; "
             f"expected one of {', '.join(_ANIMATIONS)}"
         )
-    if animate in _CHART_ANIMATIONS and groups:
-        raise LayoutError(
-            f"slide {ctx.spec.index}: animate {animate!r} only applies to a native chart"
-        )
-    if animate is None or animate == "none" or not groups:
-        return
+    last = list(last or [])
     motion = ctx.theme.motion
-    if animate == "together":
+    if animate in _CHART_ANIMATIONS:
+        if ctx.chart_build is None:
+            still = sum(1 for p in ctx.spec.place if p.component == "chart")
+            if still:
+                which = (
+                    "its only chart is 'animate: none' — drop that"
+                    if still == 1
+                    else "its charts are all 'animate: none' — drop it from one"
+                )
+                raise LayoutError(
+                    f"slide {ctx.spec.index}: animate {animate!r} builds the slide's chart, "
+                    f"and {which}, or build the slide with one_at_a_time"
+                )
+            raise LayoutError(
+                f"slide {ctx.spec.index}: animate {animate!r} only applies to a native chart"
+            )
+        _chart_then(ctx, ctx.chart_build, groups, last)
+        return
+    elif animate in (None, "none"):
+        groups = []
+    if not groups and not last:
+        return
+    if animate == "together" and not last:
         # add_click_build fades every shape onto one click, so the groups are not beats.
         flat = list(dict.fromkeys(shape_id(g) for group in groups for g in group))
         add_click_build(ctx.slide, flat, motion.stagger_ms)
         ctx.manifest.record_animation("click_build", [flat], clicks=1)
         return
+    if animate == "together":
+        groups = [[item for group in groups for item in group]] if groups else []
+    sequence = groups + last
     beat = motion.beat_ms if motion.advance == "after_previous" else None
-    add_click_sequence(ctx.slide, _resolve_roles(ctx, groups), motion.stagger_ms, beat_ms=beat)
+    add_click_sequence(ctx.slide, _resolve_roles(ctx, sequence), motion.stagger_ms, beat_ms=beat)
+    if animate == "together" and groups:
+        ctx.manifest.record_animation("click_build", groups, clicks=1)
+        ctx.manifest.record_animation("line_build", last, clicks=0 if beat else len(last))
+        return
     ctx.manifest.record_animation(
-        "click_sequence", groups, clicks=1 if beat is not None else len(groups)
+        "click_sequence" if groups else "line_build",
+        sequence,
+        clicks=1 if beat is not None else len(sequence),
     )
+
+
+def _chart_then(
+    ctx: SlideCtx,
+    build: tuple[int, str, int, str],
+    groups: list[list[RevealItem]],
+    last: list[list[RevealItem]],
+) -> None:
+    """The pending chart ``build``, then ``groups`` and ``last`` one per click on its
+    timeline."""
+    sequence = groups + last
+    spid, by, parts, kind = build
+    add_chart_build(
+        ctx.slide,
+        spid,
+        by=by,
+        parts=parts,
+        kind=kind,
+        then=_resolve_roles(ctx, sequence),
+        stagger_ms=ctx.theme.motion.stagger_ms,
+    )
+    ctx.manifest.record_animation("chart_build", [[spid]], clicks=parts + 1 if parts >= 1 else 1)
+    if groups:
+        ctx.manifest.record_animation("click_sequence", groups, clicks=len(groups))
+    if last:
+        ctx.manifest.record_animation("line_build", last, clicks=len(last))
 
 
 def _resolve_roles(ctx: SlideCtx, groups: list[list[RevealItem]]) -> list[list[RevealItem]]:

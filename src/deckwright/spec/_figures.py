@@ -8,7 +8,7 @@ from typing import Any
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
-from deckwright.spec._tree import shape_type
+from deckwright.spec._tree import shape_type, slide_box
 from deckwright.utils.a11y import described, is_file_name
 
 _FILLS = tuple(qn(f"a:{tag}") for tag in ("solidFill", "gradFill", "pattFill", "blipFill"))
@@ -66,14 +66,69 @@ def card(
         return (_card_body(lines, source), None) if _card_sized(source, canvas) else None
     if shape_type(source) is not MSO_SHAPE_TYPE.TEXT_BOX:
         return None
-    under = [
-        p
-        for p in plates
-        if _same_space(p, source) and _contains(p, source) and _card_sized(p, canvas)
-    ]
+    under = [p for p in plates if _contains(p, source) and _card_sized(p, canvas)]
     if len(under) != 1:
         return None
     return _card_body(lines, source), under[0]
+
+
+def cards_of(
+    bodies: list[Any], plates: dict[Any, tuple[Any, str]], *, canvas: tuple[int, int]
+) -> tuple[list[dict], list[Any], list[str]]:
+    """Which of ``bodies`` are cards and which stay words, both in reading order, and the
+    dropped-shape names of the plates the cards claimed. ``plates`` maps a plate's element
+    to the plate and that name."""
+    under = [p for p, _ in plates.values()]
+    shared: dict[Any, list[Any]] = {}
+    for body in bodies:
+        if (lying := lone_plate(body.source, under, canvas=canvas)) is not None:
+            shared.setdefault(lying._element, []).append(body)
+    merged = {
+        plate_: split_card([(b.lines, b.source) for b in group])
+        for plate_, group in shared.items()
+        if len(group) > 1
+    }
+    on = {id(body): plate_ for plate_ in merged for body in shared[plate_]}
+    cards: list[dict] = []
+    words: list[Any] = []
+    claimed: list[str] = []
+    claimed_plates: set[Any] = set()
+    for body in bodies:
+        if id(body) in on:
+            plate_ = on[id(body)]
+            split = merged[plate_]
+            if split is None:
+                words.append(body)  # the boxes on it hold more than a card does
+            elif plate_ not in claimed_plates:
+                cards.append(split)
+                claimed.append(plates[plate_][1])
+                claimed_plates.add(plate_)
+            continue
+        found = card(body.lines, body.source, under, canvas=canvas)
+        if found is None:
+            words.append(body)
+            continue
+        cards.append(found[0])
+        if found[1] is not None:
+            claimed.append(plates[found[1]._element][1])
+    return cards, words, claimed
+
+
+def lone_plate(source: Any, plates: list[Any], *, canvas: tuple[int, int]) -> Any | None:
+    """The one card-sized plate the text box ``source`` lies on, or ``None``."""
+    if source is None or shape_type(source) is not MSO_SHAPE_TYPE.TEXT_BOX:
+        return None
+    under = [p for p in plates if _contains(p, source) and _card_sized(p, canvas)]
+    return under[0] if len(under) == 1 else None
+
+
+def split_card(boxes: list[tuple[tuple[str, ...], Any]]) -> dict | None:
+    """Text boxes sharing one plate, given in reading order, as one card when together they
+    hold a heading and a line or less; ``None`` when they hold more, and stay words."""
+    lines = tuple(line for box_lines, _ in boxes for line in box_lines)
+    if len(lines) > _MOST_LINES:
+        return None
+    return _card_body(lines, boxes[0][1])
 
 
 def _card_body(lines: tuple[str, ...], source: Any) -> dict:
@@ -84,20 +139,17 @@ def _card_body(lines: tuple[str, ...], source: Any) -> dict:
 
 
 def _card_sized(shape: Any, canvas: tuple[int, int]) -> bool:
-    return shape.width * shape.height < _MOST_OF_SLIDE * canvas[0] * canvas[1]
-
-
-def _same_space(first: Any, second: Any) -> bool:
-    """Two shapes in one group, or both on the slide, measure in one coordinate space."""
-    return first._element.getparent() is second._element.getparent()
+    box = slide_box(shape)
+    return box is not None and box[2] * box[3] < _MOST_OF_SLIDE * canvas[0] * canvas[1]
 
 
 def _contains(outer: Any, inner: Any) -> bool:
+    """Whether ``inner`` lies on ``outer`` where the slide draws them, groups and all."""
+    a, b = slide_box(outer), slide_box(inner)
+    if a is None or b is None:
+        return False
     return (
-        outer.left <= inner.left
-        and outer.top <= inner.top
-        and inner.left + inner.width <= outer.left + outer.width
-        and inner.top + inner.height <= outer.top + outer.height
+        a[0] <= b[0] and a[1] <= b[1] and b[0] + b[2] <= a[0] + a[2] and b[1] + b[3] <= a[1] + a[3]
     )
 
 

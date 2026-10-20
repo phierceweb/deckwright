@@ -118,6 +118,47 @@ def members(shapes) -> tuple[list, list[Unreadable]]:
     return built, unreadable
 
 
+def slide_box(shape) -> tuple[int, int, int, int] | None:
+    """``shape``'s left, top, width and height in slide space, EMU, through every group around
+    it; ``None`` when it reports no geometry.
+
+    A group maps its child space onto the slide by ``x' = off + (x - chOff) * ext / chExt`` on
+    each axis. One with no child extent, as a group assembled by moving shapes into it has,
+    has nothing to scale by and leaves its children as they are.
+    """
+    box = (shape.left, shape.top, shape.width, shape.height)
+    if None in box:
+        return None
+    left, top, width, height = (float(v) for v in box)
+    for group in shape._element.iterancestors(qn("p:grpSp")):
+        mapped = _child_space(group)
+        if mapped is None:
+            continue
+        (off_x, off_y), (ch_x, ch_y), (scale_x, scale_y) = mapped
+        left, top = off_x + (left - ch_x) * scale_x, off_y + (top - ch_y) * scale_y
+        width, height = width * scale_x, height * scale_y
+    return round(left), round(top), round(width), round(height)
+
+
+def _child_space(group) -> tuple[tuple[int, int], tuple[int, int], tuple[float, float]] | None:
+    """A group's offset, child offset and scale, or ``None`` if it maps nothing."""
+    xfrm = group.find(f"{qn('p:grpSpPr')}/{qn('a:xfrm')}")
+    if xfrm is None:
+        return None
+    parts = [xfrm.find(qn(f"a:{name}")) for name in ("off", "ext", "chOff", "chExt")]
+    if any(part is None for part in parts):
+        return None
+    off, ext, ch_off, ch_ext = parts
+    ch_cx, ch_cy = int(ch_ext.get("cx", 0)), int(ch_ext.get("cy", 0))
+    if not ch_cx or not ch_cy:
+        return None
+    return (
+        (int(off.get("x", 0)), int(off.get("y", 0))),
+        (int(ch_off.get("x", 0)), int(ch_off.get("y", 0))),
+        (int(ext.get("cx", 0)) / ch_cx, int(ext.get("cy", 0)) / ch_cy),
+    )
+
+
 def _build(shapes, element):
     """The shape ``element`` reads back as, or ``None`` when it carries no geometry."""
     try:

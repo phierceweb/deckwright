@@ -1,7 +1,7 @@
 # deckwright — AI assistant context
 
-A pf-core consumer: a library/tool in the **src-layout** (no web/DB layers),
-built on the pf-core framework.
+A pw-foundation consumer: a library/tool in the **src-layout** (no web/DB layers),
+built on the pw-foundation framework.
 
 ## Changing the package itself
 
@@ -14,8 +14,8 @@ when it fails. Layout and types are enforced, not advisory — run `bin/py -m ru
 src tests` before committing. Two rules are worth stating here because they shape where
 code goes.
 
-**Check pf-core before writing any helper** — logging, a config knob, an error
-class, retries, caching, parallelism, an atomic file write. It probably has it.
+**Check pw-foundation before writing any helper** — logging, a config knob, an error
+class, caching, parallelism, an atomic file write, a content hash. It probably has it.
 `bin/check-framework` runs in pre-commit and CI and names the replacement in every
 failure.
 
@@ -27,8 +27,18 @@ test file. [`docs/testing.md`](docs/testing.md) is the evidence behind that, and
 ## Building a deck
 
 Deck authoring is *conditional*, not a package rule — load the doc you need,
-don't carry them all. **Route by what the author actually has**, not by reading
-everything:
+don't carry them all. A new deck goes in four steps:
+
+1. **`bin/run new "<Name>" --theme <theme>`** — a deck that already builds, with the theme's
+   grounds written in its header.
+2. **`bin/run demo --theme <theme>`, then `render --contact-sheet`** — see what the theme's
+   plates, pairs and type look like before choosing shapes for it. A face this machine lacks
+   renders in a substitute, which `qa` names as `font-substituted`; read its widths loosely.
+3. **Plan before writing YAML.** One row per slide: its claim as a sentence, its shape, its
+   composition ([`docs/treatments.md`](docs/treatments.md#compositions)), and what a click does
+   ([`docs/lessons.md`](docs/lessons.md)). Run the run test on the plan, where changing a row
+   costs nothing.
+4. **Per slide, route by what it has**, and read the wire format for only the sections the plan uses:
 
 | They arrive with | Read first |
 |---|---|
@@ -36,6 +46,7 @@ everything:
 | A story and **no data** — a rule, a consequence, an artefact, an opposition | [`docs/treatments.md`](docs/treatments.md) — which shape it earns, what it costs, and whether the deck already looks like it |
 | A deck that is turning into one rectangle repeated | [`docs/treatments.md`](docs/treatments.md) — the run test and the levers, cheapest first |
 | A process, steps, branches, anything with arrows | [`docs/flows.md`](docs/flows.md) — and when a flow is a bulleted list wearing a costume |
+| A deck to teach, or to present live | [`docs/lessons.md`](docs/lessons.md) — what each click is for, and which moves the room can see |
 | A shape in mind, needing the wire format | [`docs/authoring.md`](docs/authoring.md) |
 | A component to place | [`docs/components.md`](docs/components.md) |
 | An error the compiler printed | [`docs/errors.md`](docs/errors.md) |
@@ -53,11 +64,11 @@ resolve, or "use the <brand> template": follow the three-step flow at the end of
 `theme: <name>` from that point on. Never ask them to paste colours or re-tune by
 hand — the sidecar exists so tuning survives.
 
-- **[`docs/authoring.md`](docs/authoring.md)** — **start here, always.** The
-  `.deck.yaml` wire format: glossary, the two-document structure, every slide
+- **[`docs/authoring.md`](docs/authoring.md)** — the wire-format reference. The
+  `.deck.yaml` format: glossary, the two-document structure, every slide
   field, `place:`, the chart block and all 29 chart kinds, `animate:`, what
   lives in the theme instead — and the component index that routes to the two
-  docs below. Read it before authoring or editing any deck spec.
+  docs below. Read the sections the plan uses before writing or editing a spec.
 - **[`docs/components.md`](docs/components.md)** — the components'
   fields, defaults and worked examples. Load the sections you are writing, not
   the whole file.
@@ -105,7 +116,7 @@ there in the same change that adds a doc.
 
 ## Layout
 
-- `src/deckwright/cli/` — CLI entry (thin; pf-core `create_cli` / `run_cli`), split by
+- `src/deckwright/cli/` — CLI entry (thin; the Typer app in `_app.py`, exit codes in `_run.py`), split by
   concern: `build.py` (build/render/shot/qa), `reading.py` (diff/inspect/extract),
   `onboarding.py` (new/demo/conform/sample/doctor), `glyphs.py`.
 - `src/deckwright/config.py` — `Config(AppConfig)` subclass; the `cfg` singleton.
@@ -141,7 +152,9 @@ from output that matters.
 
 `bin/setup`, `bin/run <cmd>`, `bin/test`, `bin/lint`.
 
-## pf-core
+## pw-foundation
 
-Declared in `pyproject.toml` as `pf-core[cli]`; import from `pf_core.*`. The rule and
-the module reference are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Declared in `pyproject.toml` as `pw-foundation~=1.0.0`, patch releases only, because
+`deckwright/__init__.py` reads its private `log._setup_done`; import from `pw_foundation.*`. It
+has no CLI scaffold (that is pw-core's, which deckwright does not depend on), so `cli/_run.py`
+owns the exit codes. The rule and the module reference are in [`CONTRIBUTING.md`](CONTRIBUTING.md).

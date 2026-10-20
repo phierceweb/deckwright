@@ -19,7 +19,7 @@ from lxml import etree
 from pptx import Presentation
 from pptx.util import Inches, Pt
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.utils.xml import fromstring as parse_xml
 

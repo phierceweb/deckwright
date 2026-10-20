@@ -312,7 +312,7 @@ def test_outside_a_checkout_the_sample_check_skips(tmp_path, monkeypatch):
 @pytest.mark.parametrize("status", ["PASS", "WARN", "SKIP"])
 def test_only_a_fail_sets_a_non_zero_exit(status):
     """setup runs `doctor || true`, but CI will not — so the code has to mean this."""
-    from pf_core.doctor import CheckResult
+    from pw_foundation.doctor import CheckResult
 
     assert doctor.report([CheckResult("g", "n", status, "d")]) == 0
     assert doctor.report([CheckResult("g", "n", "FAIL", "d")]) == 1

@@ -58,8 +58,9 @@ NO_END = frozenset("（〔［｛〈《「『【〘〖〝‘“｟«([{")
 HANG = frozenset("、。，．")
 # UAX #14 GL: spaces a line never breaks at — no-break, figure and narrow no-break.
 NO_BREAK_SPACE = frozenset("\u00a0\u2007\u202f")
-# UAX #14 LB12a: a line may still break before a no-break space after a hyphen or en dash.
-_BREAKS_BEFORE_GLUE = frozenset("-\u2010\u2013")
+# UAX #14 HY and BA hyphens: never a line's first character (LB21), and still breakable
+# before a no-break space that follows one (LB12a).
+_HYPHENS = frozenset("-\u2010\u2013")
 
 
 def _within(ch: str, blocks: tuple[tuple[int, int], ...]) -> bool:
@@ -117,17 +118,18 @@ def atoms(text: str) -> list[str]:
 
 def glue(pieces: list[str]) -> list[str]:
     """``pieces`` with one that may not start a line joined to the piece before it, and the
-    piece after one that may not end a line joined to it. A no-break space does neither;
-    breakable whitespace joins nothing."""
+    piece after one that may not end a line joined to it. A no-break space does neither, a
+    hyphen may not start one; breakable whitespace joins nothing."""
     glued: list[str] = []
     for piece in pieces:
         if glued and not breakable(piece) and not breakable(glued[-1]):
             first, last = piece[0], glued[-1][-1]
             if (
                 first in NO_START
+                or first in _HYPHENS
                 or last in NO_END
                 or last in NO_BREAK_SPACE
-                or (first in NO_BREAK_SPACE and last not in _BREAKS_BEFORE_GLUE)
+                or (first in NO_BREAK_SPACE and last not in _HYPHENS)
             ):
                 glued[-1] += piece
                 continue

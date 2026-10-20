@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import pathlib
 import re
 
 import pytest
@@ -1363,8 +1364,9 @@ def test_copy_that_reads_as_a_link_without_being_one_is_escaped_in_the_draft(tmp
     assert harvest(path)[0].blocks == ((r"print('\[x](https://code.example.com)')",),)
 
 
-def test_harvest_carries_a_drawn_shapes_alt_text_too(tmp_path):
-    """A glyph icon is a freeform with an empty text frame, not a picture."""
+def test_a_glyph_icons_alt_text_comes_back_on_it_and_in_the_transcript(tmp_path):
+    """A glyph icon is a freeform with an empty text frame, not a picture: read back as its
+    glyph, it carries its alt text, and the transcript says it."""
     from deckwright.compile import build_deck
 
     spec = tmp_path / "i.deck.yaml"
@@ -1373,8 +1375,12 @@ def test_harvest_carries_a_drawn_shapes_alt_text_too(tmp_path):
         "    icon: {name: target, alt: Hit the quarterly target}\n"
     )
     build_deck(spec)
-    assert harvest(tmp_path / "i.pptx")[0].alt == (
-        "freeform 's1.p1.icon#1': Hit the quarterly target",
+    (slide,) = harvest(tmp_path / "i.pptx")
+    assert [item.body for item in slide.placed] == [
+        {"icon": {"name": "target", "alt": "Hit the quarterly target"}}
+    ]
+    assert "*alt text on icon target: Hit the quarterly target*" in render_markdown(
+        [slide], title="T"
     )
 
 
@@ -1383,3 +1389,187 @@ def test_a_morph_named_bullets_shape_loses_the_marker_deckwright_wrote(tmp_path)
     path = _named_deck(tmp_path, {"m.notes.bullets#1": "•  a body line"})
     (placed,) = harvest(path)[0].placed
     assert (placed.morph, placed.body) == ("notes", {"bullets": {"items": ["a body line"]}})
+
+
+def _transform(group, *, off, ext, ch_off, ch_ext):
+    """Set ``group``'s transform, every value in inches."""
+    xfrm = group._element.grpSpPr.get_or_add_xfrm()
+    for point, (x, y) in ((xfrm.get_or_add_off(), off), (xfrm.get_or_add_chOff(), ch_off)):
+        point.x, point.y = Inches(x), Inches(y)
+    for size, (cx, cy) in ((xfrm.get_or_add_ext(), ext), (xfrm.get_or_add_chExt(), ch_ext)):
+        size.cx, size.cy = Inches(cx), Inches(cy)
+
+
+def _grouped_child(*depth_transforms):
+    """A shape at child (1in, 1in, 2in, 2in) inside one group per transform, outermost first."""
+    prs = Presentation()
+    shapes = prs.slides.add_slide(prs.slide_layouts[6]).shapes
+    groups = []
+    for _ in depth_transforms:
+        groups.append(shapes.add_group_shape())
+        shapes = groups[-1].shapes
+    child = shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(2))
+    for group, transform in zip(groups, depth_transforms, strict=True):
+        _transform(group, **transform)
+    return child
+
+
+_MOVED_AND_HALVED = {"off": (2, 1), "ext": (2, 2), "ch_off": (0, 0), "ch_ext": (4, 4)}
+
+
+def test_a_shape_in_a_moved_and_scaled_group_is_measured_where_the_group_draws_it():
+    from deckwright.spec._tree import slide_box
+
+    child = _grouped_child(_MOVED_AND_HALVED)
+    assert slide_box(child) == (2286000, 1371600, 914400, 914400)  # (2.5, 1.5, 1, 1) in
+
+
+def test_nested_groups_compose_their_transforms():
+    from deckwright.spec._tree import slide_box
+
+    shifted = {"off": (1, 0), "ext": (8, 8), "ch_off": (0, 0), "ch_ext": (8, 8)}
+    child = _grouped_child(shifted, _MOVED_AND_HALVED)
+    assert slide_box(child) == (3200400, 1371600, 914400, 914400)  # (3.5, 1.5, 1, 1) in
+
+
+def test_a_group_with_no_child_extent_leaves_its_childrens_boxes_as_they_are():
+    """A group assembled by moving shapes into it carries a zero child extent: nothing to
+    scale by, so its children read as their own numbers."""
+    from deckwright.spec._tree import slide_box
+
+    flat = {"off": (5, 5), "ext": (0, 0), "ch_off": (0, 0), "ch_ext": (0, 0)}
+    assert slide_box(_grouped_child(flat)) == (914400, 914400, 1828800, 1828800)
+
+
+def test_a_chart_build_whose_chart_is_not_read_back_drafts_a_slide_that_builds(tmp_path):
+    """A scatter's points are not read back, so the draft has no chart for `by_series` to build."""
+    spec = tmp_path / "xy.deck.yaml"
+    spec.write_text(
+        "theme: base\ntitle: XY\nout: xy.pptx\n---\ntitle: Scatter\nanimate: by_series\nplace:\n"
+        "- at: {cols: full}\n  chart: {kind: xy-scatter, alt: points, data: "
+        "[{x: 1, y: 2}, {x: 2, y: 3}, {x: 3, y: 5}]}\n"
+    )
+    draft = tmp_path / "draft" / "d.deck.yaml"
+    result = runner.invoke(app, ["extract", str(build_deck(spec).deck), "-o", str(draft)])
+    assert result.exit_code == 0, result.output
+    assert "animate: one_at_a_time\n" in draft.read_text()
+    assert build_deck(draft).deck.is_file()
+
+
+def test_a_morph_slide_holding_only_its_chrome_keeps_its_transition(tmp_path):
+    import yaml
+
+    spec = tmp_path / "m.deck.yaml"
+    spec.write_text(
+        "theme: base\ntitle: M\nout: m.pptx\n---\ntitle: One\nplace:\n"
+        "- {at: {cols: full}, morph: a, card: {heading: A}}\n"
+        "---\ntitle: Two\ntransition: morph\ncarry: previous\ndrop: [a]\n"
+    )
+    draft = tmp_path / "draft" / "d.deck.yaml"
+    result = runner.invoke(app, ["extract", str(build_deck(spec).deck), "-o", str(draft)])
+    assert result.exit_code == 0, result.output
+    slides = [d for d in yaml.safe_load_all(draft.read_text()) if isinstance(d, dict)][1:]
+    assert [s.get("transition") for s in slides] == [None, "morph"]
+
+
+def test_a_chrome_plate_is_not_reported_as_a_shape_left_behind(tmp_path):
+    """The build lays a plate under a line it cannot ink on what is behind it, and lays it
+    again from the draft, so there is nothing for the author to put back."""
+    spec = tmp_path / "p.deck.yaml"
+    spec.write_text(
+        "theme: base\ntitle: P\nout: p.pptx\n---\nbackground: inverse\n"
+        "title: At noon, sunlight takes a short path through the air\nplace:\n"
+        "  - {at: {box: {x: 0%, y: 13%, w: 40%, h: 4%}}, bleed: true, panel: {pair: page}}\n"
+    )
+    deck = build_deck(spec).deck
+    assert any(s.name.endswith(".plate") for s in Presentation(str(deck)).slides[0].shapes)
+    draft = tmp_path / "draft" / "d.deck.yaml"
+    result = runner.invoke(app, ["extract", str(deck), "-o", str(draft)])
+    assert result.exit_code == 0, result.output
+    assert ".plate" not in draft.read_text()
+
+
+def test_a_chrome_preset_drafts_back_as_the_preset(tmp_path):
+    import yaml
+
+    spec = tmp_path / "c.deck.yaml"
+    spec.write_text(
+        "theme: base\ntitle: C\nout: c.pptx\n---\n"
+        "title: A title in its own column\nchrome: side\nplace:\n"
+        "- {at: {cols: full}, card: {heading: Body}}\n"
+        "---\ntitle: The one line this slide is\nchrome: statement\n"
+    )
+    draft = tmp_path / "draft" / "d.deck.yaml"
+    result = runner.invoke(app, ["extract", str(build_deck(spec).deck), "-o", str(draft)])
+    assert result.exit_code == 0, result.output
+    slides = [d for d in yaml.safe_load_all(draft.read_text()) if isinstance(d, dict)][1:]
+    assert [s.get("chrome") for s in slides] == ["side", "statement"]
+    assert build_deck(draft).deck.is_file()
+
+
+def _extracted(tmp_path, slide: str, *, theme: str = "base", manifest: bool = True):
+    """Build ``slide``, extract the deck against ``theme``, and return the draft's slide docs."""
+    import yaml
+
+    spec = tmp_path / "s.deck.yaml"
+    spec.write_text(f"theme: {theme}\ntitle: S\nout: s.pptx\n---\n{slide}")
+    built = build_deck(spec)
+    if not manifest:
+        built.manifest.unlink()
+    draft = tmp_path / "draft" / "d.deck.yaml"
+    result = runner.invoke(app, ["extract", str(built.deck), "-o", str(draft), "--theme", theme])
+    assert result.exit_code == 0, result.output
+    docs = [d for d in yaml.safe_load_all(draft.read_text()) if isinstance(d, dict)][1:]
+    return draft, docs
+
+
+def test_a_slides_language_drafts_back_so_its_han_text_still_builds(tmp_path, monkeypatch):
+    """Under a theme setting Japanese and Chinese in different faces, Han characters alone
+    need the slide's `lang:` to say which, and the file keeps it only on the runs."""
+    import deckwright
+
+    base = pathlib.Path(deckwright.__file__).parent / "theme" / "builtin" / "base.yaml"
+    (tmp_path / "cjk.theme.yaml").write_text(
+        base.read_text()
+        .replace("name: base", "name: cjk")
+        .replace(
+            "  mono: Courier New\n",
+            "  mono: Courier New\n  ea: {ja: Hiragino Mincho ProN, zh-Hans: PingFang SC}\n",
+        )
+    )
+    monkeypatch.setenv("DECKWRIGHT_THEME_DIR", str(tmp_path))
+    draft, (doc,) = _extracted(
+        tmp_path,
+        "title: 地域\nlang: ja\nplace:\n- {at: {cols: full}, card: {heading: 地域}}\n",
+        theme="cjk",
+    )
+    assert doc["lang"] == "ja"
+    assert build_deck(draft).deck.is_file()
+
+
+@pytest.mark.parametrize(
+    ("box", "manifest"),
+    [
+        ("{x: 0%, y: 0%, w: 30%, h: 30%}", True),  # inside the slide: only the manifest knows
+        ("{x: 60%, y: 30%, w: 45%, h: 40%}", False),  # off its edge: the box itself says so
+    ],
+    ids=["declared", "off-the-edge"],
+)
+def test_a_placement_that_bleeds_drafts_back_bleeding(tmp_path, box, manifest):
+    draft, (doc,) = _extracted(
+        tmp_path,
+        f"title: Bleed\nplace:\n- {{at: {{box: {box}}}, bleed: true, panel: {{pair: inverse}}}}\n",
+        manifest=manifest,
+    )
+    assert [e.get("bleed") for e in doc["place"]] == [True]
+    assert build_deck(draft).deck.is_file()
+
+
+def test_a_tables_column_widths_draft_back(tmp_path):
+    _, (doc,) = _extracted(
+        tmp_path,
+        "title: T\nplace:\n- at: {cols: full}\n  table: {header: [Stage, A, B], widths: [3, 1, 1], "
+        "rows: [[Discovery, '1', '2']]}\n",
+    )
+    (entry,) = doc["place"]
+    assert entry["table"]["widths"] == pytest.approx([0.6, 0.2, 0.2], abs=0.01)

@@ -31,7 +31,7 @@ def test_the_scaffold_builds(elsewhere):
     first thing an author meets would be a build error in code they did not write."""
     made = new_deck("Q4 Review", root=elsewhere / "authoring")
     assert made.built is not None
-    assert len(Presentation(str(made.built.deck)).slides) == 6
+    assert len(Presentation(str(made.built.deck)).slides) == 8
 
 
 @pytest.mark.parametrize(
@@ -52,7 +52,7 @@ def test_the_scaffold_builds_whatever_the_title_is(title, elsewhere):
     which is `deckwright new` failing on the deck names people actually use."""
     made = new_deck(title, root=elsewhere / "authoring")
     assert made.built is not None
-    assert len(Presentation(str(made.built.deck)).slides) == 6
+    assert len(Presentation(str(made.built.deck)).slides) == 8
 
 
 def test_a_title_yaml_would_read_as_syntax_survives_into_the_deck(elsewhere):
@@ -112,8 +112,8 @@ def test_the_scaffold_says_what_to_change_on_every_slide(elsewhere):
     made = new_deck("D", root=elsewhere / "authoring", build=False)
     text = made.spec.read_text()
     slides = text.split("\n---\n")[1:]
-    assert len(slides) == 6
-    assert sum(1 for s in slides if s.lstrip().startswith("#")) >= 5
+    assert len(slides) == 8
+    assert sum(1 for s in slides if s.lstrip().startswith("#")) >= 7
 
 
 @pytest.mark.parametrize(
@@ -158,3 +158,12 @@ def test_no_placeholder_needle_appears_in_copy_this_repo_itself_writes():
         (source.name, hit) for source in examples + exercises if (hit := _hit(source.read_text()))
     ]
     assert not collisions, f"a placeholder needle collides with the repo's own copy: {collisions}"
+
+
+def test_the_header_names_the_theme_s_grounds_and_canvas(elsewhere):
+    header = [line for line in _spec_text("q", "Q", "base").splitlines() if line.startswith("# ")]
+    assert "# The canvas is 13.333 x 7.5in; a box's percents are of it." in header
+    assert any(
+        line.startswith("# Grounds on base: page FFFFFF (light), inverse 12161B (dark)")
+        for line in header
+    )

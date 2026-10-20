@@ -1,9 +1,8 @@
 import pytest
 from typer.testing import CliRunner
 
-from pf_core.cli import run_cli
-
 from deckwright.cli import app
+from deckwright.cli._run import run_cli
 
 runner = CliRunner()
 
@@ -70,7 +69,7 @@ def test_qa_rejects_an_invalid_fail_on(tmp_path, dirty_manifest_deck, capsys):
                 "bogus",
             ],
         )
-    assert exc_info.value.code != 0
+    assert exc_info.value.code == 1
     err = capsys.readouterr().err.lower()
     assert "fail-on" in err
     assert "bogus" in err

@@ -27,6 +27,8 @@ def _shape(name, **over):
         ("s4.chrome.title", ("s4.chrome", "title")),
         ("s2.p1.table.r1c1", ("s2.p1.table", "r1c1")),
         ("s4.bg#12", ("s4.bg", None)),
+        ("m.step#2.card#1", ("m.step#2.card", None)),
+        ("m.step#2.table.r1c1", ("m.step#2.table", "r1c1")),
     ],
 )
 def test_a_shape_name_splits_into_its_origin_and_part(name, expected):

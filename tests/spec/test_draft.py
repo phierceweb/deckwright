@@ -422,6 +422,6 @@ def test_a_foreign_slide_painted_white_drafts_as_an_ordinary_page(tmp_path):
 )
 def test_a_placements_box_is_rounded_outward_and_never_flat(box, drafted):
     """Outward, so words drawn tight in their box still fit; an exact edge stays put."""
-    from deckwright.spec.draft import _box
+    from deckwright.spec._themeback import _box
 
     assert _box(*box) == drafted

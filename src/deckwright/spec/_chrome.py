@@ -16,7 +16,7 @@ from statistics import median
 from pptx.enum.shapes import PP_PLACEHOLDER
 
 from deckwright.layouts.chrome import CHROME_ORDER
-from deckwright.spec._tree import Unreadable, flat, linked_text
+from deckwright.spec._tree import Unreadable, flat, linked_text, members
 
 Lines = tuple[str, ...]
 
@@ -163,3 +163,53 @@ def _resolve(texts: list[_Text]) -> tuple[dict[str, str], list[_Text]]:
             fields[text.field] = " ".join(text.lines)
             claimed.add(position)
     return fields, [t for i, t in enumerate(texts) if i not in claimed]
+
+
+_OWN_FRAME = re.compile(rf"^s\d+\.chrome\.({'|'.join(CHROME_ORDER)})$")
+_ANCHORS = {"t": "top", "ctr": "middle", "b": "bottom"}
+_ALIGNS = {"l": "left", "ctr": "center", "r": "right"}
+
+
+@dataclass(frozen=True)
+class ChromeFrame:
+    """A chrome line the build drew in a frame of its own, as the file holds it."""
+
+    field: str
+    box: tuple[float, float, float, float]  # x, y, w, h as fractions of the canvas
+    size_pt: float | None
+    anchor: str | None
+    align: str | None
+    built: bool = False  # the slide's build reveals it: `build: last`
+
+
+def own_frames(
+    slide, canvas: tuple[int, int], revealed: frozenset[int] | set[int] = frozenset()
+) -> tuple[ChromeFrame, ...]:
+    """Each chrome line drawn in a frame of its own: one given an ``at:``, or one a
+    narrowed measure or an empty stack left alone. Stacked lines share ``s<n>.chrome``."""
+    width, height = canvas
+    out = []
+    shapes, _ = members(slide.shapes)
+    for shape in shapes:
+        named = _OWN_FRAME.match(shape.name or "")
+        if not named or not shape.has_text_frame or None in (shape.left, shape.top):
+            continue
+        paragraph = shape.text_frame.paragraphs[0]._p
+        algn = paragraph.pPr.get("algn") if paragraph.pPr is not None else None
+        sizes = _run_sizes(shape)
+        out.append(
+            ChromeFrame(
+                field=named.group(1),
+                box=(
+                    shape.left / width,
+                    shape.top / height,
+                    shape.width / width,
+                    shape.height / height,
+                ),
+                size_pt=max(sizes) if sizes else None,
+                anchor=_ANCHORS.get(shape.text_frame._txBody.bodyPr.get("anchor", "")),
+                align=_ALIGNS.get(algn or ""),
+                built=int(shape.shape_id) in revealed,
+            )
+        )
+    return tuple(out)

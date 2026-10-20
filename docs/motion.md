@@ -164,7 +164,10 @@ is written too, the way PowerPoint writes it: `mc:AlternateContent` holding a `p
 Choice and a fade Fallback, in `<p:transition>`'s place. A slide asks for it with
 `transition: morph`. A placement carrying the same `morph:` name as one on the slide before
 has its shapes named `m.<name>.<component>#k`, with no slide number, because PowerPoint pairs
-shapes by name. A reader without Morph takes the Fallback's fade, as LibreOffice does. The
+shapes by name. A shape new on a morph slide carries its name there so the next morph slide
+can pair with it; one in the slide's `animate:` build is written with its entrance like any
+other, so it starts hidden. A reader without Morph takes the Fallback's fade, as LibreOffice
+does. The
 wrapper does not validate against `pml.xsd` as a whole, so each branch is validated
 on its own. The rest of the 2010-era set — ripple, glitter, prestige — stays unwritten: most
 do not survive a LibreOffice round trip even in their fallback.
@@ -195,9 +198,13 @@ order without spending a slide advance. **Keynote does not play a chart build** 
 chart arrives whole; for a Keynote audience use `animate: together` or split the
 categories across slides.
 
-Awaiting the next PowerPoint check: that a `transition: morph` slide the build wrote glides
-its `morph:` placements as the hand-made probe did, and that a click away from a trigger
-advances the slide instead of stepping every trigger forward. The interactive sequence is written in
+Written and never played in PowerPoint — no check is planned, so each is held to the schema
+and to the structure tests only: that a `transition: morph` slide the build wrote glides its
+`morph:` placements as the hand-made probe did, and fades in a shape entering the sequence;
+that a click away from a trigger advances the slide instead of stepping every trigger forward;
+a chart build followed by the slide's other placements on one timeline (`add_chart_build`'s
+`then=`, the chart's `bldGraphic` entries and their `bldP` entries in one build list); and a
+chrome line with `build: last`, whose frame is the last click of the slide's sequence. The interactive sequence is written in
 PowerPoint's own shape, learned back from its save of a deckwright deck — `cancelBubble`,
 an `endSync`, a next-condition on the trigger's own click and no previous-condition.
 

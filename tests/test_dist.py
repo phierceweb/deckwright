@@ -1,10 +1,9 @@
 """What a built distribution is allowed to contain.
 
 `.gitignore` keeps brand material out of the *repo*. It does nothing for a *dist*:
-`python -m build` packs the working tree, so a checkout with a populated
-`templates/` builds an sdist containing licensed artwork unless MANIFEST.in says
-otherwise. These pin that layer, so `pip install git+https://…` and any local build
-stay clean.
+`python -m build` packs the working tree, so a `.pptx` anywhere a graft reaches, or the
+framework docs link under `docs/`, ships unless MANIFEST.in says otherwise. These pin that
+layer, so `pip install git+https://…` and any local build stay clean.
 """
 
 from __future__ import annotations
@@ -16,9 +15,9 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "MANIFEST.in"
 
-#: Directory a graft would otherwise sweep up, and the rule that must exclude it.
+#: Directory `graft docs` would otherwise sweep up, and the rule that must exclude it.
 PRIVATE = (
-    ("templates", "prune templates"),
+    ("docs/pw-foundation", "prune docs/pw-foundation"),
     ("docs/pf-core", "prune docs/pf-core"),
 )
 

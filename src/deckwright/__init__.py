@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from importlib import metadata
 
-from pf_core import log as _pf_log
+from pw_foundation import log as _pw_log
 
-# pf-core's implicit setup targets the root logger; claim ours before it fires.
-if not _pf_log._setup_done:
-    _pf_log.setup_logging(app_logger_name="deckwright")
+# pw-foundation's implicit setup targets the root logger; claim ours before it fires.
+if not _pw_log._setup_done:
+    _pw_log.setup_logging(app_logger_name="deckwright")
 
 from deckwright.compile.build import BuildResult, build_deck
 from deckwright.errors import LayoutError, MissingToolError, RenderError, SpecError, ThemeError

@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pf_core.exceptions import InvalidInputError, PreconditionError
-from pf_core.utils.io import atomic_write_json
+from pw_foundation.exceptions import InvalidInputError, PreconditionError
+from pw_foundation.utils.io import atomic_write_json
 
 from deckwright.compile.record import (
     _INCH_DP,
@@ -82,11 +82,19 @@ class ManifestRecorder:
         self._framed.clear()
 
     def begin_slide(
-        self, index: int, *, background: str, section: str | None = None, notes: str | None = None
+        self,
+        index: int,
+        *,
+        background: str,
+        section: str | None = None,
+        notes: str | None = None,
+        chrome: str | None = None,
     ) -> None:
         """Start recording a new slide."""
         self.slides.append(
-            SlideRecord(index=index, background=background, section=section, notes=notes)
+            SlideRecord(
+                index=index, background=background, section=section, notes=notes, chrome=chrome
+            )
         )
         # Shape ids restart on every slide, so the name map does too.
         self._named.clear()
@@ -170,7 +178,9 @@ class ManifestRecorder:
         self.slides[-1].shapes.append(rec)
         return rec
 
-    def record_placement(self, origin: str, component: str, rect: Rect) -> None:
+    def record_placement(
+        self, origin: str, component: str, rect: Rect, *, bleed: bool = False
+    ) -> None:
         """Note the rect a placement resolved to, so QA can measure its shapes against it."""
         if not self.slides:
             raise PreconditionError("call begin_slide() before record_placement()")
@@ -179,6 +189,7 @@ class ManifestRecorder:
                 origin=origin,
                 component=component,
                 box=Box.from_inches(rect.left, rect.top, rect.width, rect.height),
+                bleed=bleed,
             )
         )
 

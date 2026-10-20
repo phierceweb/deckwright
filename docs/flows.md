@@ -88,6 +88,11 @@ these is true:
 - The audience will read the steps as a list rather than watch a pipeline.
 - The slide already spends its width on something else.
 
+A vertical step costs depth: every plate is as deep as the wordiest step needs, so four
+steps with a line of copy each can outgrow the content band on a theme with a large `head`
+rung, and adding rows cannot help a flow that already spans the band. Give it a taller
+`box:`, which may start above the band, or cut a step.
+
 **`current:`** — set it when the slide's claim is *"we are here"*: a status or roadmap
 slide the deck returns to. Leave it off when the claim is *"this is the process"*. An
 accented step with no status story invites the question "why that one?", and there is no

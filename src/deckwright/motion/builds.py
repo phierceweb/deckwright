@@ -73,6 +73,27 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
     many milliseconds after the previous finishes.
     """
     P, A = _P, _A
+    clickgroups, builds = click_groups_xml(slide, groups, stagger_ms, beat_ms=beat_ms, start_id=3)
+    bld = f"<p:bldLst>{builds}</p:bldLst>" if builds else ""
+    xml = (
+        f'<p:timing xmlns:p="{P}" xmlns:a="{A}"><p:tnLst><p:par>'
+        f'<p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
+        f'<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
+        f"{clickgroups}"
+        f"</p:childTnLst></p:cTn>"
+        f'<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
+        f'<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
+        f"</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>"
+        f"{bld}</p:timing>"
+    )
+    attach(slide, xml)
+
+
+def click_groups_xml(
+    slide, groups, stagger_ms: int = 0, *, beat_ms: int | None = None, start_id: int
+) -> tuple[str, str]:
+    """``groups`` as main-sequence click wrappers numbered from ``start_id``, and the
+    ``<p:bldP>`` entries their text-bearing shapes need."""
     EFFECTS = _EFFECTS
     items = [_item(item) for group in groups for item in group]
     all_spids = list(dict.fromkeys(spid for spid, _, _ in items))
@@ -84,7 +105,7 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
         if s in by_paragraph and s in built
     )
     chained = beat_ms is not None
-    cid = 3
+    cid = start_id
     clickgroups = ""
     for gi, group in enumerate(groups):
         g_ind, g_zero = cid, cid + 1
@@ -123,19 +144,7 @@ def add_click_sequence(slide, groups, stagger_ms: int = 0, *, beat_ms: int | Non
             f"{effects}"
             f"</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>"
         )
-    bld = f"<p:bldLst>{builds}</p:bldLst>" if builds else ""
-    xml = (
-        f'<p:timing xmlns:p="{P}" xmlns:a="{A}"><p:tnLst><p:par>'
-        f'<p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
-        f'<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
-        f"{clickgroups}"
-        f"</p:childTnLst></p:cTn>"
-        f'<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
-        f'<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'
-        f"</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>"
-        f"{bld}</p:timing>"
-    )
-    attach(slide, xml)
+    return clickgroups, builds
 
 
 def _item(item) -> tuple[int, str, int | None]:

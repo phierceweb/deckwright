@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import SpecError
 from deckwright.spec._checks import (
@@ -20,7 +20,7 @@ from deckwright.spec._checks import (
 )
 from deckwright.spec._scalars import SpecLoader
 from deckwright.spec._slide import _SLIDE_FIELDS, _lang, _slide  # noqa: F401 — _SLIDE_FIELDS re-exported for tests
-from deckwright.spec.model import DeckSpec
+from deckwright.spec.model import SlideSpec, DeckSpec
 from deckwright.utils.keys import refuse_unknown
 
 logger = get_logger(__name__)
@@ -80,10 +80,11 @@ def parse_deck_text(text: str, *, source: Path) -> DeckSpec:
     if extends is not None:
         _load_extension(extends)
 
-    slides = tuple(
-        _slide(doc, index=i, sections=sections, source=source)
-        for i, doc in enumerate(slide_docs, start=1)
-    )
+    parsed: list[SlideSpec] = []
+    for i, doc in enumerate(slide_docs, start=1):
+        before = parsed[-1].place if parsed else None
+        parsed.append(_slide(doc, index=i, sections=sections, source=source, before=before))
+    slides = tuple(parsed)
     _check_section_runs(slides, sections=sections, source=source)
     _check_gotos(slides, source=source)
     _check_morphs(slides, source=source)

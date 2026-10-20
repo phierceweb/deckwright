@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from deckwright.errors import LayoutError
 from deckwright.motion._tree import _EFFECTS, attach, timing_xml
-from deckwright.motion.builds import _fade_entrance_xml
+from deckwright.motion.builds import _fade_entrance_xml, click_groups_xml
 
 # "element" collapses to the category-grouped variant of the per-point builds.
 _CHART_BUILDS = {
@@ -65,7 +65,16 @@ def _chart_part_xml(
     return nodes
 
 
-def add_chart_build(slide, spid: int, by: str, *, parts: int = 0, kind: str = "wipeup") -> None:
+def add_chart_build(
+    slide,
+    spid: int,
+    by: str,
+    *,
+    parts: int = 0,
+    kind: str = "wipeup",
+    then=(),
+    stagger_ms: int = 0,
+) -> None:
     """Make a native chart's own build reveal it one ``by`` unit at a time on click.
 
     Args:
@@ -78,6 +87,9 @@ def add_chart_build(slide, spid: int, by: str, *, parts: int = 0, kind: str = "w
             out of the axis; ``"fade"`` is the flatter alternative.
         parts: How many categories (or series) to stagger. Without it the whole
             chart fades on one click.
+        then: Groups to reveal one per click once the chart has built, in
+            :func:`~deckwright.motion.builds.add_click_sequence`'s form — the claim a
+            slide makes after its bars. ``stagger_ms`` cascades each group's items.
 
     Raises:
         LayoutError: ``by`` is not one of the values above.
@@ -99,4 +111,5 @@ def add_chart_build(slide, spid: int, by: str, *, parts: int = 0, kind: str = "w
         f'<a:bldChart bld="{bld}"/></p:bldSub></p:bldGraphic>'
         for i in range(groups)
     )
-    attach(slide, timing_xml(effects, builds))
+    after, more = click_groups_xml(slide, list(then), stagger_ms, start_id=5 + 3 * groups)
+    attach(slide, timing_xml(effects, builds + more, after=after))

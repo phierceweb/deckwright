@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterator
 
-from pf_core.utils.io import atomic_write_text
+from pw_foundation.utils.io import atomic_write_text
 
 from deckwright.compile.content import split_name
 
@@ -21,6 +21,7 @@ _KIND = {
     "click_sequence": "animate: one_at_a_time",
     "click_reveals": "reveals:",
     "chart_build": "a chart's own build",
+    "line_build": "build: last",
 }
 
 
@@ -70,18 +71,25 @@ def _said(shape: dict[str, Any]) -> str:
 
 
 def _words(slide: dict[str, Any]) -> dict[str, str]:
-    """What each shape says, keyed by its name and by the placement that drew it.
+    """What each shape says, keyed by its name, and everything a placement says, keyed by
+    the placement that drew it.
 
     A card's plate is drawn first and says nothing, so a trigger named by its shape would
     tell a reader nothing — hence the placement key.
     """
     out: dict[str, str] = {}
-    for shape in reversed(slide.get("shapes") or []):
+    spoken: dict[str, list[str]] = {}
+    for shape in slide.get("shapes") or []:
         name = str(shape.get("name") or "")
         said = _said(shape)
         out[name] = said
         if said:
-            out[split_name(name)[0]] = said
+            spoken.setdefault(split_name(name)[0], []).append(said)
+        # A paragraph build steps through a shape as `<name> ¶<n>`, counting from one.
+        for n, line in enumerate(shape.get("lines") or [], start=1):
+            out[f"{name} ¶{n}"] = str(line).lstrip("•").strip()
+    for origin, lines in spoken.items():
+        out.setdefault(origin, " · ".join(lines))
     return out
 
 
@@ -118,7 +126,11 @@ def _slide(slide: dict[str, Any]) -> Iterator[str]:
 
 
 def _beat(step: list[str], words: dict[str, str]) -> str:
-    said = [w for w in (words.get(name) or "" for name in step) if w]
+    said = [w for w in dict.fromkeys(words.get(name) or "" for name in step) if w]
+    if not said:
+        # A table's frame says nothing; its cells, recorded under its origin, say it all.
+        heard = (words.get(split_name(name)[0]) or "" for name in step)
+        said = [w for w in dict.fromkeys(heard) if w]
     if not said:
         return f"*({len(step)} shape(s), no words: {', '.join(step)})*"
     line = " · ".join(said)

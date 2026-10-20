@@ -60,4 +60,27 @@ def title_slides() -> dict[str, dict[str, Any]]:
                 "title": {"at": {"box": {"x": "6%", "y": "63%", "w": "70%", "h": "13%"}}},
             },
         },
+        "statement": {
+            "kicker": "A RULE",
+            "title": "A rule worth a slide of its own",
+            "subtitle": "No body: the title is the slide",
+            "chrome": "statement",
+        },
+        "side-title": {
+            "kicker": "BESIDE",
+            "title": "A title in its own column",
+            "subtitle": "The body takes the columns beside it",
+            "chrome": "side",
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": {"from": 0, "to": 6}},
+                    "callouts": {
+                        "items": [
+                            {"head": "Full width", "body": "Means the rest of the slide."},
+                            {"head": "Halves and thirds", "body": "Divide what is left."},
+                        ]
+                    },
+                }
+            ],
+        },
     }

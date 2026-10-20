@@ -221,6 +221,15 @@ def test_the_dot_is_the_brand_accent_and_sits_clear_of_the_text(ctx_factory):
     assert Emu(dot.width).inches < 0.3, "a dot this large is a disc, not a bullet"
 
 
+def test_the_dot_gives_way_on_a_slide_painted_in_its_accent(ctx_factory):
+    """On an `accent-1` slide every dot was `accent-1` on `accent-1`, and vanished."""
+    ctx = ctx_factory({"callouts": {"items": [{"head": "H", "body": "b"}]}}, background="accent-1")
+    get_component("callouts")(ctx)
+    dot = next(s for s in ctx.slide.shapes if not s.has_text_frame or not s.text_frame.text)
+    # No other accent clears 3:1 on 27B94C — 18CEDA differs only in hue — so the slide's ink.
+    assert str(dot.fill.fore_color.rgb) == "2D0937"
+
+
 # --- a mark instead of a dot -------------------------------------------------
 
 MARKED = [

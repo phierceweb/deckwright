@@ -1,17 +1,17 @@
-# Utils — the shared primitives, and why none of them is a pf-core call
+# Utils — the shared primitives, and why none of them is a pw-foundation call
 
 What lives in `src/deckwright/utils/`: colour maths, string measurement, the fraction
 vocabulary, polygon geometry, the deck-name rules, the one wording for an unknown key,
-the typed narrowing over pf-core's env resolver, and the python-pptx primitives every
+the typed narrowing over pw-foundation's env resolver, and the python-pptx primitives every
 component draws with. This doc covers what each module is for, the constraints that keep it callable
-from every layer above it, and the pf-core check each one has already been through.
+from every layer above it, and the pw-foundation check each one has already been through.
 
 These are library internals with no project content in them. Nothing here reads a deck
 spec, a theme or a `SlideCtx` — a helper that needs one of those belongs in the
 subsystem that owns it. `utils/spans.py` is the near-exception, and the section on it
 says exactly how far it goes.
 
-Before adding anything here, check whether pf-core already has it — that is a rule
+Before adding anything here, check whether pw-foundation already has it — that is a rule
 with teeth, and `bin/check-framework` is what enforces it.
 
 ---
@@ -32,7 +32,7 @@ with teeth, and `bin/check-framework` is what enforces it.
 - [`a11y.py` — alternative text and the decorative flag](#a11ypy--alternative-text-and-the-decorative-flag)
 - [`links.py` — `[words](address)` in copy](#linkspy--wordsaddress-in-copy)
 - [`provenance.py` — which manifest describes a deck](#provenancepy--which-manifest-describes-a-deck)
-- [What was checked against pf-core](#what-was-checked-against-pf-core)
+- [What was checked against pw-foundation](#what-was-checked-against-pw-foundation)
 - [Adding a helper here](#adding-a-helper-here)
 
 ## The tier utils sits in
@@ -55,7 +55,7 @@ Two consequences, both easy to break by habit:
   context decides whether that is worth a log line.
 - **No module here reads the environment or writes a file.** A tunable belongs in the
   subsystem that owns it; a helper that ever
-  needs to write one calls `pf_core.utils.io.atomic_write_text` / `_json` / `_bytes`
+  needs to write one calls `pw_foundation.utils.io.atomic_write_text` / `_json` / `_bytes`
   rather than reinventing the rename dance.
 
 ## `color.py` — the WCAG maths
@@ -89,7 +89,8 @@ template's colour scheme, so one class is right for all of them.
 ## `text.py` and `_metrics.py` — measuring a string
 
 `text_em(text, face)` returns a width in ems; `wrapped_lines(text, width_in=, size_pt=,
-face=)` returns how many lines it takes in a box. A `code` listing has its own pair, since a
+face=)` returns how many lines it takes in a box, breaking where `spaced_runs` says a renderer
+would. A `code` listing has its own pair, since a
 listing keeps its spacing where prose collapses it: `listing_em(line, face)` is a line's
 width in the `mono` face, its trailing spaces hung, and `listing_rows(line, width_in=,
 size_pt=, face=)` the rows it wraps to, the spaces before each run charged on the row they
@@ -100,12 +101,12 @@ geometry (`components/_tablegeom.py`, `components/card.py`), category-label room
 `charts/native.py` and QA's own geometry check all size off this pair, so a change here
 moves the whole build at once.
 
-`_metrics.py` holds per-character advance tables baked as literals from real font files:
-`CALIBRI` (Carlito), `ARIAL` (LiberationSans), and `CEILING`, the per-character max
-across Carlito, Liberation Sans, Verdana and DejaVu Sans. `_metrics_faces.py` holds the
-brand families the bundled themes name (Poppins, Open Sans, Montserrat, Amatic, Sniglet,
-Bebas Neue, Barlow Semi Condensed), each packed as one string of advances in `GLYPHS`
-order so seven tables stay a few dozen lines, and `COURIER` — Liberation Mono, the metric
+`_metrics.py` holds per-character advance tables baked from real font files: `CALIBRI`
+(Carlito), `ARIAL` (LiberationSans), and `CEILING`, the per-character max across Carlito,
+Liberation Sans, Verdana and DejaVu Sans. `_metrics_faces.py` holds the brand families the
+bundled themes name (Poppins, Open Sans, Montserrat, Amatic, Sniglet, Bebas Neue, Barlow Semi
+Condensed). Every one of those tables is packed as one string of advances in `GLYPHS` order,
+so ten tables stay a few dozen lines. `_metrics_faces.py` also holds `COURIER` — Liberation Mono, the metric
 clone of the default `mono` face, one advance for every glyph. `MONO` is the widest
 monospace advance measured (SF Mono), and `table_for(face, mono=True)` gives it to any face
 setting a listing that has no monospaced table of its own — an unmeasured one, and one whose
@@ -131,11 +132,13 @@ A listing passes `mono=True` to both `measured` and `estimate_caveat`, so a face
 break it: at a space other than a no-break, figure or narrow no-break one, after a hyphen
 or dash, and on either side of a wide character. Not after a slash, since LibreOffice sets
 a URL broken mid-word. Not after a hyphen before a digit or another dash, nor after one
-opening a word (`-v`): UAX #14's LB25, LB21 and LB20a, each pinned in
-`tests/utils/test_text.py` against a LibreOffice render of a box too narrow for the run. A CJK character breaks on either side, a hangul run only where Latin text would,
-since Korean breaks at spaces, and `_cjk.glue` keeps a mark that may not start or end a line
-with its neighbour (kinsoku), and a no-break space with the characters either side of it
-unless a hyphen or en dash comes before it (LB12a).
+opening a word (`-v`) — at the start or after a space, not after a wide character — and never
+before a hyphen or en dash: UAX #14's LB25, LB20a and LB21, each pinned in
+`tests/utils/test_text.py` against a LibreOffice render of a box too narrow for the run. A
+CJK character breaks on either side, a hangul run only where Latin text would, since Korean
+breaks at spaces, and `_cjk.glue` keeps a mark that may not start or end a line with its
+neighbour (kinsoku), a hyphen with the character before it, and a no-break space with the
+characters either side of it unless a hyphen or en dash comes before it (LB12a).
 
 Five traps for anyone editing this pair:
 
@@ -150,8 +153,8 @@ Five traps for anyone editing this pair:
   through what sits below it, and neither QA's `bounds` check nor its `overflow` check
   can see a doubled-up chrome stack.
 - **A lone word and a listing are measured without `_MARGIN`.** `overlong_word` refuses a
-  build rather than sizing a box, and `wrapped_lines` breaks a word too long for its line
-  where the real width does; an allowance in either refuses, or reserves a second line for,
+  build rather than sizing a box, and `wrapped_lines` breaks a run too long for its line
+  where the real width does, after breaking at its hyphens first; an allowance in either refuses, or reserves a second line for,
   a word that fits its widest cut. `listing_em` and `listing_rows` measure monospaced
   columns, which have no kerning to allow for, so the two agree on every line.
 - **`advance_em` over-counts every character no table carries**, charging it the widest
@@ -256,16 +259,16 @@ Three behaviours to keep when touching it:
 
 ## `env.py` — the resolver, narrowed to `str`
 
-`env_str(arg, env_var, *, default=)` is `pf_core.utils.env.resolve_str` with its return
+`env_str(arg, env_var, *, default=)` is `pw_foundation.utils.env.resolve_str` with its return
 narrowed from `str | None` to `str`. Every deckwright knob passes a real default, so the
 None arm never happens; the wrapper says so once for the type checker instead of at each
 call site. Use it for every `DECKWRIGHT_*` string knob — a binary path, a directory — and
 keep the precedence it gives you: the caller's argument, then the variable, then the
-default. Integer and boolean knobs call pf-core's `resolve_int` / `resolve_bool`
+default. Integer and boolean knobs call pw-foundation's `resolve_int` / `resolve_bool`
 directly; those already return the narrow type.
 
-This is the one module here whose whole body is a pf-core call, and it must never grow
-into a resolver of its own. Two of pf-core's semantics ride through it unchanged: an
+This is the one module here whose whole body is a pw-foundation call, and it must never
+grow into a resolver of its own. Two of pw-foundation's semantics ride through it unchanged: an
 empty string is a value, not an absence — `DECKWRIGHT_CHROME=` is "configured to nothing",
 and `services/htmlshot.py` strips and tests for exactly that — and only an unset
 variable falls to the default.
@@ -404,24 +407,24 @@ finds its build. `diff` reads a copy back through it, and `extract` takes a plac
 box from the manifest it finds. It lives here rather than in `compile/` because `spec/`
 sits below `compile/` and cannot import it.
 
-## What was checked against pf-core
+## What was checked against pw-foundation
 
 `bin/check-framework`'s own `EXEMPT` table records the deliberate non-adoptions
 project-wide. These are the ones specific to this package, so the check does not have to
 be redone from memory:
 
-| Helper here | Nearest pf-core | Why it stays |
+| Helper here | Nearest in pw-foundation | Why it stays |
 |---|---|---|
-| `color.py` | nothing | pf-core carries no colour module; the maths is the WCAG spec, not a utility choice |
+| `color.py` | nothing | pw-foundation carries no colour module; the maths is the WCAG spec, not a utility choice |
 | `text_em`, `wrapped_lines`, `_metrics.py` | nothing | font advances are a PowerPoint-shaped problem the framework has no reason to know about |
 | `poly.py` | nothing | four functions of plane geometry; a C-extension dependency would cost more than it saves |
-| `shapes.py`, `deck.py` | nothing | pf-core knows nothing about OOXML or python-pptx |
-| `xml.py` | `pf_core.parsers` | not a match: that is a stdlib `html.parser` walker rendering article HTML to plain text plus link records. pf-core does not depend on `lxml` at all, and has no XML tree parser to harden |
-| `closest_match` | `pf_core.utils.similarity` | different question, and the numbers say so — below |
-| `keys.py` | nothing | pf-core's `InvalidInputError` carries a message, not a vocabulary; the wording is deckwright's |
-| `env.py` | `pf_core.utils.env.resolve_str` | it *is* the call, wrapped once to narrow the return type |
+| `shapes.py`, `deck.py` | nothing | pw-foundation knows nothing about OOXML or python-pptx |
+| `xml.py` | nothing | pw-foundation has no parser. The nearest in the framework, pw-core's `parsers`, is a stdlib `html.parser` walker rendering article HTML to plain text plus link records; neither package depends on `lxml` or has an XML tree parser to harden |
+| `closest_match` | nothing — pw-core's `utils.similarity` is the nearest | different question, and the numbers say so — below |
+| `keys.py` | nothing | pw-foundation's `InvalidInputError` carries a message, not a vocabulary; the wording is deckwright's |
+| `env.py` | `pw_foundation.utils.env.resolve_str` | it *is* the call, wrapped once to narrow the return type |
 
-`pf_core.utils.similarity.is_near_duplicate` is the one that looks like a hit and is not.
+pw-core's `pw_core.utils.similarity.is_near_duplicate` is the one that looks like a hit and is not.
 It answers "are these two bodies of text near-duplicates" with a boolean, over character
 4-shingles at a 0.75 Jaccard threshold. `closest_match` answers "which one of these
 short identifiers did the author mean" and must rank a vocabulary and return `None` when
@@ -437,7 +440,7 @@ the replacement in every failure.
 
 ## Adding a helper here
 
-1. **Check pf-core first.** Start at `docs/pf-core/modules.md` (the symlink `bin/setup`
+1. **Check pw-foundation first.** Start at `docs/pw-foundation/modules.md` (the symlink `bin/setup`
    creates); [`../CLAUDE.md`](../CLAUDE.md) states the rule. The gate refuses the common cases, but
    it only knows the rules someone wrote down — the index is the actual check.
 2. **Check the tier.** If it needs the theme, the grid, a spec document or a slide

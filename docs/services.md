@@ -47,7 +47,7 @@ here.
 | `services/montage.py` | nothing — Pillow | `contact_sheet` | the sheet's path |
 
 Every knob each one reads is declared in its own module docstring and resolved through
-`pf_core.utils.env` **at call time**, so a `.env` edit takes effect between invocations
+`pw_foundation.utils.env` **at call time**, so a `.env` edit takes effect between invocations
 with no reinstall. The precedence is always kwarg > env > default.
 
 Two more binaries a deck workflow touches are not in this package: `pdftotext`, which
@@ -312,9 +312,8 @@ the markup, and `markdown.markdown` passes raw HTML through by design.
 [`panels.md`](panels.md) has the failure this produces on a real document, and why
 suppressing it would be worse.
 
-The third-party `markdown` dependency is deliberate, and named as such in
-the framework-first check: `pf_core.web.markdown.safe_markdown` renders a narrow
-escape-first subset for untrusted web content, which drops the tables, fenced code and
+The third-party `markdown` dependency is deliberate: pw-foundation renders no Markdown, and
+the escape-first `safe_markdown` in pw-core's web layer drops the tables, fenced code and
 definition lists these cards are for.
 
 ## `card_pictures.py` — the pictures a card names
@@ -395,9 +394,9 @@ thing that broke — `bin/check-framework` is what enforces it. `MissingToolErro
 
 1. **One module per tool**, named for the tool's job. Put the env knobs in the module
    docstring; that is where the next reader looks.
-2. **Resolve the binary through `pf_core.utils.env.resolve_str` at call time**, caller's
+2. **Resolve the binary through `pw_foundation.utils.env.resolve_str` at call time**, caller's
    kwarg first, so precedence stays kwarg > env > default
-   (a module constant for the default, a wrapper over `pf_core.utils.env.resolve_*`,
+   (a module constant for the default, a wrapper over `pw_foundation.utils.env.resolve_*`,
    read at call time). Then document the variable in [`cli.md`](cli.md):
    `tests/test_docs.py` fails on any `DECKWRIGHT_*` the code reads and that table omits.
 3. **A missing tool raises `MissingToolError`; a failing one raises `RenderError`.** Catch

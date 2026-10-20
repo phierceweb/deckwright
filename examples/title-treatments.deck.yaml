@@ -11,7 +11,7 @@ notes: 'The regression reference. 38 of 127 corpus titles use this treatment; it
 
   '
 place:
-- at: {cols: full, rows: {from: 0, to: 5}}
+- at: {cols: full, rows: {from: 0, to: 7}}
   bullets:
     heading: What moves from here
     columns: 2
@@ -62,7 +62,7 @@ background: inverse
 chrome:
   kicker: {at: {box: {x: 5.5%, y: 50%, w: 50%, h: 5%}}, anchor: bottom}
   title: {at: {box: {x: 5.5%, y: 55%, w: 75%, h: 13%}}, rung: display, anchor: bottom}
-  subtitle: {at: {box: {x: 5.5%, y: 69%, w: 60%, h: 6%}}, anchor: top}
+  subtitle: {at: {box: {x: 5.5%, y: 69%, w: 60%, h: auto}}}
 ---
 title: Offset column title
 subtitle: The measure is the column, so the title wraps where the column ends
@@ -102,7 +102,7 @@ notes: 'Nine corpus titles sit inside a colour panel, inset 0.042 to 0.091 of ca
 chrome:
   kicker: {at: {box: {x: 9%, y: 30%, w: 30%, h: 5%}}, pair: accent-3}
   title: {at: {box: {x: 9%, y: 36%, w: 30%, h: 20%}}, pair: accent-3}
-  subtitle: {at: {box: {x: 9%, y: 57%, w: 30%, h: 10%}}, pair: accent-3}
+  subtitle: {at: {box: {x: 9%, y: 57%, w: 30%, h: auto}}, pair: accent-3}
 place:
 - at: {box: {x: 0%, y: 0%, w: 45%, h: 100%}}
   bleed: true

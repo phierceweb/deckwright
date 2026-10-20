@@ -6,7 +6,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
 
 import deckwright.components  # noqa: F401 — registers the built-in components
-from deckwright.components.card import _ICON_LINES
+from deckwright.components._cardgeom import ICON_LINES as _ICON_LINES
 from deckwright.errors import LayoutError, ThemeError
 from deckwright.layouts.components import get_component, registered_components, shape_id
 from deckwright.theme.model import Rect
@@ -100,6 +100,50 @@ def test_align_sets_the_cards_type_without_moving_the_plate(ctx_factory):
     plate, text = _draw(ctx)
     assert text.text_frame.paragraphs[0].alignment == PP_ALIGN.CENTER
     assert plate.left / EMU == pytest.approx(ctx.body_rect.left)
+
+
+@pytest.mark.parametrize(("anchor", "expected"), [("middle", "ctr"), ("bottom", "b")])
+def test_anchor_sets_the_cards_type_inside_the_plate(ctx_factory, anchor, expected):
+    """Written `t` whatever was asked, a deep plate kept its type at the top, and no error
+    said why."""
+    ctx = ctx_factory({"card": {"heading": "Discovery"}})
+    ctx.anchor = anchor
+    plate, text = _draw(ctx)
+    assert text.text_frame._txBody.bodyPr.get("anchor") == expected
+    assert plate.top / EMU == pytest.approx(ctx.body_rect.top)
+
+
+def test_anchor_moves_an_icon_down_with_the_type(ctx_factory, icon_theme):
+    """The icon is drawn apart from the type's frame, so the frame's anchor cannot reach it."""
+    ctx = ctx_factory(
+        {"card": {"icon": "icon.png", "heading": "Discovery"}}, theme_override=icon_theme
+    )
+    ctx.rect = Rect(1.0, 1.0, 4.0, 4.0)
+    ctx.anchor = "bottom"
+    get_component("card")(ctx)
+    picture, text = ctx.slide.shapes[1], ctx.slide.shapes[2]
+    assert picture.top / EMU > 2.5
+    assert text.top >= picture.top + picture.height
+
+
+def test_an_icon_only_card_can_sit_at_the_bottom_of_its_plate(ctx_factory, icon_theme):
+    ctx = ctx_factory({"card": {"icon": "icon.png"}}, theme_override=icon_theme)
+    ctx.rect = Rect(1.0, 1.0, 4.0, 4.0)
+    ctx.anchor = "bottom"
+    get_component("card")(ctx)
+    picture = ctx.slide.shapes[1]
+    assert (picture.top + picture.height) / EMU == pytest.approx(5.0 - ctx.grid.gutter)
+
+
+def test_align_moves_the_icon_with_the_type(ctx_factory, icon_theme):
+    ctx = ctx_factory(
+        {"card": {"icon": "icon.png", "heading": "Discovery"}}, theme_override=icon_theme
+    )
+    ctx.rect = Rect(1.0, 1.0, 4.0, 2.5)
+    ctx.align = "center"
+    get_component("card")(ctx)
+    picture = ctx.slide.shapes[1]
+    assert (picture.left + picture.width / 2) / EMU == pytest.approx(3.0, abs=0.01)
 
 
 def test_the_type_is_inset_from_the_plate_by_the_themes_gutter(ctx_factory):
@@ -331,27 +375,27 @@ def test_a_component_that_raises_mid_bleed_does_not_leave_the_flag_set(ctx_facto
 def test_plate_height_insets_by_the_same_curve_the_card_does(ctx_factory):
     """The helper sizes the plate and the component fills it; disagree about how far the
     corner cuts in and the copy runs past the bottom. A stadium is where the two must meet."""
-    from deckwright.components.card import plate_height
+    from deckwright.components._cardgeom import plate_height
 
-    ctx = ctx_factory({"card": {"heading": "H", "body": "b"}})
+    theme = ctx_factory({"card": {"heading": "H", "body": "b"}}).theme
     # 2.5in and 24 words: narrow enough that the arc's 0.24in a side changes the line count.
     # At 4in the copy wraps identically and a radius-blind helper would pass.
     words = " ".join(["word"] * 24)
-    square = plate_height(ctx, width=2.5, heading="Heading", copy=words, radius=0.0)
-    stadium = plate_height(ctx, width=2.5, heading="Heading", copy=words, radius=0.5)
+    square = plate_height(theme, width=2.5, heading="Heading", copy=words, radius=0.0)
+    stadium = plate_height(theme, width=2.5, heading="Heading", copy=words, radius=0.5)
     assert stadium > square, f"a stadium eats measure: {square} vs {stadium}"
 
 
 def test_plate_height_is_unchanged_for_the_radius_every_card_uses(ctx_factory):
     """The second pass must not move the common case: a flow sizes every step through
     this helper, and shifting them all would be a re-flow nobody asked for."""
-    from deckwright.components.card import _RADIUS_DEFAULT, plate_height
+    from deckwright.components._cardgeom import RADIUS_DEFAULT as _RADIUS_DEFAULT, plate_height
 
-    ctx = ctx_factory({"card": {"heading": "H", "body": "b"}})
+    theme = ctx_factory({"card": {"heading": "H", "body": "b"}}).theme
     words = " ".join(["word"] * 12)
     assert plate_height(
-        ctx, width=2.4, heading="H", copy=words, radius=_RADIUS_DEFAULT
-    ) == plate_height(ctx, width=2.4, heading="H", copy=words, radius=0.0)
+        theme, width=2.4, heading="H", copy=words, radius=_RADIUS_DEFAULT
+    ) == plate_height(theme, width=2.4, heading="H", copy=words, radius=0.0)
 
 
 def test_a_card_refusal_on_an_unmeasured_face_says_the_estimate_errs_wide(ctx_factory, theme):

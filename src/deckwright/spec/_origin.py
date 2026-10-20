@@ -35,13 +35,20 @@ class Origin:
         return f"{head}.{self.placement}.{self.component}"
 
 
+def counted(name: str) -> tuple[str, str]:
+    """``name`` without its ``#k`` counter, and the counter: the last ``#`` before digits only,
+    since a morph name may hold a ``#`` of its own."""
+    head, mark, tail = name.rpartition("#")
+    return (head, tail) if mark and tail.isdigit() else (name, "")
+
+
 def origin_of(name: str) -> Origin | None:
     """The placement ``name`` belongs to, or None for chrome, a background or a stranger."""
     match = _HEAD.match(name)
     if match is None:
         return None
     slide, rest = match.group(1), match.group(3)
-    rest, _, number = rest.partition("#")
+    rest, number = counted(rest)
     segments = rest.split(".")
     known = set(registered_components())
     for at in range(len(segments) - 1, 0, -1):

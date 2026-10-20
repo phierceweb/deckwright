@@ -150,6 +150,7 @@ class PlacementRecord:
     origin: str
     component: str
     box: Box
+    bleed: bool = False  # declared to run off the slide, so a draft can declare it again
 
 
 @dataclass
@@ -165,6 +166,7 @@ class SlideRecord:
     shapes: list[ShapeRecord] = field(default_factory=list)
     animations: list[dict[str, Any]] = field(default_factory=list)
     transition: str | None = None  # the kind the show arrives on; `none` for a hard cut
+    chrome: str | None = None  # the slide's `chrome:` preset, so a draft can name it again
 
     def texts(self) -> list[str]:
         """Text a PDF extractor should be able to find — native records, one entry per line."""

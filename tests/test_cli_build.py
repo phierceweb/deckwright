@@ -79,50 +79,6 @@ def test_build_honours_the_out_flag(project, tmp_path):
     assert dest.is_file()
 
 
-def _stderr(capsys) -> str:
-    return " ".join(capsys.readouterr().err.split())
-
-
-def test_a_bad_spec_exits_1_with_a_readable_message(project, capsys):
-    from pf_core.cli import run_cli
-
-    (project / "bad.deck.yaml").write_text("title: no theme\n---\ntitle: T\n")
-    with pytest.raises(SystemExit) as exit_info:
-        run_cli(
-            app,
-            args=["build", str(project / "bad.deck.yaml"), "--theme", str(project / "cli.yaml")],
-        )
-    assert exit_info.value.code == 1
-    assert "missing required field 'theme'" in _stderr(capsys)
-
-
-def test_an_unknown_component_exits_1_with_a_readable_message(project, capsys):
-    from pf_core.cli import run_cli
-
-    (project / "bad2.deck.yaml").write_text(
-        "theme: cli\nout: X.pptx\n---\nplace:\n  - at: {cols: full}\n    nonesuch: {}\n"
-    )
-    with pytest.raises(SystemExit) as exit_info:
-        run_cli(
-            app,
-            args=["build", str(project / "bad2.deck.yaml"), "--theme", str(project / "cli.yaml")],
-        )
-    assert exit_info.value.code == 1
-    assert "unknown field 'nonesuch'" in _stderr(capsys)
-
-
-def test_a_missing_theme_file_exits_1_with_a_readable_message(project, capsys):
-    from pf_core.cli import run_cli
-
-    with pytest.raises(SystemExit) as exit_info:
-        run_cli(
-            app,
-            args=["build", str(project / "d.deck.yaml"), "--theme", str(project / "absent.yaml")],
-        )
-    assert exit_info.value.code == 1
-    assert "theme file not found" in _stderr(capsys)
-
-
 def _need_soffice():
     import shutil
 

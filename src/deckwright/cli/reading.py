@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from pf_core.utils.io import atomic_write_bytes, atomic_write_text
+from pw_foundation.utils.io import atomic_write_bytes, atomic_write_text
 
 from deckwright.cli._app import app
 from deckwright.compile.readback import read_back, write_drift
@@ -16,6 +16,7 @@ from deckwright.errors import SpecError
 from deckwright.qa import inspect_deck
 from deckwright.spec.draft import draft_spec
 from deckwright.spec.extract import harvest, render_markdown
+from deckwright.theme.load import load_theme
 
 
 @app.command()
@@ -83,7 +84,7 @@ def extract(
     dest = out or deck.with_name(deck.stem + (".md" if fmt == "md" else ".deck.yaml"))
     if dest.exists() and not force:
         raise SpecError(f"{dest} already exists — pass --force to replace it")
-    slides = harvest(deck)
+    slides = harvest(deck, theme=load_theme(theme) if fmt == "yaml" else None)
     spilled = 0
     media: dict[str, bytes] = {}
     folder = dest.parent / (dest.name.removesuffix(".deck.yaml").removesuffix(".yaml") + ".media")

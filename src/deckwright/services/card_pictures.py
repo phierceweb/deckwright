@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote
 
-from pf_core.exceptions import InvalidInputError
+from pw_foundation.exceptions import InvalidInputError
 
 # A quoted attribute value may hold a '>'.
 _START_TAG = re.compile(r"""<([a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>""", re.I)

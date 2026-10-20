@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 
 import pytest
-from pf_core.exceptions import InvalidInputError, PreconditionError
+from pw_foundation.exceptions import InvalidInputError, PreconditionError
 from pptx import Presentation
 from pptx.util import Inches
 

@@ -18,6 +18,11 @@ from deckwright.spec._origin import Origin, origin_of
         ("s2.a.b.card#1", Origin(slide=2, placement="a.b", component="card", part="1")),
         ("s4.p1.bullets#3", Origin(slide=4, placement="p1", component="bullets", part="3")),
         ("s1.x.card.bullets#1", Origin(slide=1, placement="x.card", component="bullets", part="1")),
+        ("m.step#2.card#1", Origin(slide=None, placement="step#2", component="card", part="1")),
+        (
+            "m.step#2.table.r1c1",
+            Origin(slide=None, placement="step#2", component="table", part="r1c1"),
+        ),
     ],
 )
 def test_a_placements_shape_names_its_slide_placement_component_and_part(name, origin):

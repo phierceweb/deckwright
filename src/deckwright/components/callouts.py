@@ -11,10 +11,11 @@ from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import Disc, SlideCtx
 from deckwright.spec._scalars import has_text
 from deckwright.theme.model import Rect
+from deckwright.utils.color import AA_LARGE, contrast_ratio, stands_off
 from deckwright.utils.shapes import ANCHOR, rrect, textbox
 
 from deckwright.components._shape import known_fields, known_item_fields
-from deckwright.components.card import copy_height
+from deckwright.components._cardgeom import copy_height
 from deckwright.components._shared import (
     HEAD_SPACE_AFTER_PT,
     LINE_HEIGHT,
@@ -76,7 +77,10 @@ def callouts(ctx: SlideCtx) -> BodyResult:
     heights = [
         max(
             copy_height(
-                ctx, width=rect.width - indent, heading=str(i["head"]), copy=str(i.get("body", ""))
+                ctx.theme,
+                width=rect.width - indent,
+                heading=str(i["head"]),
+                copy=str(i.get("body", "")),
             ),
             _min_row(ctx),
         )
@@ -110,22 +114,11 @@ def callouts(ctx: SlideCtx) -> BodyResult:
             )
             indent = side + ctx.grid.gutter
         else:
-            dot = rrect(
-                ctx.slide,
-                rect.left,
-                top + 0.06,
-                _DOT,
-                _DOT,
-                ctx.color("accent-1"),
-                radius=0.5,
-            )
-            accent = ctx.theme.palette.role("accent-1")
-            ctx.manifest.record(
-                dot,
-                fill=accent,
-                ground=ctx.behind(Rect(rect.left, top + 0.06, _DOT, _DOT), ink=accent),
-            )
-            ctx.painted.append((Rect(rect.left, top + 0.06, _DOT, _DOT), Disc(accent)))
+            box = Rect(rect.left, top + 0.06, _DOT, _DOT)
+            accent = _dot_colour(ctx, box)
+            dot = rrect(ctx.slide, box.left, box.top, _DOT, _DOT, ctx.rgb(accent), radius=0.5)
+            ctx.manifest.record(dot, fill=accent, ground=ctx.behind(box, ink=accent))
+            ctx.painted.append((box, Disc(accent)))
             marker = (dot.shape_id, "surface")
             indent = _TEXT_INDENT
 
@@ -174,3 +167,18 @@ def _heading(ctx: SlideCtx, text: str, top: float) -> int:
     head(ctx, frame, text, first=True)
     ctx.manifest.record(frame._parent, text=text)
     return frame._parent.shape_id
+
+
+def _dot_colour(ctx: SlideCtx, box: Rect) -> str:
+    """``accent-1`` wherever it stands off its ground, by `qa`'s own test. Where it does not —
+    an `accent-1` slide — the dot gives way as a mark does: to the first accent clearing 3:1,
+    then the slide's ink. A hue alone barely shows on a dot this small."""
+    palette = ctx.theme.palette
+    first = palette.role(palette.accents[0])
+    if stands_off(first, ctx.behind(box, ink=first)):
+        return first
+    for name in palette.accents[1:]:
+        colour = palette.role(name)
+        if contrast_ratio(colour, ctx.behind(box, ink=colour)) >= AA_LARGE:
+            return colour
+    return ctx.pair.fg

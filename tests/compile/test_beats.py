@@ -150,3 +150,68 @@ def test_a_manifest_written_before_clicks_were_recorded_still_renders():
         }
     )
     assert "2 click(s)" in out
+
+
+def test_a_table_beat_reads_its_cells_not_its_empty_frame():
+    """The click names the table's frame, and the words are on its cells' records: every
+    table beat read `no words` though the table is all words."""
+    shapes = [
+        {"name": "s1.p1.table#1"},
+        {"name": "s1.p1.table.r1c1", "lines": ["Judgement"]},
+        {"name": "s1.p1.table.r1c2", "lines": ["Observation"]},
+    ]
+    out = render_beats(
+        {
+            "deck": "d.pptx",
+            "slides": [
+                _slide(
+                    1,
+                    [{"kind": "click_sequence", "clicks": 1, "steps": [["s1.p1.table#1"]]}],
+                    shapes,
+                )
+            ],
+        }
+    )
+    assert "1. Judgement · Observation" in out
+
+
+def test_a_flow_step_reads_its_own_words_not_the_whole_flows():
+    """A step's plate says nothing; falling back to the placement read every step's words on
+    every click."""
+    shapes = [
+        {"name": "s1.p1.flow#1"},
+        {"name": "s1.p1.flow#2", "lines": ["Arrives"]},
+        {"name": "s1.p1.flow#3"},
+        {"name": "s1.p1.flow#4", "lines": ["Shakes"]},
+    ]
+    steps = [["s1.p1.flow#1", "s1.p1.flow#2"], ["s1.p1.flow#3", "s1.p1.flow#4"]]
+    out = render_beats(
+        {
+            "deck": "d.pptx",
+            "slides": [
+                _slide(1, [{"kind": "click_sequence", "clicks": 2, "steps": steps}], shapes)
+            ],
+        }
+    )
+    assert "1. Arrives\n" in out and "2. Shakes\n" in out
+
+
+def test_a_paragraph_beat_reads_its_own_paragraph_not_the_whole_list():
+    steps = [["s1.p1.bullets#1 ¶1"], ["s1.p1.bullets#1 ¶2"]]
+    shape = {"name": "s1.p1.bullets#1", "lines": ["•  alpha", "•  beta"]}
+    out = render_beats(
+        {
+            "deck": "d.pptx",
+            "slides": [
+                _slide(1, [{"kind": "click_sequence", "clicks": 2, "steps": steps}], [shape])
+            ],
+        }
+    )
+    assert "1. alpha\n2. beta\n" in out
+
+
+def test_a_paragraph_beat_with_no_words_names_its_step_not_the_whole_list():
+    shape = {"name": "s1.p1.bullets#1", "lines": ["•  alpha", ""]}
+    anim = {"kind": "click_sequence", "clicks": 1, "steps": [["s1.p1.bullets#1 ¶2"]]}
+    out = render_beats({"deck": "d.pptx", "slides": [_slide(1, [anim], [shape])]})
+    assert "1. *(1 shape(s), no words: s1.p1.bullets#1 ¶2)*" in out

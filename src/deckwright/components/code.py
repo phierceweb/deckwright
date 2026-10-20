@@ -16,7 +16,13 @@ from deckwright.errors import LayoutError
 from deckwright.layouts.components import BodyResult, RevealItem, component
 from deckwright.layouts.registry import SlideCtx
 from deckwright.utils.shapes import para, rrect
-from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, listing_em, listing_rows
+from deckwright.utils.text import (
+    LINE_HEIGHT,
+    estimate_caveat,
+    inches_apart,
+    listing_em,
+    listing_rows,
+)
 
 from deckwright.components._shape import flag, known_fields, pair_named
 from deckwright.components._shared import head as head_line
@@ -84,9 +90,10 @@ def code(ctx: SlideCtx) -> BodyResult:
         _refuse_overwide(ctx, lines, width_in=width_in, size_pt=size, face=face)
     if top + plate_h > rect.bottom:
         wrapped = f" wrap to {rows} rows and" if rows != len(lines) else ""
+        need, left = inches_apart(plate_h, rect.bottom - top)
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'code'): {len(lines)} lines{wrapped} need "
-            f"{plate_h:.2f}in but only {rect.bottom - top:.2f}in is left — shorten the "
+            f"{need} but only {left} is left — shorten the "
             f"listing, split the slide, or lower 'size'"
             f"{estimate_caveat(face, mono=True) if wrapped else ''}"
         )

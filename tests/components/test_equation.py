@@ -127,3 +127,21 @@ def test_an_equation_taller_than_its_placement_is_refused(ctx_factory):
     ctx.rect = Rect(ctx.rect.left, ctx.rect.top, ctx.rect.width, 0.5)
     with pytest.raises(LayoutError, match=rf"^{WHERE}: the equation stacks 4 rows, \d+\.\d\din"):
         get_component("equation")(ctx)
+
+
+@pytest.mark.parametrize("align, algn", [("left", "l"), ("center", "ctr"), ("right", "r")])
+def test_the_fallback_spans_its_placement_and_aligns_in_it(ctx_factory, align, algn):
+    """Framed at the placement's width, a substituted face a little wider than the theme's
+    still sets the line whole; the paragraph, not the frame's position, carries the align."""
+    from pptx.util import Inches
+
+    ctx = ctx_factory({"equation": {"tex": QUADRATIC}})
+    ctx.align = align
+    get_component("equation")(ctx)
+    choice, fallback = list(_alternate(ctx))
+    (off,) = fallback.iter(qn("a:off"))
+    (ext,) = fallback.iter(qn("a:ext"))
+    (p_pr,) = fallback.iter(qn("a:pPr"))
+    assert int(off.get("x")) == pytest.approx(Inches(ctx.body_rect.left), abs=1)
+    assert int(ext.get("cx")) == Inches(ctx.body_rect.width)
+    assert p_pr.get("algn") == algn

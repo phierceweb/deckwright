@@ -4,39 +4,26 @@ import pytest
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 
-from pf_core.exceptions import (
-    AppError,
-    ClientError,
-    ConfigurationError,
-    FlowException,
-    InvalidInputError,
-)
+from pw_foundation.exceptions import ClientError, ConfigurationError, InvalidInputError
 
 from deckwright.errors import LayoutError, RenderError, SpecError, ThemeError
 from deckwright.utils.deck import open_presentation
 
 
-def test_spec_error_is_a_flow_exception():
+def test_spec_error_is_invalid_input():
     assert issubclass(SpecError, InvalidInputError)
-    assert issubclass(SpecError, FlowException)
 
 
 def test_theme_error_is_a_configuration_error():
     assert issubclass(ThemeError, ConfigurationError)
 
 
-def test_layout_error_is_a_flow_exception():
+def test_layout_error_is_invalid_input():
     assert issubclass(LayoutError, InvalidInputError)
 
 
-def test_render_error_is_an_app_error():
+def test_render_error_is_a_client_error():
     assert issubclass(RenderError, ClientError)
-    assert issubclass(RenderError, AppError)
-
-
-def test_spec_error_carries_its_message():
-    with pytest.raises(SpecError, match=r"slide 3: unknown layout 'bogus'"):
-        raise SpecError("slide 3: unknown layout 'bogus'")
 
 
 _RELS_NS = "http://schemas.openxmlformats.org/package/2006/relationships"

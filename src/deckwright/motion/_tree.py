@@ -68,12 +68,13 @@ def bld_p_list(slide, spids) -> str:
     )
 
 
-def timing_xml(effects_xml: str, bld_lst_xml: str) -> str:
+def timing_xml(effects_xml: str, bld_lst_xml: str, *, after: str = "") -> str:
     """Wrap main-sequence ``effects_xml`` and ``<p:bldLst>`` content into one ``<p:timing>``.
 
     An empty ``bld_lst_xml`` writes no ``<p:bldLst>`` at all: ``CT_BuildList`` requires a
     child, so ``<p:bldLst/>`` is schema-invalid. The effect nodes then carry no
-    ``grpId``, whose only job is to name a build-list entry.
+    ``grpId``, whose only job is to name a build-list entry. ``after`` is further click
+    wrappers, each a ``<p:par>``, for the main sequence to play once ``effects_xml`` has.
     """
     P, A = _P, _A
     bld = f"<p:bldLst>{bld_lst_xml}</p:bldLst>" if bld_lst_xml else ""
@@ -85,6 +86,7 @@ def timing_xml(effects_xml: str, bld_lst_xml: str) -> str:
         f'<p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>'
         f"{effects_xml}"
         f"</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>"
+        f"{after}"
         f"</p:childTnLst></p:cTn>"
         f'<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
         f'<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>'

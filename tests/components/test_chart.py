@@ -86,9 +86,18 @@ def test_the_native_chart_stays_inside_the_body_rect(ctx_factory):
 # Chart build animation — animate: by_category / by_series on a native chart.
 
 
+def _build(ctx):
+    """Draw the chart and write the slide's build, as compose does once all are drawn."""
+    from deckwright.layouts.motion import apply_reveal
+
+    result = as_body_result(get_component("chart")(ctx))
+    apply_reveal(ctx, [g for g in result.groups if g])
+    return result
+
+
 def test_a_by_category_animate_emits_a_chart_build_on_the_real_frame(ctx_factory):
     ctx = _ctx(ctx_factory, animate="by_category")
-    get_component("chart")(ctx)
+    _build(ctx)
     frame = ctx.slide.shapes[0]
 
     timing = ctx.slide._element.find(qn("p:timing"))
@@ -102,7 +111,7 @@ def test_a_by_category_animate_emits_a_chart_build_on_the_real_frame(ctx_factory
 
 def test_a_by_series_animate_maps_to_the_series_bld_value(ctx_factory):
     ctx = _ctx(ctx_factory, animate="by_series")
-    get_component("chart")(ctx)
+    _build(ctx)
     timing = ctx.slide._element.find(qn("p:timing"))
     bld_chart = timing.find(f"{{{_P}}}bldLst/{{{_P}}}bldGraphic/{{{_P}}}bldSub/{{{_A}}}bldChart")
     assert bld_chart.get("bld") == "series"
@@ -136,7 +145,7 @@ def test_a_category_build_staggers_one_part_per_category(ctx_factory):
             animate="by_category",
             data=[{"category": f"Q{i}", "value": i} for i in range(1, n + 1)],
         )
-        get_component("chart")(ctx)
+        _build(ctx)
         return etree.tostring(ctx.slide.element).decode().count("categoryIdx=")
 
     three, five = targets(3), targets(5)
@@ -172,7 +181,7 @@ def test_the_refusal_names_a_kind_that_does_build(ctx_factory):
 def test_a_column_chart_still_builds_by_category(ctx_factory):
     """The exclusion is per kind, not a retreat from category builds."""
     ctx = ctx_factory({"chart": {"kind": "column", "data": _RADAR_ROWS}}, animate="by_category")
-    get_component("chart")(ctx)
+    _build(ctx)
     assert ctx.manifest.to_dict()["slides"][0]["animations"]
 
 
@@ -236,7 +245,7 @@ def test_a_chart_build_enters_with_the_themes_datum_entrance(ctx_factory, theme)
     motion = dataclasses.replace(theme.motion, roles={**theme.motion.roles, "datum": "wiperight"})
     styled = dataclasses.replace(theme, motion=motion)
     ctx = ctx_factory({"chart": dict(_CHART)}, animate="by_category", theme_override=styled)
-    get_component("chart")(ctx)
+    _build(ctx)
     timing = ctx.slide._element.find(qn("p:timing"))
     parts = {
         (c.get("presetID"), c.get("presetSubtype"))

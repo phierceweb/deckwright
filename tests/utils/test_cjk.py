@@ -44,6 +44,10 @@ def test_korean_breaks_at_spaces():
     assert atoms("한국어 문장은") == ["한국어", " ", "문장은"]
 
 
+def test_a_hyphen_joins_the_ideograph_before_it():
+    assert atoms("京京-大大") == ["京", "京-", "大", "大"]
+
+
 def test_a_no_break_space_holds_the_ideographs_either_side_of_it_together():
     """Pinned against a LibreOffice render: in a box four ideographs wide, ``日日日日 本本本本``
     with a no-break space sets ``日日日`` above ``日 本本``, where a plain space breaks it."""

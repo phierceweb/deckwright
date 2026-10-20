@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 if TYPE_CHECKING:
     from pptx.presentation import Presentation

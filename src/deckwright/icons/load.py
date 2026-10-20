@@ -16,6 +16,7 @@ import difflib
 import functools
 import re
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -185,6 +186,26 @@ def available() -> tuple[str, ...]:
     if bundle is None:
         return ()
     return tuple(sorted(n.removesuffix(".svg") for n in bundle.namelist() if n.endswith(".svg")))
+
+
+def glyphs(dirs: tuple[Path, ...]) -> Iterator[Glyph]:
+    """Every glyph a name can reach: each directory's, then the shipped set's that no
+    directory shadows. One that does not parse is skipped, since a name cannot draw it."""
+    shadowed: set[str] = set()
+    sources = []
+    for root in dirs:
+        for path in sorted(root.glob("*.svg")) if root.is_dir() else ():
+            if path.stem not in shadowed:
+                shadowed.add(path.stem)
+                sources.append((Source(name=path.name, path=path), path.stem))
+    for name in available():
+        if name not in shadowed:
+            sources.append((Source(name=f"{name}.svg"), name))
+    for source, name in sources:
+        try:
+            yield _read(source, name)
+        except SpecError:
+            continue
 
 
 def search(term: str) -> tuple[str, ...]:

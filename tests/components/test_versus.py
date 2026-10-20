@@ -193,6 +193,26 @@ def test_the_small_plate_grows_to_hold_its_own_type(ctx_factory):
     assert small == pytest.approx(1.6702, abs=0.001)
 
 
+def test_a_no_break_space_holds_a_value_and_its_unit_on_one_line(ctx_factory):
+    """`str.split` cuts at U+00A0 and LibreOffice does not, so a plate sized for `0.3`
+    alone renders `0.3 n` over `m`."""
+
+    def small_plate(value: str) -> float:
+        ctx = ctx_factory(
+            {
+                "versus": {
+                    "left": {"value": value, "label": "a"},
+                    "right": {"value": "450 nm", "label": "b"},
+                }
+            }
+        )
+        get_component("versus")(ctx)
+        return min(w for _, w in _plates(ctx))
+
+    assert small_plate("0.3 nm") == pytest.approx(1.2, abs=0.01)
+    assert small_plate("0.3 nm") > 1.5
+
+
 def test_a_short_pair_keeps_the_absolute_floor(ctx_factory):
     """A measured floor below 1.2in must not licence a sliver."""
     ctx = ctx_factory(

@@ -29,7 +29,8 @@ from deckwright.components._shape import (
     pair_named,
 )
 from deckwright.components._shared import coerce_int, require_list, subcontext
-from deckwright.components.card import card, plate_height
+from deckwright.components._cardgeom import plate_height
+from deckwright.components.card import card
 from deckwright.components.connector import connector
 from deckwright.components.ellipse import ellipse
 
@@ -174,7 +175,7 @@ def _plate_depth(
     limit = cell.height - rail if horizontal else cell.height
     natural = max(
         plate_height(
-            ctx,
+            ctx.theme,
             width=width,
             heading=str(item["head"]),
             copy=str(item["body"]) if has_text(item.get("body")) else "",

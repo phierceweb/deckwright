@@ -13,7 +13,7 @@ from deckwright.layouts.registry import SlideCtx
 from deckwright.spec._scalars import has_text
 from deckwright.theme.model import Rect
 from deckwright.utils.shapes import para, textbox
-from deckwright.utils.text import estimate_caveat, text_em, wrapped_lines
+from deckwright.utils.text import estimate_caveat, inches_apart, text_em, wrapped_lines
 
 from deckwright.components._shape import known_fields
 from deckwright.components._shared import (
@@ -177,15 +177,16 @@ def _refuse(
     ctx: SlideCtx, *, count: int, lines: int, needed: float, available: float, face: str
 ) -> None:
     where = f"slide {ctx.spec.index} (component 'bullets')"
+    need, have = inches_apart(needed, available)
     if lines == count:
         raise LayoutError(
-            f"{where}: {count} bullets in the longest column need {needed:.2f}in but only "
-            f"{available:.2f}in is available — split the slide, add a column, or shorten "
+            f"{where}: {count} bullets in the longest column need {need} but only "
+            f"{have} is available — split the slide, add a column, or shorten "
             f"the list"
         )
     raise LayoutError(
         f"{where}: {count} bullets wrap to {lines} lines in the tallest column and need "
-        f"{needed:.2f}in but only {available:.2f}in is available — split the slide, "
+        f"{need} but only {have} is available — split the slide, "
         f"shorten the longest items, or give the placement more room{estimate_caveat(face)}"
     )
 

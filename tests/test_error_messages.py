@@ -1,7 +1,7 @@
-"""Every error message must survive the console it is printed on: `pf_core.cli.run_cli` prints
-through a rich `Console`, so an unescaped `[x, y]` is *dropped* on its way to the terminal and
-`[/]` raises `MarkupError` from inside the error handler. `theme/load.py`'s `{x, y}` is the house
-form."""
+"""Every error message must survive the console it is printed on: `doctor` quotes a theme
+loader's message in a rich table cell, where an unescaped `[x, y]` is *dropped* on its way to the
+terminal and `[/]` raises `MarkupError` from inside the report. `theme/load.py`'s `{x, y}` is the
+house form."""
 
 from __future__ import annotations
 

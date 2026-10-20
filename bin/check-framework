@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Refuse code that hand-rolls what pf-core already provides.
+"""Refuse code that hand-rolls what pw-foundation already provides.
 
 A written rule describes; this enforces. `CLAUDE.md` has said "never reach for a
-third-party library when pf-core already provides it" since the first commit, and the
+third-party library when the framework already provides it" since the first commit, and the
 things below still got written — the atomic-write dance twice by hand, builtin `raise`s
 in library code, the project's own error hierarchy bypassed for the base class it
 derives from. None of that is carelessness. It is what happens when a framework's
@@ -33,30 +33,34 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "deckwright"
 
-# Modules pf-core replaces outright. {import: (what to use instead, what it buys)}
+# Modules pw-foundation replaces outright. {import: (what to use instead, what it buys)}
 BANNED_IMPORTS = {
     "logging": (
-        "pf_core.log.get_logger(__name__)",
+        "pw_foundation.log.get_logger(__name__)",
         "structured events, and the project's log level and file wiring",
     ),
     "dotenv": (
-        "pf_core.config.load_env",
+        "deckwright.config.load_env",
         "entry points already load .env; a second loader fights the first",
     ),
-    "requests": ("pf_core.clients", "timeouts, retries and usage tracking"),
-    "httpx": ("pf_core.clients", "timeouts, retries and usage tracking"),
     "concurrent.futures": (
-        "pf_core.parallel.run_parallel",
+        "pw_foundation.parallel.run_parallel",
         "a reporter, resilient failure collection, one cap on width",
     ),
-    "multiprocessing": ("pf_core.parallel.run_parallel", "the same, without the process cost"),
+    "multiprocessing": (
+        "pw_foundation.parallel.run_parallel",
+        "the same, without the process cost",
+    ),
 }
 
 # Builtins that must not be raised from library code. {name: (what to raise, why)}
 BANNED_RAISES = {
     "Exception": ("a class from deckwright.errors", "an unsearchable log key and no context"),
-    "RuntimeError": ("pf_core.exceptions.PreconditionError", "'required state not met'"),
-    "ValueError": ("pf_core.exceptions.InvalidInputError", "'the caller passed something bad'"),
+    "RuntimeError": ("pw_foundation.exceptions.PreconditionError", "'required state not met'"),
+    "ValueError": (
+        "pw_foundation.exceptions.InvalidInputError",
+        "'the caller passed something bad'",
+    ),
 }
 
 # (name, pattern, what to use, why). `name` is what an exemption refers to.
@@ -64,25 +68,25 @@ BANNED_CALLS = [
     (
         "env-read",
         re.compile(r"\bos\.(environ|getenv)\b"),
-        "pf_core.utils.env.resolve_int/resolve_str/resolve_bool",
+        "pw_foundation.utils.env.resolve_int/resolve_str/resolve_bool",
         "malformed values warn and fall back instead of crashing",
     ),
     (
         "print",
         re.compile(r"(?<![\w.])print\s*\("),
-        "pf_core.log.get_logger(__name__), or typer.echo at the CLI boundary",
+        "pw_foundation.log.get_logger(__name__), or typer.echo at the CLI boundary",
         "print() in a service is output nobody can level, filter or redirect",
     ),
     (
         "logger-exception",
         re.compile(r"\blogger\.exception\s*\("),
-        "pf_core.log.log_exception",
+        "pw_foundation.log.log_exception",
         "it carries the structured context and the project's event prefix",
     ),
     (
         "atomic-write",
         re.compile(r"\bos\.replace\s*\("),
-        "pf_core.utils.io.atomic_write_text / _json / _bytes",
+        "pw_foundation.utils.io.atomic_write_text / _json / _bytes",
         "the temp-file-then-rename dance is already written and tested",
     ),
 ]
@@ -168,11 +172,11 @@ def main(argv: list[str]) -> int:
     paths = [p for p in given if p.suffix == ".py"] or sorted(SRC.rglob("*.py"))
     bad = [problem for p in paths if p.is_file() for problem in check(p)]
     if bad:
-        print("Framework rules — pf-core already provides these:\n")
+        print("Framework rules — pw-foundation already provides these:\n")
         for line in bad:
             print(f"  {line}")
-        print(f"\n{len(bad)} to fix. The module index is docs/pf-core/modules.md.")
-        print("If pf-core genuinely does not cover a case, add an EXEMPT entry here with")
+        print(f"\n{len(bad)} to fix. The module index is docs/pw-foundation/modules.md.")
+        print("If pw-foundation genuinely does not cover a case, add an EXEMPT entry here with")
         print("the reason — never a blanket skip.")
         return 1
     return 0

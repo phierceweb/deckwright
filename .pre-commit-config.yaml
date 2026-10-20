@@ -5,9 +5,9 @@
 repos:
   - repo: local
     hooks:
-      - id: pf-guards
-        name: pf-core structural gate
-        entry: bin/py -m pf_core.guards
+      - id: pw-guards
+        name: pw-foundation structural gate
+        entry: bin/py -m pw_foundation.guards
         language: system
         pass_filenames: false
         always_run: true
@@ -36,7 +36,7 @@ repos:
         pass_filenames: false
         always_run: true
       - id: deckwright-framework
-        name: deckwright framework-first (pf-core)
+        name: deckwright framework-first (pw-foundation)
         entry: bin/py bin/check-framework
         language: system
         pass_filenames: false

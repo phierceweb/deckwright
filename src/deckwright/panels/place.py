@@ -9,9 +9,9 @@ from typing import Any
 from PIL import Image
 from pptx.util import Inches
 
-from pf_core.log import get_logger
-from pf_core.utils.env import resolve_int
-from pf_core.utils.io import atomic_write_bytes
+from pw_foundation.log import get_logger
+from pw_foundation.utils.env import resolve_int
+from pw_foundation.utils.io import atomic_write_bytes
 
 from deckwright.errors import LayoutError
 from deckwright.panels.cache import PanelRenderer, cached_png

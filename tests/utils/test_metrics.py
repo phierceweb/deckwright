@@ -409,11 +409,13 @@ def test_a_character_never_measured_is_charged_its_class_ceiling():
 
 
 if __name__ == "__main__":
-    for name in ("CALIBRI", "ARIAL", "CEILING"):
-        print(f"{name} = {_measured(_ALL if name == 'CEILING' else _SOURCES[name])}\n")
-    for name, paths in (("COURIER", _MONO),) + tuple((n, _face_paths(n)) for n in _FACE_SOURCES):
+    tables = tuple(
+        (n, _ALL if n == "CEILING" else _SOURCES[n]) for n in ("CALIBRI", "ARIAL", "CEILING")
+    )
+    for name, paths in tables + tuple((n, _face_paths(n)) for n in _FACE_SOURCES):
         packed = " ".join(f"{v:g}" for v in _measured(paths).values())
         print(f'{name} = _packed("{packed}")\n')
+    print(f"COURIER advance = {max(_measured(_MONO).values()):g}\n")
     for name, cuts, below in (
         ("COURIER", _COURIER_CUTS, 0x110000),
         ("MONO", _MONO_CUTS, _LATIN_END),

@@ -9,15 +9,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 from pptx.enum.dml import MSO_COLOR_TYPE, MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from deckwright.components.bullets import MARKER
-from deckwright.spec._chartback import chart_block
+from deckwright.spec._bodyback import component_body, text_lines
 from deckwright.spec._figures import Picture, picture
-from deckwright.spec._motionback import read_animate, read_reveals, read_transition
+from deckwright.spec._glyphback import glyph_name
+from deckwright.spec._motionback import built_spids, read_animate, read_reveals, read_transition
 from deckwright.spec._origin import Origin, origin_of
 from deckwright.spec._tree import (
     MAX_GROUP_DEPTH,
@@ -26,14 +27,16 @@ from deckwright.spec._tree import (
     linked_text,
     members,
     shape_type,
-    table_grid,
+    slide_box,
 )
+from deckwright.utils.a11y import described, is_file_name
 
 Box = tuple[float, float, float, float]  # x, y, w, h as fractions of the canvas
 
 _AUTO = re.compile(r"p\d+")
 _PAIRED = ("card", "panel")
-_CITE = "— "
+# A box this far past an edge, in canvas fractions, runs off the slide rather than meeting it.
+_SLACK = 0.001
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,11 @@ class Recovered:
     words: tuple[str, ...] = ()
     media: tuple[tuple[str, bytes], ...] = ()  # a picture's file, by the name ``body`` gives it
     painted: tuple[str, str | None] | None = None  # a plate's fill and its words' ink, as hex
+    inked: str | None = None  # an icon's fill, as hex
+    sizes: tuple[float | None, ...] = ()  # each line over an image, its point size
+    token: str = ""  # the origin its shapes were named for, which a note names it by
+    still: bool = False  # on an animated slide, none of its shapes is in the build
+    bleed: bool = False  # declared to run off the slide, or found running off it
 
 
 @dataclass(frozen=True)
@@ -64,12 +72,23 @@ class Recovery:
     transition: str | None = None
 
 
-def recover(slide, *, index: int, canvas: tuple[int, int], boxes: dict[str, Box]) -> Recovery:
+def recover(
+    slide,
+    *,
+    index: int,
+    canvas: tuple[int, int],
+    boxes: dict[str, Box],
+    icons: tuple[Path, ...] = (),
+    bleeds: frozenset[str] = frozenset(),
+) -> Recovery:
     """The placements ``slide``'s named shapes came from; nothing for a stranger's slide.
 
     ``boxes`` maps a placement's origin to the rectangle its manifest recorded. Without one,
-    a placement's box is the union of its shapes'.
+    a placement's box is the union of its shapes'. An icon is named by its drawing, from the
+    glyphs in ``icons`` and the shipped set.
     """
+    animate = read_animate(slide)
+    built = built_spids(slide) if animate not in (None, "none") else None
     groups: dict[str, list[Any]] = {}
     origins: dict[str, Origin] = {}
     for shape in _built(slide.shapes):
@@ -78,7 +97,8 @@ def recover(slide, *, index: int, canvas: tuple[int, int], boxes: dict[str, Box]
             groups.setdefault(found.token, []).append(shape)
             origins.setdefault(found.token, found)
     if not groups:
-        return Recovery()
+        # A slide holding only its chrome still arrives the way it was told to.
+        return Recovery(transition=read_transition(slide))
     placed: list[Recovered] = []
     notes: list[str] = []
     claimed: set[Any] = set()
@@ -87,10 +107,16 @@ def recover(slide, *, index: int, canvas: tuple[int, int], boxes: dict[str, Box]
             continue  # a copy kept its original's name: two placements, left to the words walk
         origin = origins[token]
         name = f"slide{index}-{_safe(origin.placement)}"
+        box = boxes.get(token) or _union(shapes, canvas)
+        inked = None
+        sizes: tuple[float | None, ...] = ()
         if origin.component == "image":
+            sizes = _over_sizes(shapes)
             body, note, words, media = _image(shapes, name=name)
+        elif origin.component == "icon":
+            (body, inked), note, words, media = _icon(shapes, box, canvas, icons), None, (), ()
         else:
-            (body, note, words), media = _body(origin.component, shapes), ()
+            (body, note, words), media = component_body(origin.component, shapes, icons), ()
             if body is None and not words:
                 body, _, words, media = _image(shapes, name=name)
                 note = (
@@ -106,13 +132,18 @@ def recover(slide, *, index: int, canvas: tuple[int, int], boxes: dict[str, Box]
             Recovered(
                 component=next(iter(body)),
                 body=body,
-                box=boxes.get(token) or _union(shapes, canvas),
+                box=box,
                 key=origin.placement,
                 id=_id(origin, position=len(placed) + 1),
                 morph=origin.placement if origin.morph else None,
                 words=words,
                 media=media,
                 painted=_painted(shapes) if origin.component in _PAIRED else None,
+                inked=inked,
+                sizes=sizes,
+                token=token,
+                still=built is not None and not any(int(sh.shape_id) in built for sh in shapes),
+                bleed=token in bleeds or _off_canvas(box),
             )
         )
     wanted, unsaid = read_reveals(slide, keys={item.key for item in placed})
@@ -122,9 +153,15 @@ def recover(slide, *, index: int, canvas: tuple[int, int], boxes: dict[str, Box]
         placed=tuple(_revealed(item, wanted) for item in placed),
         notes=tuple(notes),
         claimed=frozenset(claimed),
-        animate=read_animate(slide),
+        animate=animate,
         transition=read_transition(slide),
     )
+
+
+def _off_canvas(box: Box) -> bool:
+    """Whether a box in canvas fractions runs past any edge of the slide."""
+    x, y, w, h = box
+    return min(x, y) < -_SLACK or max(x + w, y + h) > 1 + _SLACK
 
 
 def _revealed(item: Recovered, wanted: dict[str, str]) -> Recovered:
@@ -156,46 +193,6 @@ def _id(origin: Origin, *, position: int) -> str | None:
     return None
 
 
-def _body(
-    component: str, shapes: list[Any]
-) -> tuple[dict[str, Any] | None, str | None, tuple[str, ...]]:
-    """The component's mapping, a note on what did not come back, and its words."""
-    texts = [s for s in shapes if s.has_text_frame and _lines(s)]
-    if component == "card":
-        return _card(shapes, texts)
-    if component == "bullets":
-        return _bullets(texts)
-    if component == "prose" and len(texts) == 1:
-        lines = _lines(texts[0])
-        body: dict[str, Any] = {"paragraphs": list(lines)}
-        if len(lines) > 1 and lines[-1].startswith(_CITE):
-            body = {"paragraphs": list(lines[:-1]), "cite": lines[-1][len(_CITE) :]}
-        return {"prose": body}, None, lines
-    if component == "table" and shapes[0].has_table:
-        grid = table_grid(shapes[0])
-        if len(grid) > 1:
-            head, *rows = grid
-            return {"table": {"header": list(head), "rows": [list(r) for r in rows]}}, None, ()
-    if component == "chart" and shapes[0].has_chart:
-        block, why = chart_block(shapes[0])
-        if block is None:
-            return None, f"not converted: {why}", ()
-        return {"chart": block}, None, ()
-    if component == "rule":
-        wide = shapes[0].width >= shapes[0].height
-        return {"rule": {} if wide else {"orient": "vertical"}}, None, ()
-    if component == "panel" and not texts:
-        return {"panel": {}}, None, ()
-    words = tuple(line.removeprefix(MARKER) for shape in texts for line in _lines(shape))
-    if not words:
-        return None, f"not converted: a {component} placement, which holds no words", ()
-    return (
-        {"bullets": {"items": list(words)}},
-        f"drafted as bullets: a {component} placement's fields are not in the file, only its words",
-        words,
-    )
-
-
 def _image(
     shapes: list[Any], *, name: str
 ) -> tuple[dict[str, Any] | None, str | None, tuple[str, ...], tuple[tuple[str, bytes], ...]]:
@@ -206,16 +203,24 @@ def _image(
     if not isinstance(got, Picture):
         return None, None, (), ()
     body = got.image()
-    texts = [s for s in shapes if s.has_text_frame and _lines(s)]
-    over = tuple(line for shape in texts for line in _lines(shape))
+    texts = [s for s in shapes if s.has_text_frame and text_lines(s)]
+    over = tuple(line for shape in texts for line in text_lines(shape))
     if over:
         body["over"] = list(over)
     scrim = any(s is not found and s not in texts for s in shapes)
-    note = " and ".join(
-        (["its lines come back at the default rung"] if over else [])
-        + (["its scrim is solved afresh"] if scrim else [])
+    note = "its scrim is solved afresh" if scrim else None
+    return {"image": body}, note, over, ((got.name, got.blob),)
+
+
+def _over_sizes(shapes: list[Any]) -> tuple[float | None, ...]:
+    """The point size of each line over an image, in the order ``_image`` reads them."""
+    return tuple(
+        next((run.font.size.pt for run in p.runs if run.font.size is not None), None)
+        for shape in shapes
+        if shape.has_text_frame and text_lines(shape)
+        for p in shape.text_frame.paragraphs
+        if flat(linked_text(p))
     )
-    return {"image": body}, note or None, over, ((got.name, got.blob),)
 
 
 def _painted(shapes: list[Any]) -> tuple[str, str | None] | None:
@@ -240,49 +245,35 @@ def _safe(key: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]+", "-", key).strip("-") or "image"
 
 
-def _card(
-    shapes: list[Any], texts: list[Any]
-) -> tuple[dict[str, Any] | None, str | None, tuple[str, ...]]:
-    lines = tuple(line for shape in texts for line in _lines(shape))
-    body: dict[str, Any] = {}
-    if len(lines) >= 2:
-        body = {"heading": lines[0], "body": " ".join(lines[1:])}
-    elif lines:
-        run = texts[0].text_frame.paragraphs[0].runs
-        body = {"heading" if run and run[0].font.bold else "body": lines[0]}
-    marks = [s for s in shapes[1:] if s not in texts]
-    note = "its icon is not in the file by name, so it is left out" if marks else None
-    return {"card": body}, note, lines
-
-
-def _bullets(texts: list[Any]) -> tuple[dict[str, Any] | None, str | None, tuple[str, ...]]:
-    heading = [s for s in texts if not _lines(s)[0].startswith(MARKER)]
-    columns = [s for s in texts if _lines(s)[0].startswith(MARKER)]
-    items = [line.removeprefix(MARKER) for shape in columns for line in _lines(shape)]
-    if not items:
-        return None, "not converted: a bullets placement with no items", ()
-    body: dict[str, Any] = {}
-    if heading:
-        body["heading"] = _lines(heading[0])[0]
-    if len(columns) > 1:
-        body["columns"] = len(columns)
-    body["items"] = items
-    words = ((body["heading"],) if "heading" in body else ()) + tuple(items)
-    return {"bullets": body}, None, words
-
-
-def _lines(shape) -> tuple[str, ...]:
-    return tuple(
-        line for line in (flat(linked_text(p)) for p in shape.text_frame.paragraphs) if line
-    )
+def _icon(
+    shapes: list[Any], box: Box, canvas: tuple[int, int], icons: tuple[Path, ...]
+) -> tuple[dict[str, Any] | None, str | None]:
+    """An icon placement as the glyph it draws, and the fill it was painted; nothing for a
+    drawing no glyph name reaches, which the words walk names with its alt text."""
+    name = glyph_name(shapes[0], icons) if len(shapes) == 1 else None
+    if name is None:
+        return None, None
+    shape = shapes[0]
+    fields: dict[str, Any] = {"name": name}
+    drawn, short = slide_box(shape), min(box[2] * canvas[0], box[3] * canvas[1])
+    size = round(drawn[2] / short, 2) if drawn and short else 1.0
+    if size != 1.0:
+        fields["size"] = size
+    alt, decorative = described(shape)
+    if decorative:
+        fields["decorative"] = True
+    elif alt and not is_file_name(alt):
+        fields["alt"] = alt
+    fill = str(shape.fill.fore_color.rgb) if shape.fill.type == MSO_FILL.SOLID else None
+    return {"icon": fields}, fill
 
 
 def _union(shapes: list[Any], canvas: tuple[int, int]) -> Box:
     width, height = canvas
     edges = [
-        (s.left, s.top, s.left + s.width, s.top + s.height)
-        for s in shapes
-        if None not in (s.left, s.top, s.width, s.height)
+        (box[0], box[1], box[0] + box[2], box[1] + box[3])
+        for box in map(slide_box, shapes)
+        if box is not None
     ]
     left = min(e[0] for e in edges)
     top = min(e[1] for e in edges)

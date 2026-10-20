@@ -451,6 +451,14 @@ def test_a_chrome_align_outside_the_vocabulary_is_rejected(tmp_path, synthetic_t
         load_theme(_write(tmp_path, synthetic_template, body))
 
 
+def test_a_theme_that_builds_a_chrome_line_is_rejected(tmp_path, synthetic_template):
+    """`build:` is one slide's choice; a theme's would make every slide carrying that line
+    fail to build, and a `chrome: side` slide could not undo it."""
+    body = BASE + "    chrome:\n      subtitle: {build: last}\n"
+    with pytest.raises(ThemeError, match="chrome field 'subtitle': 'build' is a slide's"):
+        load_theme(_write(tmp_path, synthetic_template, body))
+
+
 def test_a_mark_whose_value_is_not_a_mapping_is_rejected_at_load(tmp_path, synthetic_template):
     """Caught at load, not mid-build from the compositor on whichever slide reaches it first."""
     body = BASE + "    marks:\n      inverse: art.jpg\n"

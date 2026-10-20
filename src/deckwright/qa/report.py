@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pf_core.utils.io import atomic_write_json, atomic_write_text
+from pw_foundation.utils.io import atomic_write_json, atomic_write_text
 
 from deckwright.qa.model import QaReport, Severity
 

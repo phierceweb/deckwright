@@ -12,7 +12,7 @@ from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import LayoutError, ThemeError
 from deckwright.theme.defaults import (
@@ -363,6 +363,11 @@ def chrome(cfg: Any, *, path: Path) -> dict[str, ChromeField]:
         )
     out: dict[str, ChromeField] = {}
     for key, entry in cfg.items():
+        if isinstance(entry, dict) and "build" in entry:
+            raise ThemeError(
+                f"theme {path}: chrome field {str(key)!r}: 'build' is a slide's — on a theme it "
+                f"would hold back that line on every slide; set it in the slide's own chrome:"
+            )
         try:
             out[str(key)] = chrome_field(entry, name=str(key))
         except LayoutError as e:

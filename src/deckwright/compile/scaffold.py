@@ -1,4 +1,4 @@
-"""Start a deck from something that already runs — six annotated slides, not a stub."""
+"""Start a deck from something that already runs — eight annotated slides, not a stub."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from pf_core.log import get_logger
-from pf_core.utils.io import atomic_write_text
+from pw_foundation.log import get_logger
+from pw_foundation.utils.io import atomic_write_text
 
 from deckwright.compile.build import BuildResult, build_deck
 from deckwright.errors import SpecError
@@ -21,6 +21,7 @@ AUTHORING_DEFAULT = Path("authoring")
 SCAFFOLD_WORDS = (
     "A KICKER",
     "Three lines and a chrome block make a cover",
+    "The one line the room should keep",
     "Three things are broken",
     "questions@example.com",
 )
@@ -39,6 +40,39 @@ def _scalar(text: str) -> str:
     return yaml.safe_dump(text, width=NO_FOLD).removesuffix("...\n").strip()
 
 
+def _grounds(theme: str) -> str:
+    """Comment lines naming the theme's grounds, so a slide's `background:` is chosen
+    knowing what each one looks like; nothing for a theme that will not load."""
+    from deckwright.errors import ThemeError
+    from deckwright.theme.load import load_theme
+    from deckwright.utils.color import delta_e, relative_luminance
+
+    try:
+        loaded = load_theme(theme)
+    except ThemeError:
+        return ""
+    palette, scale = loaded.palette, loaded.scale
+
+    def ground(name: str) -> str:
+        colour = palette.pair(name).bg
+        return f"{name} {colour} ({'light' if relative_luminance(colour) > 0.4 else 'dark'})"
+
+    accents = ", ".join(f"{n} {palette.role(n)}" for n in palette.accents)
+    lines = [
+        f"# Grounds on {theme}: {ground('page')}, {ground('inverse')}; {accents}.",
+        f"# The canvas is {round(scale.slide_w, 3):g} x {round(scale.slide_h, 3):g}in; "
+        f"a box's percents are of it.",
+    ]
+    surface, page = palette.pair("surface").bg, palette.pair("page").bg
+    # The difference past which a plate reads as a shape rather than a recess.
+    if delta_e(surface, page) >= 10:
+        lines.append(
+            f"# card, flow, code and a table's header paint one {surface} plate here, so "
+            f"slides of them read as one treatment."
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _spec_text(slug: str, title: str, theme: str) -> str:
     """A deck that builds, annotated with what to change in it."""
     deck = f"{deck_filename(title)} v1.pptx"
@@ -49,9 +83,10 @@ def _spec_text(slug: str, title: str, theme: str) -> str:
 #   deckwright build authoring/{slug}/{slug}.deck.yaml
 #   deckwright render "out/{slug}/{deck}" --contact-sheet
 #
-# Every field: docs/authoring.md. Every component: docs/components.md.
-# Everything this library can draw, in one deck: deckwright demo
-theme: {theme}
+# Every slide below is a different composition. Pick by what each slide does in the
+# talk — docs/treatments.md#compositions — and what a click is for: docs/lessons.md.
+# Every field: docs/authoring.md. Everything this library can draw: deckwright demo
+{_grounds(theme)}theme: {theme}
 title: {name}
 sections: [Problem, Solution]
 out: {_scalar(f"../../out/{slug}/{deck}")}
@@ -68,10 +103,12 @@ subtitle: Three lines and a chrome block make a cover
 chrome:
   kicker: {{at: {{box: {{x: 5.5%, y: 40%, w: 50%, h: 5%}}}}, anchor: bottom}}
   title: {{at: {{box: {{x: 5.5%, y: 46%, w: 85%, h: 32%}}}}, rung: display, anchor: top}}
-  subtitle: {{at: {{box: {{x: 5.5%, y: 80%, w: 60%, h: 6%}}}}, anchor: top}}
+  subtitle: {{at: {{box: {{x: 5.5%, y: 80%, w: 60%, h: auto}}}}}}
 
 ---
-# A section divider. Every slide's `section:` must be one of the names above.
+# A section divider. Every slide's `section:` must be one of the names above. It sits
+# on `inverse` because every theme has one that reads; once you have seen your theme,
+# an accent is usually the better ground (docs/authoring.md#background).
 background: inverse
 section: Problem
 kicker: PART 1 OF 2
@@ -79,24 +116,35 @@ title: Problem
 subtitle: What is going wrong
 
 ---
-# Bullets across the whole content width. Drop `animate:` for no click build.
+# A statement: the title is the slide. For the one rule or result the room should
+# keep — once or twice a deck, not every third slide.
+section: Problem
+title: The one line the room should keep
+subtitle: Said once, with nothing beside it
+chrome: statement
+
+---
+# A side title: the chrome takes the left third and the body the rest. No `animate:` —
+# a list whose order is not the lesson needs no click; say the items aloud.
 section: Problem
 kicker: PROBLEM
 title: Three things are broken
-animate: one_at_a_time
+chrome: side
 place:
 - at: {{cols: full}}
-  bullets:
+  callouts:
     items:
-    - The first thing
-    - The second thing
-    - The third thing
+    - {{head: The first thing, body: Why it matters.}}
+    - {{head: The second thing, body: Why it matters.}}
+    - {{head: The third thing, body: Why it matters.}}
 
 ---
-# A row of cards. `split:` divides the band — add a fourth and nothing else moves.
+# A row of cards, one per click: here the order *is* the lesson. `split:` divides the
+# band — add a fourth and nothing else moves.
 section: Solution
 kicker: SOLUTION
-title: Three moves
+title: Three moves, in order
+animate: one_at_a_time
 place:
 - at: {{rows: {{from: 0, to: 6}}}}
   split:
@@ -105,14 +153,15 @@ place:
   - card: {{heading: Ship, body: What we did.}}
 
 ---
-# A real PowerPoint chart — editable in the deck, not a picture of numbers.
+# Evidence first: the title asks, the chart answers, and the next slide says it. A
+# real PowerPoint chart — editable in the deck, not a picture of numbers.
 section: Solution
-kicker: SOLUTION
-title: Adoption climbs every quarter
+title: Did adoption climb?
 place:
-- at: {{cols: full, rows: top-two-thirds}}
+- at: {{cols: full}}
   chart:
     kind: column
+    alt: Adoption by quarter, rising from 12 to 91
     data:
     - {{category: Q1, value: 12}}
     - {{category: Q2, value: 34}}
@@ -120,12 +169,32 @@ place:
     - {{category: Q4, value: 91, highlight: true}}
 
 ---
+# The claim lands as this slide's title, over the same chart — a chart takes no
+# `morph:`, so it is repeated — with what it means beside it rather than under it.
+section: Solution
+title: Adoption climbs every quarter
+place:
+- at: {{cols: left-two-thirds}}
+  chart:
+    kind: column
+    alt: Adoption by quarter, rising from 12 to 91
+    data:
+    - {{category: Q1, value: 12}}
+    - {{category: Q2, value: 34}}
+    - {{category: Q3, value: 58}}
+    - {{category: Q4, value: 91, highlight: true}}
+- at: {{cols: right-third}}
+  callouts:
+    items:
+    - {{head: Seven times Q1, body: "In a year, with no paid push."}}
+
+---
 background: inverse
 title: Thank you
 subtitle: questions@example.com
 chrome:
   title: {{at: {{box: {{x: 5.5%, y: 46%, w: 85%, h: 32%}}}}, rung: display, anchor: top}}
-  subtitle: {{at: {{box: {{x: 5.5%, y: 80%, w: 60%, h: 6%}}}}, anchor: top}}
+  subtitle: {{at: {{box: {{x: 5.5%, y: 80%, w: 60%, h: auto}}}}}}
 """
 
 

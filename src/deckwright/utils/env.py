@@ -1,4 +1,4 @@
-"""Typed narrowing over pf-core's env resolvers.
+"""Typed narrowing over pw-foundation's env resolvers.
 
 ``resolve_str`` returns ``str | None`` because its ``default`` is optional. Every
 deckwright knob passes a real default, so the result is never None — this pins that
@@ -7,7 +7,7 @@ for the type checker without restating the default at each call site.
 
 from __future__ import annotations
 
-from pf_core.utils.env import resolve_str
+from pw_foundation.utils.env import resolve_str
 
 
 def env_str(arg: str | None, env_var: str, *, default: str) -> str:

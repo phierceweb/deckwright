@@ -16,9 +16,9 @@ from pathlib import Path
 from PIL import Image, ImageChops
 from pptx.util import Inches
 
-from pf_core.exceptions import ConfigurationError
-from pf_core.log import get_logger
-from pf_core.utils.env import resolve_int
+from pw_foundation.exceptions import ConfigurationError
+from pw_foundation.log import get_logger
+from pw_foundation.utils.env import resolve_int
 
 from deckwright.errors import MissingToolError, RenderError
 from deckwright.services.chrome import (

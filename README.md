@@ -274,16 +274,16 @@ same index, maintained in the docs directory itself.
 
 - [testing.md](https://github.com/phierceweb/deckwright/blob/main/docs/testing.md) — which changes need a test and which don't, and the evidence behind that rule
 
-## Built on pf-core
+## Built on pw-foundation
 
-deckwright is built on [pf-core](https://github.com/phierceweb/pf-core)
-([PyPI](https://pypi.org/project/pf-core/)), an open-source Python foundation for LLM-facing
-applications. deckwright uses its structured logging, exception hierarchy, config-from-env, CLI
-subcommand factories and atomic-write utilities; projects that make model calls also get
-prompt versioning, cost tracking and an eval harness. pf-core is also where the conventions
-that keep a codebase legible to an AI agent are enforced instead of merely written down: a
-build gate fails when a file outgrows its line budget, and a companion checker refuses a
-hand-rolled utility the framework already provides.
+deckwright is built on [pw-foundation](https://github.com/phierceweb/pw-foundation)
+([PyPI](https://pypi.org/project/pw-foundation/)), the dependency-light foundation layer of the
+phierceweb Python projects. deckwright uses its structured logging, exception hierarchy,
+config-from-env and atomic-write utilities. Projects that make model calls, keep a database or
+serve a web app add pw-core on top of it; deckwright needs none of that. pw-foundation is also
+where the conventions that keep a codebase legible to an AI agent are enforced: a build gate
+fails when a file outgrows its line budget, and a companion checker refuses a hand-rolled
+utility the framework already provides.
 
 For other phierceweb projects, see: [github.com/phierceweb](https://github.com/phierceweb).
 

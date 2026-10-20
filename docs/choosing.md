@@ -45,6 +45,13 @@ This is also the test for whether the chart is working: if a reader can see your
 true without reading the axis labels, it is. If they have to hunt, you picked the wrong
 encoding or too much data.
 
+**A question is the other title worth writing**, when the room should look before it is
+told — "Did the water company predict who died?" over the bars, and the claim as the title of
+the slide after it, over the same chart. A chart takes no `morph:`, so it is repeated rather
+than glided; on one slide, the claim can instead arrive last with `build: last`. Write the
+claim first anyway: it is still what chooses the chart, and it becomes the next slide's title.
+[`treatments.md`](treatments.md#chosen-twice) says when each order fits.
+
 **One perceptual fact does most of the work.** Cleveland and McGill ranked how accurately
 people read quantities off a graphic, in six ranks: position along a common scale, then
 position along non-aligned scales, then length/direction/angle (tied — the paper says
@@ -350,7 +357,7 @@ nothing to set:
 | Dot plot / lollipop, categorical | `bar` |
 | Bullet chart (actual vs target) | `bar` of actuals with the target in the title, or a two-series `column` |
 | Treemap, marimekko, sankey | `table`, or `column-stacked-100` for the share |
-| Map | Not at all; use a `table` or an `image` |
+| Map | Not as a chart: an `image` of a real one, a `table` of the places, or a schematic built from `box:` placements — `rule` streets, `icon` landmarks, `ellipse` marks — the way [`flows.md`](flows.md) builds a Venn. Placements may not overlap, so a street that crosses another, or a mark that sits on one, takes `bleed: true` ([placement.md](placement.md#what-is-rejected)), which also lets it past the margins: keep its box inside them by hand |
 
 ## When a new chart kind lands
 

@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.compile.build import build_deck
 from deckwright.conform.adopt import install, plan

@@ -22,7 +22,9 @@ from deckwright.utils.text import LINE_HEIGHT, estimate_caveat, wrapped_lines
 CHROME_ORDER = ("kicker", "title", "subtitle")
 """The chrome field vocabulary, and the order fields stack in when they name no ``at:``."""
 
-_CHROME_KEYS = ("at", "align", "anchor", "rung", "pair", "ink")
+_CHROME_KEYS = ("at", "align", "anchor", "rung", "pair", "ink", "build")
+BUILDS = ("last",)
+PRESETS = ("side", "statement")
 # Rounding slack on a canvas fraction, so 0.9 + 0.1 still counts as inside.
 _FRAC_EPS = 1e-6
 
@@ -41,6 +43,7 @@ class ChromeField:
     rung: str | None = None  # type-ramp role; None means the field's own name
     pair: str | None = None  # palette pair supplying this line's ink
     ink: str | None = None  # colour role painted as this line's text
+    build: str | None = None  # "last": the line arrives on the slide's last click
 
     def merge(self, over: ChromeField | None) -> ChromeField:
         """This field with every key ``over`` actually sets replacing it."""
@@ -102,6 +105,7 @@ def chrome_field(cfg: Any, *, name: str) -> ChromeField:
         rung=None if cfg.get("rung") is None else str(cfg["rung"]),
         pair=None if cfg.get("pair") is None else str(cfg["pair"]),
         ink=None if cfg.get("ink") is None else str(cfg["ink"]),
+        build=_chrome_choice(cfg.get("build"), key="build", options=BUILDS, name=name),
     )
 
 
@@ -170,6 +174,8 @@ def chrome_bands(
     grid: Grid,
     faces: Mapping[str, str] | None = None,
     slide: int | None = None,
+    rail: Rect | None = None,
+    preset: str | None = None,
 ) -> tuple[ChromeBand, ...]:
     """Place every chrome line that has text.
 
@@ -179,6 +185,9 @@ def chrome_bands(
     Args:
         lines: Chrome field to its text and resolved point size.
         faces: Chrome field to the typeface it will be set in, for the wrap estimate.
+        rail: Where the stack goes instead of across the top — ``chrome: side``'s column.
+        preset: The ``chrome:`` preset whose boxes ``fields`` carry, which the author cannot
+            deepen; a line too long for one is told what can change instead.
         slide: Numbers the slide in anything raised here. Every other build error
             carries it, and this is the one an author meets most.
     """
@@ -186,13 +195,22 @@ def chrome_bands(
     refuse_unknown(lines, CHROME_ORDER, error=LayoutError, lead="unknown chrome field")
     canvas = Rect(0.0, 0.0, grid.slide_w, grid.slide_h)
     out: list[ChromeBand] = []
-    y = grid.top
+    y = rail.top if rail is not None else grid.top
+    left = rail.left if rail is not None else grid.left
+    measure = rail.width if rail is not None else grid.content_w
     for name in CHROME_ORDER:
         if name not in lines:
             continue
         text, size_pt = _chrome_line(lines[name], name)
         face = (faces or {}).get(name)
         field = fields.get(name) or ChromeField()
+        stacks = field.at is None or ("box" not in field.at and "rows" not in field.at)
+        if stacks and field.build is not None:
+            raise LayoutError(
+                f"{at}chrome field {name!r} sets build {field.build!r} but sits in the "
+                f"stack, whose lines share one frame, so it cannot arrive on its own; give "
+                f"it an 'at:' with 'rows:' or a 'box:'"
+            )
         if field.at is None:
             if field.anchor is not None:
                 raise LayoutError(
@@ -200,12 +218,8 @@ def chrome_bands(
                     f"a stacked line shares the stack's frame, so it has no frame of its "
                     f"own to anchor in; give it an 'at:'"
                 )
-            height = _wrap_height(text, width_in=grid.content_w, size_pt=size_pt, face=face)
-            out.append(
-                ChromeBand(
-                    name, text, size_pt, Rect(grid.left, y, grid.content_w, height), field, True
-                )
-            )
+            height = _wrap_height(text, width_in=measure, size_pt=size_pt, face=face)
+            out.append(ChromeBand(name, text, size_pt, Rect(left, y, measure, height), field, True))
             y += height
             continue
         rect = resolve_at(field.at, grid=grid, area=canvas, where=f"chrome field {name!r}")
@@ -229,11 +243,15 @@ def chrome_bands(
             )
             continue
         if needed > rect.height + _BOX_SLACK:
+            remedy = (
+                f"shorten it, or drop 'chrome: {preset}'"
+                if preset
+                else "deepen the box, shorten the text, or drop to a smaller rung"
+            )
             raise LayoutError(
                 f"{at}chrome field {name!r} wraps to {needed:.2f}in but its box is only "
                 f"{rect.height:.2f}in tall — it would be drawn through the line below; "
-                f"deepen the box, shorten the text, or drop to a smaller rung"
-                f"{estimate_caveat(face)}"
+                f"{remedy}{estimate_caveat(face)}"
             )
         out.append(ChromeBand(name, text, size_pt, rect, field, False))
     return tuple(out)
@@ -259,3 +277,18 @@ def _chrome_line(value: Any, name: str) -> tuple[str, float]:
     if size_pt <= 0:
         raise LayoutError(f"chrome band {name!r} needs a positive type size, got {size_pt}")
     return str(text), size_pt
+
+
+def statement_fields() -> dict[str, ChromeField]:
+    """``chrome: statement``: the title is the slide, centred at the display rung."""
+    return {
+        "kicker": ChromeField(
+            at={"box": (0.08, 0.25, 0.84, 0.07)}, align="center", anchor="bottom"
+        ),
+        "title": ChromeField(
+            at={"box": (0.08, 0.33, 0.84, 0.34)}, rung="display", align="center", anchor="middle"
+        ),
+        "subtitle": ChromeField(
+            at={"box": (0.08, 0.68, 0.84, 0.32)}, auto_height=True, align="center"
+        ),
+    }

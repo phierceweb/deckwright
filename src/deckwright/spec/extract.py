@@ -6,7 +6,7 @@ named in :attr:`SlideContent.dropped` so the author knows what to put back by ha
 
 from __future__ import annotations
 
-import json
+import re
 from dataclasses import dataclass, replace
 from typing import Any
 from pathlib import Path
@@ -14,13 +14,18 @@ from pathlib import Path
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import SpecError
+from deckwright.icons.load import configured
+from deckwright.layouts.chrome import CHROME_ORDER
 from deckwright.spec._chartback import chart_block
-from deckwright.spec._figures import Picture, card, picture, plate
-from deckwright.spec._recover import Box, Recovered, recover
+from deckwright.spec._motionback import built_spids
+from deckwright.spec._figures import Picture, cards_of, picture, plate
+from deckwright.spec._manifest import Built, from_manifest
+from deckwright.spec._recover import Recovered, recover
 from deckwright.spec._chrome import (
+    ChromeFrame,
     _Text,
     _claimed,
     _leads,
@@ -28,7 +33,9 @@ from deckwright.spec._chrome import (
     _resolve,
     _run_sizes,
     _texts,
+    own_frames,
 )
+from deckwright.utils._cjk import carries_cjk
 from deckwright.spec._tree import (
     MAX_GROUP_DEPTH,
     SOFT_BREAK,
@@ -43,8 +50,8 @@ from deckwright.spec._tree import (
 )
 from deckwright.spec.draft import render_markdown, render_spec  # noqa: F401 — re-exported
 from deckwright.utils.a11y import described, is_file_name
-from deckwright.utils.provenance import find_manifest
 from deckwright.utils.deck import open_presentation
+from deckwright.theme.model import Theme
 
 __all__ = ["MAX_GROUP_DEPTH", "SlideContent", "harvest", "render_markdown", "render_spec"]
 
@@ -56,6 +63,8 @@ _Table = tuple[_Lines, ...]
 # A background covers the canvas to within this; the slack absorbs a deck authored in
 # inches rather than EMU.
 _EDGE = 12700  # one point
+
+_CHROME_PLATE = re.compile(rf"^s\d+\.chrome\.({'|'.join(CHROME_ORDER)})\.plate$")
 
 
 @dataclass(frozen=True)
@@ -79,6 +88,21 @@ class SlideContent:
     remarks: tuple[str, ...] = ()  # what a placement read back could not carry
     animate: str | None = None
     transition: str | None = None
+    section: str | None = None  # from the manifest; the file holds no sections
+    frames: tuple[ChromeFrame, ...] = ()  # chrome lines drawn in a frame of their own
+    built_with: str | None = None  # the theme the manifest says built the deck
+    chrome_preset: str | None = None  # from the manifest; the file holds only the boxes
+    lang: str | None = None  # the language the build marked the slide's CJK runs with
+
+
+def _lang(slide) -> str | None:
+    """The language tag on the slide's CJK runs, when they all carry the same one."""
+    tags = set()
+    for run in slide.shapes._spTree.iter(qn("a:r")):
+        text, props = run.find(qn("a:t")), run.find(qn("a:rPr"))
+        if text is not None and props is not None and carries_cjk(text.text or ""):
+            tags.add(props.get("lang"))
+    return tags.pop() if len(tags) == 1 else None
 
 
 def _kind(shape) -> str:
@@ -108,9 +132,17 @@ def _notes(slide) -> str | None:
 
 
 def _slide_content(
-    slide, index: int, canvas: tuple[int, int], boxes: dict[str, Box]
+    slide, index: int, canvas: tuple[int, int], built: Built, icons: tuple[Path, ...]
 ) -> SlideContent:
-    recovery = recover(slide, index=index, canvas=canvas, boxes=boxes)
+    boxes = built.boxes.get(index, {})
+    recovery = recover(
+        slide,
+        index=index,
+        canvas=canvas,
+        boxes=boxes,
+        icons=icons,
+        bleeds=built.bleeds.get(index, frozenset()),
+    )
     texts: list[_Text] = []
     sizes: list[float] = []
     tables: list[_Table] = []
@@ -128,6 +160,8 @@ def _slide_content(
             continue
         if shape._element in covered or shape._element in recovery.claimed:
             continue  # the background, a full-bleed panel under it, or a placement read back
+        if _CHROME_PLATE.match(str(shape.name)):
+            continue  # the build lays it again under the line it was laid for
         if shape.has_table:
             tables.append(table_grid(shape))
             continue
@@ -165,16 +199,9 @@ def _slide_content(
     fields, bodies = _resolve(texts)
     if "title" not in fields and _leads(bodies, sizes):
         fields["title"] = bodies.pop(0).lines[0]
-    cards: list[dict] = []
-    words: list[_Text] = []
-    for body in bodies:
-        found_card = card(body.lines, body.source, [p for p, _ in plates.values()], canvas=canvas)
-        if found_card is None:
-            words.append(body)
-            continue
-        cards.append(found_card[0])
-        if found_card[1] is not None:
-            dropped.remove(plates.pop(found_card[1]._element)[1])
+    cards, words, claimed = cards_of(bodies, plates, canvas=canvas)
+    for name in claimed:
+        dropped.remove(name)
     return SlideContent(
         index=index,
         title=fields.get("title"),
@@ -193,6 +220,11 @@ def _slide_content(
         remarks=recovery.notes,
         animate=recovery.animate,
         transition=recovery.transition,
+        section=built.sections.get(index),
+        chrome_preset=built.presets.get(index),
+        lang=_lang(slide),
+        frames=own_frames(slide, canvas, built_spids(slide)),
+        built_with=built.theme,
     )
 
 
@@ -251,43 +283,22 @@ def _solid_srgb(properties) -> str | None:
     return colour.get("val", "").upper() or None
 
 
-def harvest(deck: str | Path) -> list[SlideContent]:
+def harvest(deck: str | Path, *, theme: Theme | None = None) -> list[SlideContent]:
     """Read every slide's words, in reading order.
+
+    An icon is named by its drawing, from ``theme``'s own glyphs, ``DECKWRIGHT_ICON_DIR``'s
+    and the shipped set.
 
     Raises:
         SpecError: ``deck`` is not a readable ``.pptx``.
     """
     prs = open_presentation(deck, what="deck", error=SpecError)
     canvas = (prs.slide_width, prs.slide_height)
-    boxes = _placement_boxes(Path(deck), prs)
+    built = from_manifest(Path(deck), prs)
+    icons = configured(theme)
     out = [
-        _slide_content(slide, index, canvas, boxes.get(index, {}))
+        _slide_content(slide, index, canvas, built, icons)
         for index, slide in enumerate(prs.slides, start=1)
     ]
     logger.info("deck_harvested", deck=str(deck), slides=len(out))
     return out
-
-
-def _placement_boxes(deck: Path, prs) -> dict[int, dict[str, Box]]:
-    """Each placement's rectangle as its build recorded it, by slide, when the manifest that
-    describes ``deck`` is beside it. A copy with no manifest is read from its shapes alone."""
-    found = find_manifest(deck, str(prs.core_properties.identifier or ""))
-    if found is None:
-        return {}
-    try:
-        data = json.loads(found.read_text(encoding="utf-8"))
-        width, height = float(data["canvas"]["w"]), float(data["canvas"]["h"])
-        return {
-            int(slide["index"]): {
-                str(p["origin"]): (
-                    p["box"]["x"] / width,
-                    p["box"]["y"] / height,
-                    p["box"]["w"] / width,
-                    p["box"]["h"] / height,
-                )
-                for p in slide.get("placements") or []
-            }
-            for slide in data.get("slides") or []
-        }
-    except (OSError, ValueError, KeyError, TypeError):
-        return {}

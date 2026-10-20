@@ -3,7 +3,7 @@
 Your `.deck.yaml` sources and anything they read — markdown for a `document:`, images,
 a theme variant only this deck uses. One directory per deck.
 
-Start one with `bin/run new "<Name>"` — it writes a working six-slide deck here and
+Start one with `bin/run new "<Name>"` — it writes a working eight-slide deck here and
 builds it, so you edit something that runs instead of composing from nothing.
 
 **Everything here except this README is gitignored.** A deck written for an audience is

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import subprocess
 
-from pf_core.utils.env import resolve_int
+from pw_foundation.utils.env import resolve_int
 
 from deckwright.utils.env import env_str
 

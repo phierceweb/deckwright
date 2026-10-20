@@ -1,14 +1,14 @@
 """deckwright configuration.
 
-Subclass ``pf_core.config.AppConfig`` and add project settings as class
-attributes (env var name == attribute name). See pf-core ``docs/config.md``.
+Subclass ``pw_foundation.config.AppConfig`` and add project settings as class
+attributes (env var name == attribute name). See pw-foundation ``docs/config.md``.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from pf_core.config import AppConfig
+from pw_foundation.config import AppConfig
 
 
 class Config(AppConfig):

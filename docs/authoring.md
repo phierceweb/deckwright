@@ -171,6 +171,12 @@ a table cell, a bullet, a chart category or a slide title prints them as written
 `true` and `false` stay booleans everywhere, so a cell that must print one is quoted:
 `'true'`. A quoted `'no'` in a true-or-false field is text, and the build refuses it by name.
 
+Inside braces — `{head: …, body: …}`, the form most examples use — three marks in unquoted
+copy are YAML, not text. `blue?,` and `Note: this` stop the file parsing (`invalid YAML —
+while parsing a flow mapping`), and a comma splits the copy into a new key, so
+`{head: Ask, agree, check back}` fails as `unknown field 'agree'`. Quote any copy that holds
+a `?`, a `:` or a `,`: `{head: "Ask, agree, check back"}`.
+
 - **The first document is the deck document.** Theme, section names, output path.
 - **Every document after it is one slide,** in order.
 
@@ -234,7 +240,9 @@ There is no `layout:`. Every field below is optional; an absent field draws noth
 | `animate` | How the slide's components reveal on click. See [animate](#animate). |
 | `transition` | `none` — a deliberate hard cut into this slide, refusing the theme's transition — or `morph`, to glide what this slide shares with the one before. See [transition](#transition). |
 | `place` | A list of placements. See below. |
-| `chrome` | Where the title, kicker and subtitle go, overriding the theme. See [Moving the chrome](#moving-the-chrome). |
+| `chrome` | Where the title, kicker and subtitle go: a mapping overriding the theme field by field, or one word — `side` or `statement`. See [Moving the chrome](#moving-the-chrome). |
+| `carry` | `previous`: start from the slide before's `morph:` placements, so a morph slide names only what changes. See [transition](#transition). |
+| `drop` | A list of `morph:` names `carry:` leaves behind. |
 | `id` | A name for the slide, so a placement's `goto:` can jump to it. Unique in the deck. See [goto](#goto). |
 | `lang` | The language this slide's CJK text is written in, over the deck's `lang`. See [CJK text](#cjk-text). |
 
@@ -262,6 +270,28 @@ body, and the render is where you decide whether the title should simply be shor
 
 ### Moving the chrome
 
+**Two treatments are one word**, and build on every theme without measuring anything:
+
+```yaml
+title: Feedback changes what happens next
+chrome: statement     # the title is the slide: centred, at the display rung
+---
+kicker: STEP 2
+title: Behaviour — what a camera would have seen
+chrome: side          # the chrome stacks in the left third; the body takes the rest
+place:
+  - at: {cols: full}  # `full` is the columns beside the title
+    card: {heading: Situation, body: In Tuesday's update}
+```
+
+`side` stacks the kicker, title and subtitle in the left third, starting where the body
+starts, and gives the body the columns beside them: on that slide a placement's `cols:` —
+`full`, `left-half`, `{from:, to:}` — divides those columns, not the whole width. A `box:`
+placement stays exact. Lines too long for the column are an error naming how far they reach.
+`statement` sets the kicker, title and subtitle centred down the canvas, the title at the
+`display` rung — for the one line a room should keep. Either word needs at least one of
+the three lines, and takes no per-field keys; for those, write the mapping below.
+
 The theme decides the default treatment. A slide's `chrome:` block overrides it,
 one field at a time, one key at a time — anything you leave out keeps whatever the
 theme said.
@@ -282,6 +312,7 @@ chrome:
 | `rung` | Any type-ramp role, e.g. `display` for a cover title. Defaults to the field's own name. |
 | `pair` | Any declared palette pair, e.g. `accent-3` for a line reversed out of a panel painted in it. Defaults to the slide's own pair. |
 | `ink` | A colour **role**, when the ink is all that moves and the surface behind it stays as it is. Defaults to the pair's own foreground. |
+| `build` | `last`: the line arrives on the slide's last click, after everything the slide builds — so a claim can follow its evidence. Needs an `at:` with `rows:` or a `box:`; on a slide with no `animate:` it is the slide's one click. See [animate](#animate). |
 
 Every number is a fraction of the canvas, never an inch. A `box` that leaves the
 canvas is an error saying so, which is what catches inches pasted in from a
@@ -304,10 +335,16 @@ Two behaviours follow from giving a line an `at:`:
 
 - **It stops pushing the body down.** Only stacked lines set the content band's
   top, so a title in the right-hand columns sits *beside* the body rather than
-  above it, and a title on a colour panel sits *over* it.
+  above it, and a title on a colour panel sits *over* it. The band still never starts
+  above the theme's `body_top` ([`placement.md`](placement.md)): moving every line out of
+  the stack frees no depth above that.
 - **It gets a frame of its own**, which is what lets it carry an `anchor`. Setting
   `anchor` on a field with no `at:` is an error: the stacked lines share one frame,
   so there is nothing of its own to anchor in.
+- **`cols:` alone is not enough.** It narrows the line's measure and keeps it in the
+  stack, still pushing the body down. Add `rows:`, or write a `box:`, to take it out. A
+  `box:` holding a title should write `h: auto`: a fixed depth measured on one theme is too
+  shallow on a theme with a larger rung, and the build refuses it there.
 
 Chrome is drawn last, above every placement — that is what makes a reversed-out
 title on a `panel` work:
@@ -341,7 +378,10 @@ The background is what decides the slide's colour pair, and a pair is contrast-c
 
 **For a section opener, reach for the brand's accent before `inverse`.** A template's
 own colours live in its accents; the darkest slot of a `clrScheme` is pure black on
-seven of the eleven sample templates, and not one of them uses black as a surface.
+seven of the eleven sample templates, and not one of them uses black as a surface — and on
+a dark template `inverse` is the light slide. `bin/run new` and the worked example above
+use `inverse` only because every theme guarantees a readable `inverse` pair, where an
+accent's pair may be refused; once you have seen your theme, move its openers to an accent.
 
 ---
 
@@ -365,6 +405,9 @@ place:
 | `{cols: <name>, rows: <name>}` | Also bounded vertically: `band` (the whole band), `top-half`, `bottom-half`, `top-third`, `mid-third`, `bottom-third`, `top-two-thirds`, `bottom-two-thirds`. |
 | `{cols: {from: N, to: N}}` | An exact span, where no fraction names it. Half-open indices into the theme's `columns:`; `rows:` takes the same form over its `rows:`. |
 | `{box: {x: 0%, y: 10%, w: 100%, h: 20%}}` | The escape hatch: percents of the canvas. May start off the edge. |
+
+`rows:` never stands alone except on a `split:`, whose `at:` defaults to the full width: a
+full-width band is `{cols: full, rows: {from: 9, to: 12}}`.
 
 ### `split:` — a row of equal things
 
@@ -415,9 +458,9 @@ each 12 by default. A name a grid cannot divide evenly — thirds on a 10-column
 theme — is an error telling you to state the span outright, rather than rounding
 two "thirds" to different widths on the same slide.
 
-Seven optional keys sit beside `at:`: `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `goto:` makes a click on it jump to another slide (see [goto](#goto)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle. `morph:` names the placement for a [morph transition](#transition), which pairs it with its namesake on the next slide.
+Eight optional keys sit beside `at:`: `animate: none` keeps the placement on screen while the rest of the slide builds (see [animate](#animate)), `id:` names the rectangle so another placement can refer to it, `reveals:` names another placement's `id:` to stay hidden until that one is clicked (see [reveals](#reveals)), `goto:` makes a click on it jump to another slide (see [goto](#goto)), `bleed: true` declares that the placement is meant to run off the slide edge — and a bleeding placement may leave `at:` out entirely, which is what a connector drawn between two other placements does, and `align:` (`left` | `center` | `right`) and `anchor:` (`top` | `middle` | `bottom`) say where the component sits inside the rectangle — or, on a `card`, which fills it, where the type and icon sit inside the plate. `morph:` names the placement for a [morph transition](#transition), which pairs it with its namesake on the next slide.
 
-**`id:` also names the shapes.** Every shape the build draws is named for the placement that drew it, in the manifest and in the `.pptx` — `s7.p2.card#1` for the second placement on slide 7, `s7.hero.card#1` where you wrote `id: hero`. PowerPoint keeps those names through a hand-edit, so they are what tie an edited deck back to this file. A number moves when a placement is inserted above it; an `id:` does not. See [what the manifest records](qa.md#what-the-manifest-records).
+**`id:` also names the shapes.** Every shape the build draws is named for the placement that drew it, in the manifest and in the `.pptx` — `s7.p2.card#1` for the second placement on slide 7, `s7.hero.card#1` where you wrote `id: hero`. Each `split:` child is numbered as a placement of its own, so the `callouts` after a two-card `split:` is `p3` in its name though an error message calls it placement 2. PowerPoint keeps those names through a hand-edit, so they are what tie an edited deck back to this file. A number moves when a placement is inserted above it; an `id:` does not. See [what the manifest records](qa.md#what-the-manifest-records).
 
 **Which components fill, and which hug.** `card`, `panel`, `versus` and `chart` stretch
 to whatever rectangle the placement gives them; `bullets`, `callouts`, `stats`, `flow`,
@@ -425,7 +468,7 @@ to whatever rectangle the placement gives them; `bullets`, `callouts`, `stats`, 
 split decides which lever you reach for: bound a *filling* component with `rows:` or it
 swallows the band, and settle a *hugging* one with `anchor:` or its slack piles up below.
 
-`align` moves type inside the frames a component draws. **`anchor` moves the component itself**: a component sized to its content leaves slack in its placement, and `middle` or `bottom` distributes that slack instead of piling it below — the difference between a slide that reads airy and one that reads unfinished. The default `top` moves nothing, so no existing deck shifts. A `bleed: true` placement is never settled: a declared overrun is the author overriding geometry on purpose. A component that already places itself, like `ellipse`, measures as correct and is left alone. A component that sets no text of its own — `chart`, `connector`, `document`, `panel` — refuses them rather than ignoring them; `callouts` refuses `align` because its rows are set flush against the dot rail, and `rule` refuses whichever of the two would move it along the axis it already spans.
+`align` moves type inside the frames a component draws. **`anchor` moves the component itself** — except on a `card`, which fills its placement and so has no slack to move: there it sets the type and icon inside the plate, as `align` does across it. a component sized to its content leaves slack in its placement, and `middle` or `bottom` distributes that slack instead of piling it below — the difference between a slide that reads airy and one that reads unfinished. The default `top` moves nothing, so no existing deck shifts. A `bleed: true` placement is never settled: a declared overrun is the author overriding geometry on purpose. A component that already places itself, like `ellipse`, measures as correct and is left alone. A component that sets no text of its own — `chart`, `connector`, `document`, `panel` — refuses them rather than ignoring them; `callouts` refuses `align` because its rows are set flush against the dot rail, and `rule` refuses whichever of the two would move it along the axis it already spans.
 
 `ellipse` is the one exception: its shape *is* its content, so `align`/`anchor` position the disc inside the placement.
 
@@ -456,7 +499,7 @@ list, so it stays on this page.
 | [`panel`](components.md#panel--a-filled-block-behind-other-content) | A filled colour block. It carries no text; a chrome line supplies that. |
 | [`code`](components.md#code--a-monospace-listing) | A listing on a themed plate — real text, no browser. |
 | [`equation`](components.md#equation--one-display-equation) | One display equation from a LaTeX subset, written as Office Math with one line of text as its fallback. |
-| [`prose`](components.md#prose--paragraphs-at-a-readable-measure) | Paragraphs at a capped, readable measure; `cite:` makes them a quotation. |
+| [`prose`](components.md#prose--paragraphs-at-a-readable-measure) | Paragraphs at a capped, readable measure; `cite:` makes them a quotation. Also the free-standing label — a street name, a legend line. |
 | [`swatches`](components.md#swatches--the-themes-own-palette) | A chip per palette role, labelled with the hex it resolved to. |
 | [`grid`](components.md#grid--the-themes-own-geometry) | The theme's columns, and any region a placement must avoid. |
 | [`ellipse`](components.md#ellipse--a-disc-a-badge-a-dot-a-step-number) | A disc — a badge, a dot, a step number — with an optional label in it. |
@@ -469,7 +512,7 @@ list, so it stays on this page.
 | [`image`](components.md#image--a-photograph-and-any-text-reversed-out-of-it) | A photograph, and any text reversed out of it over a measured scrim. |
 | [`document`](components.md#document--a-real-markdown-file-rendered) | A real markdown file, rendered into a window card. |
 | [`fanout`](components.md#fanout--one-call-and-the-work-it-sets-off) | One call, and one branch per consequence. |
-| [`versus`](components.md#versus--two-magnitudes-either-side-of-a-glyph) | Two magnitudes either side of a glyph. |
+| [`versus`](components.md#versus--two-magnitudes-either-side-of-a-glyph) | Two values either side of a glyph — magnitudes sized in proportion, or words at an even split. |
 | [`diverge`](components.md#diverge--signed-bars-either-side-of-a-centre-rule) | Signed bars either side of a centre rule. |
 | [`chart`](components.md#chart--a-real-editable-powerpoint-chart) | A native OOXML chart. Its block is [documented below](#the-chart-block). |
 
@@ -700,10 +743,10 @@ Scatter kinds carry no data labels — the numbers do not print beside the point
 | Value | What happens |
 |---|---|
 | `none` | Nothing animates. Same as leaving `animate:` out. |
-| `together` | One click reveals the whole component at once. |
+| `together` | One click reveals every placement on the slide at once. |
 | `one_at_a_time` | One click per group: one bullet (or one column, when a list has several), one callout row, one stat tile. |
-| `by_category` | **Charts only.** The chart builds one category at a time — Q1, then Q2, then Q3. |
-| `by_series` | **Charts only.** The chart builds one series at a time — all of Ads, then all of Organic. |
+| `by_category` | **Charts only.** The first click shows the axes and gridlines; each click after adds one category — Q1, then Q2, then Q3. Four categories are five clicks. |
+| `by_series` | **Charts only.** The first click shows the axes and gridlines; each click after adds one series — all of Ads, then all of Organic. |
 
 ```yaml
 section: Spec
@@ -725,12 +768,34 @@ What counts as a group for `one_at_a_time`:
 | `bullets` | One bullet in a single-column list, one column in a list with several; the heading rides with the first. |
 | `callouts` | One row — its dot and its text together. |
 | `stats` | One tile; the caption rides with the last tile. |
+| `card` | The whole card — plate, icon and words. |
+| `table` | The whole table; it does not build row by row. |
+| `flow` | One step, with the join into it. |
+| `versus`, `diverge` | One side, or one bar's row. |
+| `code` | The heading, then the plate. |
 | `document` | The whole card — it is a single group. |
 | `chart` | The whole chart — it is a single group. |
+| `prose`, `panel`, `ellipse`, `icon`, `equation`, `image` | The whole placement. |
 
-`by_category` and `by_series` on anything other than a chart is an error. Any value outside these five is an error listing all five. With several placements on a slide, `one_at_a_time` clicks through all of their groups in placement order.
+`by_category` and `by_series` need a chart that builds: on a slide with none, or whose only chart is `animate: none`, they are an error. The chart builds first; every other placement on the slide follows it, one group per click as under `one_at_a_time` — the bars, then the conclusion they support. Any value outside these five is an error listing all five. With several placements on a slide, `one_at_a_time` clicks through all of their groups in placement order.
 
-A slide's chrome never animates — the title and subtitle are on screen when the slide arrives, whatever `animate:` says. That is what lets a claim land a beat before its evidence.
+**Keeping one placement still.** `animate: none` on a placement leaves it on screen when the slide arrives and out of the build, whatever the slide's own `animate:` is — the empty table a worked example fills in, the question a recap's answers follow, the note beside a chart that builds:
+
+```yaml
+animate: one_at_a_time
+place:
+  - at: {cols: full, rows: {from: 0, to: 3}}
+    animate: none                 # the slots are there from the start
+    table: {header: ['0', '1', '2', '3'], rows: [['', '', '', '']]}
+  - at: {cols: left-half, rows: {from: 4, to: 9}}
+    card: {heading: cat, body: slot 0}     # click 1
+  - at: {cols: right-half, rows: {from: 4, to: 9}}
+    card: {heading: dog, body: slot 2}     # click 2
+```
+
+It takes only `none`. On a slide that does not build it has nothing to keep out of and is an error, as it is on a placement `reveals:` hides.
+
+A slide's chrome is on screen when the slide arrives, whatever `animate:` says. That is what lets a claim land a beat before its evidence. For the other order — evidence first — there are three ways, cheapest first: title the slide with the question and put the answer in the placement that builds last; make the claim the title of the next slide, carrying the evidence over with `transition: morph` (see [transition](#transition)); or give the claim line a frame of its own with `build: last` (see [Moving the chrome](#moving-the-chrome)), which arrives after everything else.
 
 A slide carries **one** animation timeline. Two charts on one slide both asked to build is an error naming the collision — give one a slide of its own, or drop it to `together`.
 
@@ -740,7 +805,7 @@ The old `reveal:` field is gone. `reveal: per-item` is now `animate: one_at_a_ti
 
 > LibreOffice renders the *final* state of a slide, so `bin/run render` shows every animated shape as visible. It cannot show a build mid-reveal. Only real PowerPoint confirms an animation opens without a repair prompt.
 
-Every value above is confirmed at playback in real PowerPoint. **Keynote is the exception: it does not play `by_category`/`by_series`** — the chart arrives whole. For a Keynote audience use `together`, or split the categories across slides.
+Every value above is confirmed at playback in real PowerPoint. **Keynote is the exception: it does not play `by_category`/`by_series`** — the chart arrives whole. For a Keynote audience use `together`, or split the categories across slides. Two builds are written but unchecked in PowerPoint: a chart build followed by other placements on one timeline, and a chrome line with `build: last`. Both validate against the schema; neither has been played.
 
 ---
 
@@ -761,26 +826,62 @@ every transition in a deck one slide out.
 as PowerPoint's Morph, with a fade as its fallback for a reader without Morph. Give a
 placement `morph: <name>` on this slide and on the one before, and both are written with the
 same shape names, which is how Morph pairs one with the other. The two placements must be the
-same component, and a `chart` cannot take `morph:`. `qa` reports a name with no namesake on
-the slide before as `morph-unpaired`. The speed is the theme's. Playback in PowerPoint is
-awaiting its first check; see [`motion.md`](motion.md).
+same component, and a `chart` cannot take `morph:`. A `split:` child takes its own `morph:`,
+so each card of a row can move on its own. A shape that enters a sequence part-way
+carries its name from the slide it first appears on, so it can pair with the next one; `qa`
+reports a new name as `morph-unpaired` only when a name from the slide before has gone at the
+same time, which is what a renamed shape looks like. A placement in the slide's `animate:`
+build is written hidden until its click, so it has nothing to arrive as when the slide lands:
+on a slide that morphs and builds, give each `morph:` placement `animate: none` so it glides
+in, and let the rest build. The speed is the theme's. Playback in PowerPoint is unchecked;
+see [`motion.md`](motion.md).
+
+**The evidence, then the claim.** The commonest teaching use of Morph: title the evidence
+slide with the question, and make the claim the next slide's title, with the evidence carried
+over and moved aside. The room sees the bars before it is told what they mean.
 
 ```yaml
-title: The same card, larger
-transition: morph
+title: Did the new intake change who died?
 place:
   - at: {cols: full}
-    morph: hero
-    card: {heading: Revenue, body: Up 12% on the year}
+    morph: evidence
+    card: {heading: Southwark & Vauxhall 315, body: Lambeth 37 · rest of London 59}
+---
+title: The water company predicted who died
+transition: morph
+carry: previous           # the evidence card comes along...
+place:
+  - at: {cols: left-half}
+    morph: evidence       # ...and this is where it moves to
+    card: {heading: Southwark & Vauxhall 315, body: Lambeth 37 · rest of London 59}
+  - at: {cols: right-half}
+    callouts: {items: [{head: Eight and a half times Lambeth's rate}]}
 ```
+
+**`carry: previous` names only what changes.** It starts the slide from the slide before's
+`morph:` placements, in their order. A placement here with the same `morph:` name replaces its
+copy in that position; one with a new name, or none, follows; `drop: [name]` leaves a copy
+behind, and a placement here under a dropped name follows as one of this slide's own. Chrome, `background:` and `animate:` are never carried. A carried copy is on screen
+when the slide lands — on a slide that builds it is written `animate: none`, and any `reveals:`
+is left behind — so it glides in
+and only what this slide adds waits for a click. A build-up of five shapes is
+five short slides rather than five copies of the picture. With nothing to carry — the first
+slide, or one before it naming nothing — it is an error.
+
+Morph earns its place five ways, each one a picture that changes rather than a list that
+grows: a shape **enters** (one new name per slide), is **emphasised** (grown or recoloured),
+is **demoted** (shrunk aside to make room), the picture is **rearranged** (the same shapes in
+new places), or the **title swaps** while the evidence stays. A morph sequence is also the one
+motion the contact sheet shows beat by beat — every slide of it is complete on its own, so a
+reader without Morph sees a fade between whole pictures.
 
 Which transition a deck uses is the theme's (`motion.transition` in
 [`theme.md`](theme.md#the-decks-transition)), for the same reason a deck never sets a
 colour: every deck on the brand should move the same way. A slide naming any other
 value is an error pointing at the theme.
 
-Leave it out and the slide takes whatever the theme says — which, for a theme with no
-`motion.transition`, is no transition at all.
+Leave it out and the slide takes whatever the theme says — `base` fades, fast — which, for
+a theme with no `motion.transition`, is no transition at all.
 
 > A still render cannot show a transition: `bin/run render` produces identical images
 > with and without one, and `deckwright qa` never sees it. Only presentation mode does.
@@ -806,7 +907,9 @@ The trigger needs an `id:`; `reveals:` names it. Unlike `animate:`, this spends 
 slide advance** — you click the trigger itself, in any order, and the slide never moves
 on. Every shape that placement drew is a trigger, so a card's icon and its words work as
 well as its plate; there is no margin you have to hit. Good for a question you want to
-sit with before the answer lands.
+sit with before the answer lands — when you present with a mouse. A clicker or an arrow key
+advances the slide, as a click away from a trigger does, so in a talk given from a clicker
+hold the answer back with `animate: one_at_a_time` and placement order instead.
 
 A slide carries one animation timeline, so `reveals:` and `animate:` cannot share one —
 asking for both is an error naming the collision. Naming an id no placement on the slide

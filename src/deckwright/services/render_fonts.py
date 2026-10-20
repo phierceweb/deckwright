@@ -19,7 +19,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.utils._cjk import carries_cjk
 from deckwright.utils.fontconfig import CJK_LANGS, fc_list, fc_match

@@ -7,10 +7,11 @@ them through `bin/run`, which uses the project venv:
 bin/run <command> [args]
 ```
 
-`bin/run` also resolves pf-core's own console scripts from the venv — `bin/run pf-doctor`
-attests the install (loaded copy, extras, env resolution, docs link) and is what `bin/setup`
-points at when it finishes. See `docs/pf-core/doctor.md` — a symlink `bin/setup`
-creates into the installed pf-core's own docs, so it exists after setup, not on GitHub.
+`bin/run` also resolves pw-foundation's own console scripts from the venv — `bin/run pw-doctor`
+attests the framework install: the loaded copy and its version, env resolution, and the docs
+link and editor wiring `bin/setup` made. See `docs/pw-foundation/doctor.md` — a symlink
+`bin/setup` creates into the installed pw-foundation's own docs, so it exists after setup, not
+on GitHub.
 
 For the workflow these commands compose into — build, look, fix, rebuild — read
 [`docs/pptx-deck-building.md`](pptx-deck-building.md). This doc is the surface
@@ -59,7 +60,11 @@ bin/run new q4-review --theme brand --no-build
 ```
 
 Writes `authoring/<slug>/<slug>.deck.yaml` and builds it, so the first thing you have
-is a deck you can open and a spec you can edit.
+is a deck you can open and a spec you can edit. Its eight slides are eight different
+compositions and clicks — a cover, a divider, a statement, a side title over an unbuilt list,
+cards built in order, a question over a chart and its claim beside the same chart, a closer —
+each commented with when it fits. The header names the theme's grounds, and says when its
+`card`, `flow` and `code` plates stand off the page enough to read as one treatment.
 
 Both paths are relative to the current directory, so run outside a checkout it
 creates `authoring/` and `out/` where you stand. `--root` moves the source
@@ -77,10 +82,8 @@ deck's filename while the title keeps them. A name that leaves no slug at all is
 refused with `a deck needs a name`. A build that fails frees the name it just wrote,
 so the retry is not blocked by the directory the first attempt left.
 
-**The scaffold is a working deck, not a stub** — six slides covering the shapes most
-decks are made of: a cover, a section divider, bullets with a click build, a `split:`
-row of cards, a native chart, and a closing. Each carries one line saying what to
-change. Editing something that runs is how these actually get written; composing the
+**The scaffold is a working deck, not a stub** — eight slides, each a different
+composition, and each carrying a comment on when it fits and what to change. Editing something that runs is how these actually get written; composing the
 first one from an empty buffer means reading the wire format, the component index and
 the placement rules before writing a word.
 
@@ -168,7 +171,7 @@ the render is the ground truth, not the spec.
 |---|---|
 | `--outdir` / `-o` | Where images go. Default `<pptx-dir>/render/<deck>`. |
 | `--dpi` | Rasterization DPI. Default 110, or `$DECKWRIGHT_RENDER_DPI`. |
-| `--contact-sheet` | Also write `contact_sheet.png`, the whole deck as one grid. |
+| `--contact-sheet` | Also write `contact_sheet.png`, the whole deck as one grid, each slide numbered in a strip above it so the number covers nothing on the slide. |
 | `--cols` | Columns in that grid. Default 4. |
 
 Stale `slide-<n>.<image>` files a previous render wrote are removed first, so a shorter
@@ -358,12 +361,13 @@ deck deckwright built comes back as its placements, not only its words.
 
 | Placement | Comes back as |
 |---|---|
-| `card` | its heading, its body and its `pair:` |
+| `card` | its heading, its body, its icon and its `pair:` |
 | `bullets` | its heading, its items and `columns:` |
 | `prose` | its paragraphs and `cite:` |
-| `table` | its header and rows |
+| `table` | its header, its rows, and its `widths:` when the columns are not an even split |
 | `chart` | its kind and data, read from the values the chart caches |
-| `image` | its picture, in the media folder; its `alt:` or `decorative:`; its `over:` lines |
+| `image` | its picture, in the media folder; its `alt:` or `decorative:`; its `over:` lines, each on the rung its size matches |
+| `icon` | the glyph it draws, by name, with its `ink:`, `size:` and alt text |
 | `rule`, `panel` | themselves, a rule's orientation and a panel's `pair:` included |
 | any other | bullets of its words — or, holding only a picture like a `document:` does, an `image:` of it — with a comment saying so |
 
@@ -371,8 +375,11 @@ Each is placed at `at: {box: …}`, in percent of the canvas. The box is the rec
 build's manifest recorded, when that manifest is beside the deck — or, for a copy saved
 under another name, any manifest beside it recording the same build id — and otherwise the
 rectangle its shapes cover, rounded outward so words drawn tight in it still fit. An
-author's `id:` and a `morph:` name come back, as do a slide's `animate:` and
-`transition: morph`. A placement drawn as `p2` keeps that name after `p1` is deleted by
+author's `id:` and a `morph:` name come back, as do a slide's `animate:`, its
+`transition: morph` and its `lang:`, read off the language its CJK runs carry. A placement
+comes back with `bleed: true` when the manifest records it, or when its box runs off the slide. With the manifest found, so do the deck's `sections:`, each slide's
+`section:` and its `chrome:` preset; the file holds none of them, so without it the draft
+invents no sections and writes a preset slide's lines as the boxes they sit in. A placement drawn as `p2` keeps that name after `p1` is deleted by
 hand, so a rebuild names its shapes as before. A `pair:` comes back when the plate's fill
 and ink are a pair the drafted theme declares; `surface`, the default, stays unwritten.
 
@@ -382,15 +389,26 @@ reveal only a card's words, reveal a card from a second shape, or reveal each of
 cards from the other — and each of those is left out with a comment naming it, so the
 draft still builds.
 
+**An icon is read by its drawing.** A glyph's name is not in the file, but its outline is:
+deckwright writes every glyph's path on one fixed grid, so it is the same at any size and
+colour, and PowerPoint keeps it. An outline that matches a glyph — from the drafting theme's
+own icons, `DECKWRIGHT_ICON_DIR`, or the shipped set — comes back by name, the first of any
+aliases that draw alike; `ink:` comes back when the fill is a role of the drafting theme. An
+outline that matches nothing is named with its alt text, as before.
+
+**Moved chrome comes back.** A chrome line drawn in a frame of its own, away from where the
+drafting theme would stack it or on another rung, alignment or anchor, drafts as that slide's
+`chrome:` block, each key only where it differs from the default. A deck built with another
+theme than the one drafted against stacks its lines elsewhere, so then no slide's chrome is
+drafted, and one comment at the top says so.
+
 What the file does not hold is said in a comment on the slide: a component whose fields
-are not in it (`# s8.p1.stats: drafted as bullets: …`), a card's icon, and — over an
-image — each line's rung and the scrim's settings. An `icon:` placement's glyph is not in
-the file by name either, so the icon is named as the shape it drew. A slide's `chrome:`
-overrides — a title moved or set on another rung — do not come back: its chrome returns
-as words, in the theme's place for them. Anything added to such a slide by hand
+are not in it (`# s8.p1.stats: drafted as bullets: …`), a line over an image set at a size
+no rung of the drafting theme has, and a scrim's settings, which the build solves afresh. Anything added to such a slide by hand
 (words, a table, a card, a chart, a picture) is named under the "did not fit" comment
 rather than banded, since a band could overlap the placements. A placement grouped by hand
-is still read back. One pasted in PowerPoint keeps its original's name, so that name now
+is still read back, and with no manifest beside the copy its box is where the group draws
+it. One pasted in PowerPoint keeps its original's name, so that name now
 covers two placements; both are read as any other deck's shapes are.
 
 ### A deck from anywhere else
@@ -402,16 +420,19 @@ run comes back as `[words](address)`. So do three kinds of figure.
   the chart caches. An XY or bubble chart, one with an empty value or two series of one
   name, and one whose cache does not cover its categories are named with the reason
   instead.
-- **A card** is a filled shape holding one or two paragraphs, or a text box holding them
-  that lies on exactly one filled shape. Two lines are a heading and a body; one line is a
-  heading when bold, and body copy when not. A filled shape covering 40% of the slide or
+- **A card** is a filled shape holding one or two paragraphs, or text boxes holding them
+  that lie on exactly one filled shape — one box, or a heading box and a body box read top
+  to bottom. Two lines are a heading and a body; one line is a heading when bold, and body
+  copy when not. Boxes on one plate holding more than two lines between them stay words. A filled shape covering 40% of the slide or
   more is a panel the slide's words sit on, not a card.
 - **A picture** comes back as an `image:` with its alt text, or `decorative: true` when
   Office marks it decorative, and its file goes in the media folder — a photo filling a
   layout's picture placeholder included. A picture covering the whole slide, and one the
-  deck links rather than embeds, are named instead. Words come first: when banding a
-  slide's pictures pushes some of its words off it, and leaving them out pushes fewer, the
-  pictures are named in the draft and their files still written.
+  deck links rather than embeds, are named instead. Words come first: three
+  layouts are tried — everything down one column, the words without the pictures, and the
+  words in the left half with the pictures down the right — and the one losing fewest words
+  wins, then the one placing most pictures. A picture that does not fit is named in the
+  draft, its file still written.
 
 A table of a single row — a label band, a one-row layout table — comes back as bullets,
 since it has no body rows to put under a header. A slide painted in one of the theme's
@@ -427,8 +448,10 @@ so what it showed survives; alt text that is only a file name is left out, and s
 picture's.
 
 A group is walked rather than named: its children convert as though each sat on the slide,
-ordered among themselves and taking the group's place in the reading order. Eight levels
-of nesting are walked; a group nested deeper than that is named whole in a
+ordered among themselves and taking the group's place in the reading order. A child is
+measured where its groups draw it — moved and scaled, though not rotated or flipped — so a
+card's text box on the slide lies on a plate inside a moved group. Eight levels of nesting
+are walked; a group nested deeper than that is named whole in a
 `# not converted:` comment instead.
 
 A shape PowerPoint stores inside `mc:AlternateContent` — an equation, a 3D model, ink — is
@@ -474,7 +497,7 @@ the same thing at the top of the file.
 
 The draft names `--theme` and is drafted against it: a placement's `rows:` spans that
 theme's own grid, so a theme declaring `scale: {rows: 6}` gets six-row spans. Each
-table placement is given the height that table will ask for at build, so its band is
+table and card placement is given the height it will ask for at build, so its band is
 sized by its contents; a chart or a picture takes half the grid, and every other placement
 a fixed two rows. A name that resolves to no theme file and no packaged theme fails here,
 before anything is written, rather than later at `build`.
@@ -581,7 +604,7 @@ SKIP   templates.brands  no brand template — tests/test_templates.py skips, so
                          the unit tests only
 ```
 
-Read-only ground truth, in pf-core's `pf-doctor` shape (run that one too — it attests
+Read-only ground truth, in pw-foundation's `pw-doctor` shape (run that one too — it attests
 the framework install). Reports the version that answered, the glyph bundle against its
 manifest, whether `theme: base` resolves, from where, and whether it loads — a theme
 that resolves but will not parse is a `WARN` naming the file and the loader's message —
@@ -679,8 +702,8 @@ directory on startup. Defaults live beside the code that reads them, not here.
 | `DECKWRIGHT_FC_MATCH` | The fontconfig `fc-match` command `render` asks for the font to draw each CJK language with, when the deck carries Chinese, Japanese or Korean text. Absent, none is linked. |
 | `DECKWRIGHT_FC_LIST_TIMEOUT_S` | Timeout for `fc-list` and `fc-match`. |
 
-pf-core supplies the rest — `LOG_LEVEL`, `LOG_FILE` and the API-key vars. See
-`docs/pf-core/config.md` (the symlink `bin/setup` creates).
+pw-foundation supplies the rest — `LOG_LEVEL` and `LOG_FILE`. See
+`docs/pw-foundation/config.md` (the symlink `bin/setup` creates).
 
 ## External tools
 
@@ -711,8 +734,10 @@ paints a native rectangle and needs nothing external, despite the name it shares
 ## Exit codes and logging
 
 `0` on success. `1` for a domain failure — a bad spec, a template that cannot yield a
-theme, a `--fail-on` threshold met, or a `conform` run with any failure. Unexpected
-errors exit non-zero with a traceback in the log.
+theme, a `--fail-on` threshold met, or a `conform` run with any failure. `2` for a usage
+error — an unknown command or option, a missing argument — printed with the usage line.
+`130` when interrupted. Unexpected errors exit non-zero with a traceback in the log.
+`src/deckwright/cli/_run.py` maps each exception to its exit code.
 
 A missing or failing external tool exits 1 with its message and no traceback: the fix
 is on the machine, not in the stack. Debug logging is `-v` / `--verbose` — see
@@ -727,10 +752,10 @@ is on the machine, not in the stack. Debug logging is `-v` / `--verbose` — see
    arguments, call **one** service or orchestrator function, print the result. No
    business logic: the command parses arguments and calls one function.
 2. Raise the project's own errors (`SpecError`, `ThemeError`, `LayoutError`) for bad
-   input; pf-core's CLI scaffold maps them to exit codes and messages already.
+   input; `src/deckwright/cli/_run.py` maps them to exit codes and messages already.
 3. Add the command to this doc's table of contents and give it a section.
 4. If it introduces an env knob, follow the wrapper-function recipe in
    `compile/build.py`'s `theme_dir()` — a module constant for the default, a
-   wrapper calling `pf_core.utils.env.resolve_*` so a malformed value warns and falls
+   wrapper calling `pw_foundation.utils.env.resolve_*` so a malformed value warns and falls
    back rather than crashing, and the read happening at call time — then add it to
    `.env.example` **and** the table above.

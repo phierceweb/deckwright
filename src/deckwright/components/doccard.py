@@ -12,6 +12,7 @@ from deckwright.panels.model import Panel
 from deckwright.panels.place import place_panel
 from deckwright.services.card_pictures import UnembeddableImage
 from deckwright.services.htmlcard import markdown_card
+from deckwright.utils.text import inches_apart
 
 from deckwright.components._shape import figure_text, known_fields
 from deckwright.components._shared import coerce_int, require_default_align
@@ -158,9 +159,10 @@ def document(ctx: SlideCtx) -> BodyResult:
     picture = placed[""]
     height = picture.height / 914400
     if height > rect.height:
+        tall, have = inches_apart(height, rect.height)
         raise LayoutError(
-            f"slide {ctx.spec.index} (component 'document'): the card came out {height:.2f}in "
-            f"tall but only {rect.height:.2f}in is available — card fewer lines with "
+            f"slide {ctx.spec.index} (component 'document'): the card came out {tall} "
+            f"tall but only {have} is available — card fewer lines with "
             f"'lines: 12-40', raise 'max_width' to set the type smaller, or use "
             f"'side: left'/'side: right' to narrow it. Do not copy part of the file "
             f"into a shorter one; the copy is what this component exists to avoid"

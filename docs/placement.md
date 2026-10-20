@@ -156,6 +156,13 @@ both pass on a slide whose chrome is illegibly doubled up.
 `content_rect()` derives the content band's top from the **stacked** bands only.
 A placed line is exact geometry like a `box:` placement: it may sit beside the
 body or over it, which is what a column title and a title on a colour panel need.
+The build does not compare it with the placements; `qa`'s `chrome-overlap` reports a line
+drawn over anything but a `panel`, an `image` or a bleeding placement.
+
+The ink a line is tried against, and any plate it is given, covers only where its words can
+land: as wide as the line when it does not wrap; for a line with a box of its own, at the
+box's anchor and as deep as its words; and for a stacked line from as high as it rises —
+when the lines above it wrap shorter than estimated — down to its slot.
 `content_rect()` raises when the stack leaves no band at all.
 
 ### Chrome is drawn last
@@ -178,7 +185,7 @@ sized one line short of its text draws over what sits below it — but only by t
 margin, so a reserved line the render does not use is the rare case, not the rule. A
 single word too long for its line is the exception: it breaks where its real width does.
 
-`compose._write_chrome()` then writes the **stacked** chrome lines into a text
+`chrome_ink.write_chrome()` then writes the **stacked** chrome lines into a text
 frame per run of consecutive bands sharing a measure, one paragraph each, rather
 than one box per band. That is the belt to the estimate's braces: if a renderer
 wraps a title wider than estimated, paragraph flow carries the subtitle down the

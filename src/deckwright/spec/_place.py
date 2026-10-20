@@ -12,7 +12,7 @@ from deckwright.utils.shapes import ALIGNS, ANCHORS
 from deckwright.utils.spans import Share, parse_box, parse_span
 from deckwright.utils.keys import refuse_unknown
 
-PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals", "goto", "morph")
+PLACEMENT_FIELDS = ("at", "id", "bleed", "align", "anchor", "reveals", "goto", "animate", "morph")
 AT_FIELDS = ("cols", "rows", "box")
 
 
@@ -153,11 +153,25 @@ def _placement(entry: Any, *, where: str) -> Placement:
         reveals=_named(entry.get("reveals"), "'reveals'", where=where),
         goto=_named(entry.get("goto"), "'goto'", where=where),
         morph=_named(entry.get("morph"), "'morph'", where=where),
+        still=_still(entry, where=where),
         bleed=bleed,
         align=_choice(entry.get("align"), "align", ALIGNS, default="left", where=where),
         anchor=_choice(entry.get("anchor"), "anchor", ANCHORS, default="top", where=where),
         where=where,
     )
+
+
+def _still(entry: dict[str, Any], *, where: str) -> bool:
+    """``animate: none`` on a placement: the one value a placement's own ``animate`` takes."""
+    if "animate" not in entry:
+        return False
+    if str(entry["animate"]) != "none":
+        raise SpecError(
+            f"{where}: a placement's 'animate' takes only none, which keeps it on screen "
+            f"while the rest of the slide builds; got {entry['animate']!r} — how the rest "
+            f"arrives is the slide's own animate:"
+        )
+    return True
 
 
 def _choice(value: Any, key: str, options: tuple[str, ...], *, default: str, where: str) -> str:

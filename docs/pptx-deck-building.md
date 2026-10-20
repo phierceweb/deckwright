@@ -51,7 +51,10 @@ capability in one deck, generated from the exercise registry against any theme, 
 2. `bin/run render <deck>.pptx --contact-sheet` rasterizes every slide to
    `render/<deck>/slide-NN.jpg` and writes `render/<deck>/contact_sheet.png`. It hands
    LibreOffice the installed fonts the deck names first, so the images show the deck's
-   own typefaces wherever they are installed.
+   own typefaces wherever they are installed. **Where the theme's face is not installed,
+   the render sets a substitute** — often wider — and every fit you judge by eye is judged
+   in a face the audience will not see. `qa` names it as `font-substituted`; install the
+   face before trusting a render for overflow.
 3. **View the images — that is the real QA.** Overflow, overlap, low contrast, and
    corner collisions only show up by eye; the contact sheet gives the whole deck
    at a glance.

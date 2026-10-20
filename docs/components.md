@@ -113,6 +113,11 @@ place:
 
 The mark and its text reveal together, so a click-build never leaves a dot on screen with nothing beside it.
 
+The dot is `accent-1` wherever that stands off what it lands on, by the same test `qa`'s
+`fill-ground` applies. On a slide painted `accent-1` it gives way as a mark does: to the next
+accent that clears 3:1 against the slide, else the slide's ink — a difference of hue alone is
+too little on a dot this small.
+
 One reveal group per row. Keep to about six rows — past that the rows are thinner than the type needs and the build fails saying so.
 
 ### `stats` — a row of big-number tiles
@@ -120,7 +125,7 @@ One reveal group per row. Keep to about six rows — past that the rows are thin
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `items` | **yes** | — | Non-empty list of mappings. |
-| `items[].value` | **yes** | — | The big number. Quote it — `"4"`, not `4`. |
+| `items[].value` | **yes** | — | The big number, printed as you wrote it — `4.50` stays `4.50`. |
 | `items[].label` | no | — | Small caption inside the tile. |
 | `items[].icon` | no | — | A glyph name, drawn above the number. Every tile in the row grows to fit it, so the row stays level. |
 | `columns` | no | one per item | Tiles per row. **Hard maximum 4**; a larger number is silently reduced. |
@@ -413,6 +418,9 @@ A fill too close to the slide's own paper to see — the default `surface` on a 
 page — is given the theme's `line` colour as an edge, so the block reads on a light
 background as well as a dark one.
 
+A panel under other placements needs `bleed: true`, as in the example: without it the
+placements on it overlap it, and the build refuses the slide naming both.
+
 ### `ellipse` — a disc: a badge, a dot, a step number
 
 The commonest non-text mark in the corpus. The diameter is the **short side of its
@@ -451,7 +459,7 @@ against the slide's — a white card on a dark slide still reads.
 | Field | Required | Default | What it does |
 |---|---|---|---|
 | `heading` | one of the three | — | Set at the `head` rung. |
-| `body` | one of the three | — | One or two lines at the `body` rung. |
+| `body` | one of the three | — | Copy at the `body` rung. One or two lines is the advice, not a limit: a card takes what fits its plate and refuses the rest, naming both heights. |
 | `icon` | one of the three | — | A glyph name (`shield`) or an image file (`logo.png`), placed at the top of the plate two heading line-heights square. A bare name is a glyph; anything with a suffix or a path separator is a file, resolved like any deck image. |
 | `alt` | no | — | What a screen reader says in place of the icon. Beside a heading or body an unlabelled picture icon is marked decorative; a card that is only an icon needs this. |
 | `decorative` | no | `false` | `true` marks the icon for a screen reader to skip. Refused beside `alt`. |
@@ -469,7 +477,8 @@ place:
 ```
 
 The type is inset from the plate by the theme's gutter on every side, and `align`/
-`anchor` set it inside that area. The gutter is measured from the plate's painted
+`anchor` set it inside that area; an icon moves with the type, so a centred card centres
+its icon too. The gutter is measured from the plate's painted
 edge, not from its square corner, so a large `radius` insets the sides further: on a
 stadium the corner curve has swept a long way in by the height the first line sits
 at, and a fixed inset would leave the leading glyph outside the shape. A card with
@@ -619,7 +628,9 @@ so the space a stacked fraction needs is kept even where the line shows.
 
 The maths is written as PowerPoint stores an equation: the shape inside
 `mc:AlternateContent`, Office Math in the Choice and the line in the Fallback. PowerPoint
-opening it without a repair prompt, and setting it as maths, is awaiting its first check.
+opening it without a repair prompt, and setting it as maths, is awaiting its first check. The
+fallback line is framed at the placement's full width and aligned in it by its paragraph, so a
+renderer that substitutes a face a little wider than the theme's still sets it on one line.
 
 ```yaml
 title: The quadratic formula
@@ -916,7 +927,15 @@ data. Write both sides in the same unit to get the proportional plates. A magnit
 counts as part of it: `$1.2M` and `$480K` do not compare, `$1.2M` and `$0.48M` do.
 
 The smaller plate never drops below the width its longest word needs, so a long label
-widens the plate rather than breaking mid-word; a placement too narrow to set both sides
+widens the plate rather than breaking mid-word. That floor caps the ratio the plates can
+show: with one-word labels on the built-in theme it is about 1.2in, so 315 against 37 (8.5:1)
+draws as 7.8:1 across the full band and as 2.9:1 across half of it. For a ratio past what the
+placement can draw, use [`stats`](#stats--a-row-of-big-number-tiles) and let the numbers
+carry it, or a `bar` chart. A value and its unit are two words, so
+`0.3 nm` may set over two lines; join them with a no-break space (`"0.3\u00a0nm"` in a
+double-quoted string) and the plate is sized for both at once. The width is measured in the
+theme's face: where that face is not installed, the render sets a substitute that may be
+wider, and `qa` names it as `font-substituted`. A placement too narrow to set both sides
 is refused at build, naming the two widths. Whether the stack then *fits the band* is
 `qa`'s `text-fit` check — give the placement more rows, or shorten the note.
 Values with no number in them — `before` and `after` — keep the even split; there is

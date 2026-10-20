@@ -12,7 +12,7 @@ from collections.abc import Callable
 from importlib import metadata
 from pathlib import Path
 
-from pf_core.doctor import CheckResult
+from pw_foundation.doctor import CheckResult
 
 from deckwright.compile.build import resolve_theme, theme_dir
 from deckwright.errors import ThemeError
@@ -232,7 +232,7 @@ def run_checks() -> list[CheckResult]:
 
 
 def report(results: list[CheckResult]) -> int:
-    """Print the table the way pf-doctor does. Returns the exit code."""
+    """Print the table the way pw-doctor does. Returns the exit code."""
     from rich.console import Console
     from rich.table import Table
 

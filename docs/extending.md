@@ -41,6 +41,10 @@ groups: [4, 3, 3, 3]   an icon per row is missing — those icons are on screen 
 groups: [4, 4, 4, 4]   each icon arrives with its row
 ```
 
+A placement written `animate: none` is left out of the slide's build whatever groups it
+returns. A component that writes timing of its own, as `chart` does for a
+`by_category` build, reads `ctx.still` and writes none.
+
 ### 2. `align` and `anchor` are enums inside a component
 
 The spec writes `align: right`; inside a component that is `PP_ALIGN.RIGHT`, and an
@@ -166,4 +170,4 @@ Then the ungated ones, which nothing will catch:
 | `tests/components/test_unknown_fields.py` | A component that declares `_FIELDS` or `_ITEM_FIELDS` and never enforces it — declaring the tuple for the docs gate's benefit and skipping the check is how the last five got there. |
 | `bin/check-layers` | A component importing from `cli`, `conform`, `compile` or `qa`. |
 | `bin/check-framework` | `logging`, `os.environ`, a bare `ValueError`, `print()`, a hand-rolled atomic write. Raise `LayoutError` from `deckwright.errors`. |
-| `python -m pf_core.guards` | The file over its size budget. |
+| `python -m pw_foundation.guards` | The file over its size budget. |

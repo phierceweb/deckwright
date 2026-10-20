@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from pptx.dml.color import RGBColor
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import LayoutError, ThemeError
 from deckwright.spec.model import SlideSpec
@@ -66,6 +66,7 @@ class SlideCtx:
     rect: Rect | None = None
     align: str = "left"  # the placement's horizontal text alignment
     anchor: str = "top"  # the placement's vertical text anchoring
+    still: bool = False  # the placement's `animate: none`: kept out of the slide's build
     placements: dict[str, Rect] = field(default_factory=dict)
     base: Path | None = None  # the deck spec's own directory
     backdrop: Backdrop | None = None  # the art painted over this slide's surface
@@ -73,6 +74,9 @@ class SlideCtx:
     painted: list[tuple[Rect, str | Disc | Backdrop]] = field(default_factory=list)
     # Each shape a `goto:` placement drew, with where it jumps; written once every slide exists.
     gotos: list[tuple[Any, str]] = field(default_factory=list)
+    # A chart's own build, written once the slide knows what builds after it:
+    # (frame id, "category" | "series", parts, entrance kind).
+    chart_build: tuple[int, str, int, str] | None = None
 
     @property
     def grid(self) -> Grid:
@@ -150,11 +154,14 @@ class SlideCtx:
             return preferred, paper
         return alternate, self.behind(rect, ink=alternate)
 
-    def plate(self, rect: Rect, *, pad: float = 0.2, within: Rect | None = None) -> str:
+    def plate(
+        self, rect: Rect, *, pad: float = 0.2, within: Rect | None = None, part: str | None = None
+    ) -> str:
         """Paint the slide's own paper behind ``rect`` and return the colour laid down.
 
         The last resort for a line over artwork no single ink reads across. ``within``
         bounds the painted surface, so a mark's padding cannot reach the placement beside it.
+        ``part`` names the plate within the current origin.
         """
         from deckwright.utils.shapes import rect as fill_rect
 
@@ -171,6 +178,7 @@ class SlideCtx:
         self.manifest.record(
             fill_rect(self.slide, plate.left, plate.top, plate.width, plate.height, self.rgb(fill)),
             plate=True,
+            part=part,
         )
         self.painted.append((plate, fill))
         return fill

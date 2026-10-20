@@ -31,6 +31,7 @@ then the message if it failed.
 | [`glyphs.md`](glyphs.md) | Which `icon:` name to reach for, grouped by what the slide is about. A shortlist into the 4,001 glyphs that ship. |
 | [`choosing.md`](choosing.md) | From a claim and some numbers to a treatment: which chart kind, or a `table`, or `stats`, or no graphic at all. Decides *what* to draw. |
 | [`treatments.md`](treatments.md) | Which shape a slide earns when it is neither a dataset nor a sequence, what each treatment costs in depth, and how to keep a deck from becoming one rectangle repeated. |
+| [`lessons.md`](lessons.md) | What each click is for in a deck presented live: the moves a teaching deck makes — predict then see, step through, build or change the picture, fill in a scaffold, hold the answer back — and the spec for each. |
 | [`flows.md`](flows.md) | Which process or relationship shape a piece of information earns, which deckwright draws, and which you assemble from primitives. |
 | [`pptx-deck-building.md`](pptx-deck-building.md) | The build → render → QA loop, animation injection, versioned output, and the rule against rebuilding after a hand-edit. |
 | [`cli.md`](cli.md) | Every command, its flags, the `DECKWRIGHT_*` environment variables, and the external tools each needs. |
@@ -58,7 +59,7 @@ always [`authoring.md`](authoring.md).
 | [`icons.md`](icons.md) | SVG → DrawingML: the search order, what an SVG must contain, even-odd filling, and how a glyph is coloured. The names themselves are [`glyphs.md`](glyphs.md). |
 | [`motion.md`](motion.md) | Builds, interactive reveals and slide transitions: motion roles, what a click covers, the build-list rules, and the four-layer verification stack. |
 | [`services.md`](services.md) | The four external-tool boundaries: what LibreOffice, Poppler, Chrome and Pillow are each asked for, which command needs which binary, and every way they fail. |
-| [`utils.md`](utils.md) | The shared primitives: WCAG colour maths, the baked font-advance tables behind every wrap estimate, the fraction vocabulary, reserved-region geometry, the unknown-key wording, the python-pptx drawing floor — and why none of them is a pf-core call. |
+| [`utils.md`](utils.md) | The shared primitives: WCAG colour maths, the baked font-advance tables behind every wrap estimate, the fraction vocabulary, reserved-region geometry, the unknown-key wording, the python-pptx drawing floor — and why none of them is a pw-foundation call. |
 
 ## Quality
 
@@ -67,18 +68,18 @@ always [`authoring.md`](authoring.md).
 | [`qa.md`](qa.md) | The automated checks, severities and `--fail-on` — and, just as important, what the layer structurally cannot catch. |
 | [`testing.md`](testing.md) | Which changes need a test and which do not, the measured evidence behind that rule, and the guard that keeps the corpus test honest. |
 
-## pf-core
+## pw-foundation
 
-`docs/pf-core/` is a symlink to the installed framework's own docs — start at
-`docs/pf-core/modules.md`. `bin/setup` creates the link (so it exists after setup,
+`docs/pw-foundation/` is a symlink to the installed framework's own docs — start at
+`docs/pw-foundation/modules.md`. `bin/setup` creates the link (so it exists after setup,
 not on GitHub); if it is missing, resolve the target with:
 
 ```bash
-bin/py -c "import pf_core, pathlib; print(pathlib.Path(pf_core.__file__).parent / 'docs')"
+bin/py -c "import pw_foundation, pathlib; print(pathlib.Path(pw_foundation.__file__).parent / 'docs')"
 ```
 
-Never reach for a third-party library when pf-core already provides it — logging, config,
-exceptions, parallelism, LLM clients.
+Never reach for a third-party library when pw-foundation already provides it — logging, config,
+exceptions, parallelism, atomic writes.
 
 ## Conventions
 

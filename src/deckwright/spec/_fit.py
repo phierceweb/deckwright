@@ -7,6 +7,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from deckwright.components._cardgeom import plate_height
 from deckwright.components._tablegeom import heights
 from deckwright.components._tablespec import Cell, Placed, Row
 from deckwright.components.bullets import column_width, item_lines, split, stack_height
@@ -80,6 +81,18 @@ def _table_rows(grid: _Table, *, theme: Theme, band: Rect) -> int:
     return math.ceil(extent / (band.height / theme.grid.rows))
 
 
+def _card_rows(card: dict, *, theme: Theme, band: Rect) -> int:
+    """Grid rows a card needs — the card's own plate arithmetic, run early."""
+    height = plate_height(
+        theme,
+        width=band.width,
+        heading=str(card.get("heading", "")),
+        copy=str(card.get("body", "")),
+        icon=bool(card.get("icon")),
+    )
+    return math.ceil(height / (band.height / theme.grid.rows))
+
+
 def fit(slide: SlideContent, *, theme: Theme, band: Rect) -> tuple[list[Item], _Lines]:
     """The placements the theme's grid can band, and the words that did not fit."""
     blocks, tables = _split(slide)
@@ -94,7 +107,10 @@ def fit(slide: SlideContent, *, theme: Theme, band: Rect) -> tuple[list[Item], _
         + [(Item({"image": p.image()}, chart_rows), (_picture_line(p),)) for p in slide.pictures]
     )
     items = [Item(_bullets(block), ROWS_PER_PLACEMENT) for block in blocks]
-    items += [Item({"card": body}, ROWS_PER_PLACEMENT) for body in slide.cards]
+    items += [
+        Item({"card": body}, max(ROWS_PER_PLACEMENT, _card_rows(body, theme=theme, band=band)))
+        for body in slide.cards
+    ]
     items += [item for item, _ in figures]
     if sum(item.rows for item in items) <= theme.grid.rows:
         return items, ()
@@ -112,19 +128,51 @@ def fit(slide: SlideContent, *, theme: Theme, band: Rect) -> tuple[list[Item], _
 
 def lay_out(slide: SlideContent, *, theme: Theme, area: Rect) -> tuple[list[dict], _Lines]:
     """The slide's placements banded down ``area``, and what did not fit. Words come first:
-    pictures that would push more of them off the slide are named instead."""
+    of the layouts tried, the one losing fewest words wins, then the one placing most
+    pictures — down one column, without the pictures, or words left and pictures right."""
     place, spilled, pushed = _banded(slide, theme=theme, area=area)
-    if pushed and slide.pictures:
-        bare, left, fewer = _banded(replace(slide, pictures=()), theme=theme, area=area)
-        if len(fewer) < len(pushed):
-            return bare, left + fewer + tuple(_picture_line(p) for p in slide.pictures)
-    return place, spilled + pushed
+    lost = _pictures_in(spilled)
+    if not slide.pictures or not (pushed or lost):
+        return place, spilled + pushed
+    options = [(place, spilled + pushed, len(pushed), len(slide.pictures) - lost)]
+    bare, left, fewer = _banded(replace(slide, pictures=()), theme=theme, area=area)
+    options.append(
+        (bare, left + fewer + tuple(_picture_line(p) for p in slide.pictures), len(fewer), 0)
+    )
+    if any((slide.blocks, slide.tables, slide.charts, slide.cards)):
+        options.append(_beside(slide, theme=theme, area=area))
+    # min() keeps the first of equals: a layout that already worked is not traded for a tie.
+    chosen = min(options, key=lambda option: (option[2], -option[3]))
+    return chosen[0], chosen[1]
 
 
-def _banded(slide: SlideContent, *, theme: Theme, area: Rect) -> tuple[list[dict], _Lines, _Lines]:
+def _beside(
+    slide: SlideContent, *, theme: Theme, area: Rect
+) -> tuple[list[dict], _Lines, int, int]:
+    """Words banded down the left half and pictures down the right, each on its own."""
+    words, w_spilled, w_pushed = _banded(
+        replace(slide, pictures=()), theme=theme, area=area, cols="left-half"
+    )
+    alone = replace(slide, blocks=(), tables=(), charts=(), cards=())
+    pictures, p_spilled, _ = _banded(alone, theme=theme, area=area, cols="right-half")
+    placed = len(slide.pictures) - _pictures_in(p_spilled)
+    return words + pictures, w_spilled + w_pushed + p_spilled, len(w_pushed), placed
+
+
+def _pictures_in(lines: _Lines) -> int:
+    return sum(1 for line in lines if line.startswith("a picture — "))
+
+
+def _banded(
+    slide: SlideContent, *, theme: Theme, area: Rect, cols: str = "full"
+) -> tuple[list[dict], _Lines, _Lines]:
     """Placements, the figures with no room, and the lines no column could hold."""
-    items, spilled = fit(slide, theme=theme, band=area)
-    place = [{"at": {"cols": "full"}, **item.body} for item in items]
+    # Sized at the width they land in: a half column wraps the same words onto more lines.
+    column = _rect({"cols": cols}, theme=theme, band=area)
+    items, spilled = fit(
+        slide, theme=theme, band=Rect(area.left, area.top, column.width, area.height)
+    )
+    place = [{"at": {"cols": cols}, **item.body} for item in items]
     band(place, [item.rows for item in items], rows=theme.grid.rows)
     return place, spilled, column_up(place, theme=theme, band=area)
 

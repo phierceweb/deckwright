@@ -380,8 +380,9 @@ def test_a_scaffold_deck_is_reported_as_placeholder_copy(tmp_path):
     assert {(f.slide, f.detail) for f in placeholder} == {
         (1, "'A KICKER' reads like copy nobody meant to ship"),
         (1, "'Three lines and a chrome block make a cover' reads like copy nobody meant to ship"),
-        (3, "'Three things are broken' reads like copy nobody meant to ship"),
-        (6, "'questions@example.com' reads like copy nobody meant to ship"),
+        (3, "'The one line the room should keep' reads like copy nobody meant to ship"),
+        (4, "'Three things are broken' reads like copy nobody meant to ship"),
+        (8, "'questions@example.com' reads like copy nobody meant to ship"),
     }
     assert all(f.severity is Severity.WARN for f in placeholder)
 

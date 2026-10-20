@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Enforce import-layering direction for deckwright (a src/ library).
 
-pf-core's structural gate checks layering only for app/<layer>/ trees, so it is
-a no-op on src/ libraries (pf-core included). This is the equivalent gate for
+pw-foundation's structural gate checks layering only for app/<layer>/ trees, so it
+is a no-op on src/ libraries (pw-foundation included). This is the equivalent gate for
 deckwright: a module may import its own layer or below, never upward.
 
     cli                                          L6  (entry point)
@@ -24,7 +24,7 @@ cycles are gone, not before.
 Every top-level module must appear in RANK, and rank() has no silent default:
 an unlisted key drops its whole tier from the check without a word.
 
-Wired into pre-commit and CI beside the pf-core structural gate. Exit 1 on any
+Wired into pre-commit and CI beside the pw-foundation structural gate. Exit 1 on any
 upward import.
 """
 from __future__ import annotations

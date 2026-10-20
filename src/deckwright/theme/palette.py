@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from functools import partial
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import ThemeError
 from deckwright.utils.color import AA_LARGE, AA_NORMAL, contrast_ratio, normalize_hex

@@ -55,14 +55,16 @@ And hold the change to these standards:
 - **Docs travel with code.** Components, chart kinds, theme keys, CLI flags,
   and glyph names are all documented; `tests/test_docs.py` fails if you add
   one without writing it up.
-- **Framework first.** deckwright builds on [pf-core](https://pypi.org/project/pf-core/)
-  for logging, config, errors, parallelism, and atomic writes —
+- **Framework first.** deckwright builds on [pw-foundation](https://pypi.org/project/pw-foundation/)
+  for logging, config, errors, atomic writes and content hashing —
   `bin/check-framework` refuses hand-rolled equivalents and names the
   replacement in every failure. Never reach for a third-party library when
-  pf-core already provides it. Its module reference is its own docs, which
-  `bin/setup` symlinks to `docs/pf-core/`; without the symlink, resolve them
-  with `bin/py -c "import pf_core, pathlib;
-  print(pathlib.Path(pf_core.__file__).parent / 'docs')"`.
+  pw-foundation already provides it. Its module reference is its own docs, which
+  `bin/setup` symlinks to `docs/pw-foundation/`; without the symlink, resolve them
+  with `bin/py -c "import pw_foundation, pathlib;
+  print(pathlib.Path(pw_foundation.__file__).parent / 'docs')"`. `bin/setup` also copies
+  pw-foundation's starter rules into the gitignored `.ai/rules/`; where one disagrees
+  with `bin/check-framework`, the gate is deckwright's rule.
 
 ## Coding conventions
 
@@ -70,7 +72,7 @@ The essentials:
 
 - Modern Python 3.12+ syntax — `X | None`, lowercase `dict`/`list`/`tuple`.
 - Type hints on every public signature; Google-style docstrings on public APIs.
-- Structured logging via `pf_core.log.get_logger(__name__)` — never bare
+- Structured logging via `pw_foundation.log.get_logger(__name__)` — never bare
   `print` outside the CLI entry point.
 - Raise from `deckwright.errors` — never a bare `Exception`.
 

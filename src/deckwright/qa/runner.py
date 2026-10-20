@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.errors import SpecError
 from deckwright.paths import render_dir
@@ -23,11 +23,13 @@ from deckwright.qa.geometry import (
     check_type_sizes,
 )
 from deckwright.qa.charts import check_charts
+from deckwright.qa.chrome import check_chrome_overlap
 from deckwright.qa.fills import check_fill_ground
 from deckwright.qa.fonts import check_faces
 from deckwright.qa.imagery import check_render_contrast
 from deckwright.qa.model import Finding, QaReport, Severity
 from deckwright.qa.morph import check_morph
+from deckwright.qa.rhythm import check_rhythm
 from deckwright.qa.motion import check_beats, check_triggers
 from deckwright.qa.package import check_package
 from deckwright.qa.placeholder import check_placeholder
@@ -170,11 +172,13 @@ def run_qa(
         check_placeholder,
         check_beats,
         check_morph,
+        check_rhythm,
     ):
         findings.extend(check(data, theme))
     # These read the saved package: a hand-edit after the build leaves the manifest
     # describing a file that is gone.
     findings.extend(check_package(deck))
+    findings.extend(check_chrome_overlap(data, theme, deck=Path(deck)))
     findings.extend(check_charts(deck))
     findings.extend(check_triggers(deck))
     findings.extend(check_alt_text(deck))

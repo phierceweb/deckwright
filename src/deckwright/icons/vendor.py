@@ -21,8 +21,8 @@ import zipfile
 from pathlib import Path
 
 
-from pf_core.log import get_logger
-from pf_core.utils.io import atomic_write_text
+from pw_foundation.log import get_logger
+from pw_foundation.utils.io import atomic_write_text
 
 from deckwright.errors import RenderError, SpecError
 from deckwright.icons.path import parse

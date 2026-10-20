@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import re
+
 from pptx.oxml.ns import qn
 
 from deckwright.motion.read import sequences
 from deckwright.motion.transition import read_kind
 from deckwright.spec._origin import origin_of
+
+
+_CHROME = re.compile(r"^s\d+\.chrome(\.|$)")
 
 
 def read_reveals(slide, *, keys: set[str]) -> tuple[dict[str, str], list[tuple[str, str]]]:
@@ -60,22 +65,41 @@ def _waits_on(wanted: dict[str, str], start: str, goal: str) -> bool:
 
 
 def read_animate(slide) -> str | None:
-    """The slide's ``animate:``, read off the main sequence its build wrote."""
+    """The slide's ``animate:``, read off the main sequence its build wrote. A chrome line's
+    own beat (``build: last``) is the line's, not the slide's."""
     timing = slide._element.find(qn("p:timing"))
     if timing is None:
         return None
     chart = next(timing.iter(qn("a:bldChart")), None)
     if chart is not None:
         return "by_series" if str(chart.get("bld", "")).startswith("series") else "by_category"
-    main = next((c for c in timing.iter(qn("p:cTn")) if c.get("nodeType") == "mainSeq"), None)
+    main = _main(timing)
     if main is None:
         return None
+    chrome = {int(s.shape_id) for s in slide.shapes if _CHROME.match(s.name or "")}
     beats = sum(
-        1 for c in main.iter(qn("p:cTn")) if c.get("nodeType") in ("clickEffect", "afterEffect")
+        1
+        for c in main.iter(qn("p:cTn"))
+        if c.get("nodeType") in ("clickEffect", "afterEffect") and not _targets(c) <= chrome
     )
     if beats > 1:
         return "one_at_a_time"
     return "together" if beats == 1 else None
+
+
+def built_spids(slide) -> set[int]:
+    """Every shape id the slide's main sequence reveals."""
+    timing = slide._element.find(qn("p:timing"))
+    main = _main(timing) if timing is not None else None
+    return _targets(main) if main is not None else set()
+
+
+def _main(timing):
+    return next((c for c in timing.iter(qn("p:cTn")) if c.get("nodeType") == "mainSeq"), None)
+
+
+def _targets(node) -> set[int]:
+    return {int(t.get("spid")) for t in node.iter(qn("p:spTgt"))}
 
 
 def read_transition(slide) -> str | None:

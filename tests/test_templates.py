@@ -40,7 +40,7 @@ _MIN_ENV_VAR = "DECKWRIGHT_TEMPLATES_MIN"
 
 
 def _required_templates() -> int:
-    from pf_core.utils.env import resolve_int
+    from pw_foundation.utils.env import resolve_int
 
     n: int = resolve_int(None, _MIN_ENV_VAR, default=0)
     return max(n, 0)
@@ -125,6 +125,23 @@ def _bound_accents(built) -> dict[str, str]:
         for role, slot in sorted(bind.items())
         if role.startswith("accent-") and slot in scheme
     }
+
+
+@pytest.mark.parametrize(
+    "name", [pytest.param(p.name, marks=pytest.mark.xdist_group(p.name)) for p in TEMPLATES]
+)
+def test_the_draft_extract_writes_from_the_template_builds(name, tmp_path):
+    """`extract` promises a draft that builds, and a brand template is a deck nobody shaped
+    for deckwright — where the draft's sizing guesses meet real copy."""
+    from typer.testing import CliRunner
+
+    from deckwright.cli import app
+    from deckwright.compile import build_deck
+
+    draft = tmp_path / "draft.deck.yaml"
+    result = CliRunner().invoke(app, ["extract", str(SAMPLES / name), "-o", str(draft)])
+    assert result.exit_code == 0, result.output
+    assert build_deck(draft).deck.is_file()
 
 
 def test_every_capability_builds_on_the_template(built):

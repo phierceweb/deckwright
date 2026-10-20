@@ -13,9 +13,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from pf_core.log import get_logger
-from pf_core.utils.hashing import content_hash
-from pf_core.utils.io import atomic_write_json
+from pw_foundation.log import get_logger
+from pw_foundation.utils.hashing import content_hash
+from pw_foundation.utils.io import atomic_write_json
 
 from deckwright.paths import SCRATCH, scratch
 

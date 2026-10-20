@@ -67,7 +67,9 @@ therefore converts the deck once. Any edit to the deck starts a fresh render.
 | `contrast` | manifest only | A shape's declared foreground/background pair fails WCAG AA (4.5:1 normal text, 3.0:1 at 18pt+). **Severity follows certainty**: a shortfall above 3:1 warns, because the manifest records the pair a component asked for and the real backdrop may be better; below 3:1 nothing behind the text saves it, so it is an error. The build itself never refuses on contrast — it logs `theme_pair_below_aa` and carries on, so a brand's own palette is never unbuildable over a check this layer runs better. Chart text is checked as written into the chart part: each label's ink against the worst stop of the fill it sits on, or against the paper behind the chart when it sits beside its shape. |
 | `text-fit` | manifest only | A shape whose own recorded text needs more height than the box it declared — text running past its own frame, which `bounds` structurally cannot see. Each line is measured at its own recorded size, and the space recorded after each paragraph but the last is added to it, so a list whose items wrap past the bottom of their column is reported. |
 | `fill-ground` | manifest only | A shape filled to stand off what is behind it — an inverse or accent `panel`, `card` or `ellipse`, a `versus` plate, a `diverge` bar, a callout's dot, a `fanout` source — that neither luminance (under 3:1) nor colour (under 35 ΔE) separates from the ground it was laid on, so it all but vanishes: an `inverse` bound to the page's own colour, an accent the page already is. A `surface` fill is a recess by design and records no fill to judge. WARN. |
-| `placeholder` | manifest only | Recorded text that reads like copy nobody meant to ship — four phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`, `FIXME`, `[insert`, and a run of three or more `x` in either case. Bare capitalised `TODO` fires unless whitespace and two more capitals follow it — the one exception, and what spares the Spanish *TODO EL MUNDO*; *TODO el mundo* and *TODO, EL MUNDO* are both reported, the second because a comma is not whitespace. `TODO:` fires unconditionally. Lowercase `todo` fires only as `todo:` opening a line, or as `@todo` anywhere. Every recorded row is read — its `lines`, or its `text` where it records none — and so are the slide's speaker notes. `TBD` is deliberately not matched: a deck may legitimately say it. WARN. |
+| `chrome-overlap` | manifest + **the .pptx itself** | A chrome line whose words can land on a placement. Chrome is written last, above everything, and the build never compares it with the placements, so a moved title can print straight through a row of cards. A line is measured where the build tries its ink: as wide as its words when it does not wrap, at its box's anchor — read from the file — when it has a box of its own, and from as high as a stacked line can rise down to its slot. A `panel` or `image` under the line, or a placement declaring `bleed: true`, is the backdrop it is meant to sit on and is not reported. WARN. |
+| `chrome-plate` | manifest only | The plate of slide paper a chrome line gets where no ink reads across the art beneath it, covering part of a placement. The plate is the line's last resort and hides whatever it lands on. WARN. |
+| `placeholder` | manifest only | Recorded text that reads like copy nobody meant to ship — five phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`, `FIXME`, `[insert`, and a run of three or more `x` in either case. Bare capitalised `TODO` fires unless whitespace and two more capitals follow it — the one exception, and what spares the Spanish *TODO EL MUNDO*; *TODO el mundo* and *TODO, EL MUNDO* are both reported, the second because a comma is not whitespace. `TODO:` fires unconditionally. Lowercase `todo` fires only as `todo:` opening a line, or as `@todo` anywhere. Every recorded row is read — its `lines`, or its `text` where it records none — and so are the slide's speaker notes. `TBD` is deliberately not matched: a deck may legitimately say it. WARN. |
 | `overflow` | manifest + render | A line of text the manifest says a shape contains is missing from the rendered PDF's extracted text for that slide. A line the whole page does not hold is asked for again inside the shape's own box, because pdftotext merges side-by-side placements row by row and splices one column's line into the other's. A line on a `plate` — a `code` listing — is asked for inside that plate only, since text run off its plate is still on the page. Every box is read from one `pdftotext -bbox` pass over the render, made the first time a box is needed; where that pass fails no box holds anything, and a plated line is asked for on the page like any other. |
 | `render-contrast` | **the render's pixels** | Text on a slide showing a picture — one this deck placed, or one the template paints behind every slide — whose *rendered* surroundings fall below WCAG AA. Measured in three horizontal bands per shape, so a gradient scrim is judged where it is weakest. |
 | `font-substituted` | **the render's PDF**, else this machine | A face the deck's runs name that the render did not embed, so it is set in something else and every finding drawn from it — `overflow`, `render-contrast` — judged type the deck does not carry. Read from the fonts the rendered PDF embeds (`pdffonts`), matched through the PostScript names fontconfig gives each family; where `pdffonts` cannot run, from `fc-list`'s installed families instead. The render hands LibreOffice every installed family the deck names (see [`cli.md`](cli.md#render--deck-to-images)), so on a machine with fontconfig a finding means the face is not installed there under that name. A run the render never draws — an equation's maths, set in the Choice branch PowerPoint reads — is not counted. One finding per face, on slide `0`. Runs only when `qa` renders. WARN. |
@@ -78,8 +80,9 @@ therefore converts the deck once. Any edit to the deck starts a fresh render.
 | `alt-text` | **the .pptx itself** | A picture, chart or other graphic frame carrying neither alternative text nor Office's decorative flag, or whose only alternative text is an image file name such as `photo.png`. A table's frame is text a screen reader reaches, and is not asked. Reads the package, so alt text added by hand in PowerPoint counts. WARN. |
 | `link` | **the .pptx itself** | A click action or hyperlink that cannot reach its target: a jump to a slide the show no longer contains, or declared through a relationship nothing holds (ERROR); a relative jump no show knows (`first`, `previous`, `next`, `last`, PowerPoint's last-viewed and end-show are known), or a web link that is not an `http`, `https` or `mailto` address with a host (WARN). Reads the package, so a link added by hand in PowerPoint is checked too. |
 | `link-contrast` | **the .pptx itself** + manifest | A linked shape whose template `hlink` colour fails 4.5:1 on the shape's recorded ground. That colour is what Keynote draws a link in, whatever ink the build wrote; PowerPoint and LibreOffice draw the line's own ink. WARN. |
+| `rhythm` | manifest only | The run test from [`treatments.md`](treatments.md#the-run-test), counted: the longest run of four or more slides sharing a ground, a mass — plates, type, a figure, a table — and the title's place; how many slides end on a band of rows under their body; a title at the top of every slide with a body; and four or more slides in a row that each reveal one group per click. Mass is measured from what each placement drew, so a list counts its rows, not the rectangle it was given. INFO: a count to decide on, never a failure. |
 | `beats` | manifest only | Reports each animated slide's rhythm — how many clicks the build spends and how many shapes each beat reveals — in the vocabulary the author wrote (`animate: together`, `animate: one_at_a_time`, `reveals:`, a chart's own build). INFO, so it never fails a run on its own; it is the only place a deck's reveal order surfaces beside `<deck>.beats.md`. |
-| `morph-unpaired` | manifest only | A `morph:` name on a slide that arrives by morph with no namesake on the slide before, so Morph has nothing of that name to pair it with; or a morph slide on which no placement carries `morph:` at all. WARN. |
+| `morph-unpaired` | manifest only | A `morph:` name new on a slide that arrives by morph while a name of the same component from the slide before no longer appears — a shape renamed, which Morph fades out and in rather than gliding; or a morph slide on which no placement carries `morph:` at all. A new name with nothing of its component gone is a shape entering the sequence, and is not reported. WARN. |
 | `beat-size` | manifest only | One beat of a *staged* build revealing more shapes than `DECKWRIGHT_MAX_BEAT_SHAPES` (default 6) — a slide that asked to be revealed a piece at a time and delivers most of it on one click. `animate: together`, a chart build and a `reveals:` trigger are exempt: one click is what they declare. WARN. |
 | `dead-trigger` | **the .pptx itself** | An interactive reveal that cannot do its job: a hidden shape whose every trigger is itself hidden, so nothing can ever be clicked to show it (ERROR), or a target the slide's main build also reveals, so it is already on screen when the trigger is clicked (WARN). The compiler refuses every spec-level case, so this catches a hand-edit or a regression. |
 | `shape-id` | **the .pptx itself** | Two shapes on a slide sharing an id, or an id outside 1..2147483647. Ids are counted per branch of an `mc:AlternateContent`: PowerPoint stores an equation or a 3D model as a Choice and a Fallback copy under one id, and no reader draws both, so that pair is not a duplicate. Two shapes inside one branch, or a branch's shape and one beside the wrapper, still are. |
@@ -169,7 +172,8 @@ The manifest opens with what produced it, before the records it describes:
 
 Each slide records the `transition` it arrives on — the theme's kind, or `none` for a hard
 cut — beside its `animations`. A manifest written before the key existed carries none, and
-`diff` treats that as unknown.
+`diff` treats that as unknown. A slide built with a `chrome:` preset records it as `chrome`,
+which `extract` drafts back.
 
 Paths are written **relative to the manifest** wherever the two share a directory
 tree, so a manifest handed over beside its deck carries no absolute home directory,
@@ -208,7 +212,8 @@ Each slide records the placements it drew, before its shapes:
 `origin` is the prefix every shape that placement drew carries in its `name`, which is
 the only link from a shape back to the rect it was constrained to — `placement-fit`
 walks it. `component` is what the placement declared, and the check reads it to exempt
-`connector`, which draws *between* two other placements rather than inside its own.
+`connector`, which draws *between* two other placements rather than inside its own. `bleed`
+is `true` on a placement written `bleed: true`, and absent otherwise; `extract` reads it.
 
 A shape drawn on no placement — chrome, the background — matches no origin and is
 simply not measured, so nothing has to list it. A slide that drew no placements at all
@@ -422,8 +427,8 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   *structurally* — how many clicks, how many shapes per beat, whether a trigger can fire.
   Whether the order teaches the room anything is a judgement, and `<deck>.beats.md` exists
   so you can read the reveal order in words and make it. Whether five consecutive slides
-  share one rhythm is the run test applied to motion; `treatments.md` carries it as prose,
-  because the tell is a click that stops changing what the room learns.
+  share one rhythm is the run test applied to motion; `rhythm` counts the run, and whether
+  each click still changes what the room learns stays a judgement.
 - **A trigger that emphasises rather than reveals is not judged.** `dead-trigger` looks for
   entrance effects. An interactive trigger that animates a shape already on screen is
   legitimate hand-authored PowerPoint, and this layer cannot tell it from a reveal someone
@@ -461,13 +466,13 @@ as a strong signal on a narrow slice of "is this deck okay," not a guarantee.
   blind spot `contrast` and `overflow` have there. Nor does the check read intent:
   it matches literal phrases, so a real sentence that happens to contain one is
   reported, and copy that is placeholder in every sense but its wording is not.
-- **`placeholder` names four scaffold phrases.**
+- **`placeholder` names five scaffold phrases.**
   Only copy no ordinary deck would write is on the list: `A KICKER`, `Three lines and
-  a chrome block make a cover`, `Three things are broken` and `questions@example.com`.
-  An unedited scaffold therefore draws four findings, on three of its six slides, and
-  its other seeded lines — *Three moves*, *The first thing*, *What we chose.*,
-  *Adoption climbs every quarter* — pass, as the same words would in a deck someone
-  wrote.
+  a chrome block make a cover`, `The one line the room should keep`, `Three things are
+  broken` and `questions@example.com`. An unedited scaffold therefore draws five findings,
+  on four of its eight slides, and its other seeded lines — *Three moves, in order*, *The
+  first thing*, *What we chose.*, *Adoption climbs every quarter* — pass, as the same words
+  would in a deck someone wrote.
 - **The x-run is matched in either case, and asks nothing about what it stands for.**
   A masked identifier (*Card ending XXXX 4242*), a Roman numeral (*Section XXX*) and a
   front-matter page reference all report alongside a real `xxx` placeholder. Three or

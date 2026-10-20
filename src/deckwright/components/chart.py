@@ -9,7 +9,6 @@ from deckwright.charts.model import ChartSpec
 from deckwright.charts.native import add_native_chart
 from deckwright.layouts.components import BodyResult, component
 from deckwright.layouts.registry import SlideCtx
-from deckwright.motion import add_chart_build
 
 from deckwright.components._shape import figure_text
 from deckwright.components._shared import require_default_align
@@ -40,7 +39,7 @@ def chart(ctx: SlideCtx) -> BodyResult:
     ctx.manifest.record(frame, rendered="native")
     record_chart_text(ctx, frame, spec)
     height = frame.height / _EMU_PER_INCH
-    if animate in _CHART_ANIMATIONS:
+    if animate in _CHART_ANIMATIONS and not ctx.still:
         by = _CHART_ANIMATIONS[animate]
         if by == "category" and spec.type not in _BUILDABLE_BY_CATEGORY:
             raise LayoutError(
@@ -50,12 +49,13 @@ def chart(ctx: SlideCtx) -> BodyResult:
                 f"category with nothing to show. Use 'animate: together', or a kind "
                 f"that builds: {', '.join(sorted(_BUILDABLE_BY_CATEGORY))}"
             )
+        if ctx.chart_build is not None:
+            raise LayoutError(
+                f"slide {ctx.spec.index} (component 'chart'): a second chart asks to build, "
+                f"and a slide carries one animation timeline — give one chart a slide of "
+                f"its own, or drop the slide to 'animate: together'"
+            )
         parts = len(spec.series) if by == "series" else len(spec.categories)
-        add_chart_build(
-            ctx.slide, frame.shape_id, by=by, parts=parts, kind=ctx.theme.motion.roles["datum"]
-        )
-        ctx.manifest.record_animation(
-            "chart_build", [[frame.shape_id]], clicks=parts + 1 if parts >= 1 else 1
-        )
+        ctx.chart_build = (frame.shape_id, by, parts, ctx.theme.motion.roles["datum"])
         return BodyResult(groups=[], height=height)
     return BodyResult(groups=[[(frame.shape_id, "datum")]], height=height)

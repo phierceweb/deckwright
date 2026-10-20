@@ -150,7 +150,7 @@ def test_an_unrecognisable_placement_key_lists_what_is_accepted(tmp_path):
     with pytest.raises(
         SpecError,
         match=r"placement 1: unknown field 'colour'; known fields: "
-        r"at, id, bleed, align, anchor, reveals, goto, morph, bullets",
+        r"at, id, bleed, align, anchor, reveals, goto, animate, morph, bullets",
     ):
         _one("at: {cols: left-half}\n    colour: blue", tmp_path)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pf_core.log import get_logger
+from pw_foundation.log import get_logger
 
 from deckwright.compile.build import build_deck, resolve_theme, theme_dir
 from deckwright.conform import assemble

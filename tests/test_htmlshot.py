@@ -234,7 +234,7 @@ def test_a_configured_browser_that_is_not_there_names_the_tool(tmp_path):
 
 
 def test_a_canvas_that_is_not_positive_is_a_configuration_error(tmp_path):
-    from pf_core.exceptions import ConfigurationError
+    from pw_foundation.exceptions import ConfigurationError
 
     from deckwright.services.htmlshot import render_html_to_png
 

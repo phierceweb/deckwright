@@ -122,7 +122,8 @@ def motion_slides() -> dict[str, dict[str, Any]]:
 
 
 def build_slides() -> dict[str, dict[str, Any]]:
-    """The build exercises: a whole-slide reveal, and a chart built in parts."""
+    """The build exercises: a whole-slide reveal, a chart built in parts and followed by its
+    claim, a placement kept out of the build, and a title that builds last."""
     return {
         "reveal-together": {
             "title": "Everything at once",
@@ -167,6 +168,59 @@ def build_slides() -> dict[str, dict[str, Any]]:
                             for row in CATEGORY_ROWS
                         ],
                     },
+                }
+            ],
+        },
+        "chart-then-claim": {
+            "title": "Did the quarter turn?",
+            "subtitle": "The bars build, then the claim they support",
+            "animate": "by_category",
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": {"from": 0, "to": 9}},
+                    "chart": {
+                        "kind": "column",
+                        "alt": CHART_ALT,
+                        "data": [dict(r) for r in CATEGORY_ROWS],
+                    },
+                },
+                {
+                    "at": {"cols": "full", "rows": {"from": 9, "to": 12}},
+                    "callouts": {"items": [{"head": "It did, in week three"}]},
+                },
+            ],
+        },
+        "still-scaffold": {
+            "title": "Four slots, filled one key at a time",
+            "subtitle": "The table is on screen on arrival; only the keys build",
+            "animate": "one_at_a_time",
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": {"from": 0, "to": 3}},
+                    "animate": "none",
+                    "table": {"header": ["0", "1", "2", "3"], "rows": [["", "", "", ""]]},
+                },
+                {
+                    "at": {"rows": {"from": 4, "to": 9}},
+                    "split": [
+                        {"card": {"heading": "cat", "body": "slot 0"}},
+                        {"card": {"heading": "dog", "body": "slot 2"}},
+                    ],
+                },
+            ],
+        },
+        "title-last": {
+            "title": "The claim arrives after its evidence",
+            "chrome": {
+                "title": {
+                    "at": {"cols": "left-two-thirds", "rows": {"from": 8, "to": 10}},
+                    "build": "last",
+                }
+            },
+            "place": [
+                {
+                    "at": {"cols": "full", "rows": {"from": 0, "to": 7}},
+                    "card": {"heading": "The evidence", "body": "On screen when the slide lands."},
                 }
             ],
         },

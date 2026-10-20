@@ -5,7 +5,6 @@ A string is measured as it shows, so a ``[words](address)`` link counts its word
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from collections.abc import Iterable, Iterator
 from difflib import get_close_matches
@@ -41,7 +40,6 @@ _MARGIN = 1.04
 
 _BREAK_AFTER = frozenset("-‐–—")
 _WIDE = ("W", "F")
-_BREAKABLE_SPACE = re.compile("[^\\S%s]+" % "".join(sorted(NO_BREAK_SPACE)))
 # No space is wider than an em, and one a monospaced table lacks may come from another face.
 _WIDEST_SPACE = 1.0
 
@@ -82,9 +80,9 @@ def wrapped_lines(
         return _cjk_lines(shown, capacity=capacity, face=face)
     space = _MARGIN * advance_em(" ", table_for(face))
     lines, used = 1, 0.0
-    for word in filter(None, _BREAKABLE_SPACE.split(shown)):
+    for gap, word in spaced_runs(shown):
         width = _em(word, face)
-        need = width if used == 0.0 else used + space + width
+        need = width if used == 0.0 else used + (space if gap else 0.0) + width
         if need <= capacity:
             used = need
             continue
@@ -135,6 +133,16 @@ def estimate_caveat(*faces: str | None, mono: bool = False) -> str:
     return f" ({names} has no width table, so this estimate errs wide)"
 
 
+def inches_apart(wanted: float, room: float) -> tuple[str, str]:
+    """Both lengths in inches, with as many decimals as it takes for them to read differently."""
+    shown = (f"{wanted:.2f}in", f"{room:.2f}in")
+    for places in (3, 4):
+        if shown[0] != shown[1]:
+            break
+        shown = (f"{wanted:.{places}f}in", f"{room:.{places}f}in")
+    return shown
+
+
 def spaced_runs(text: str) -> Iterator[tuple[str, str]]:
     """The runs of ``text`` no line break can fall inside, each with the whitespace before it;
     trailing whitespace hangs and is not yielded. The break rules are in ``docs/utils.md``."""
@@ -150,7 +158,7 @@ def spaced_runs(text: str) -> Iterator[tuple[str, str]]:
 def _pieces(text: str) -> Iterator[str]:
     """``text`` cut at every break, each breakable whitespace, wide or CJK character a piece
     of its own."""
-    run = ""
+    run, opens = "", True
     for index, ch in enumerate(text):
         wide = (unicodedata.east_asian_width(ch) in _WIDE or is_cjk(ch)) and not is_hangul(ch)
         if wide or (ch.isspace() and ch not in NO_BREAK_SPACE):
@@ -158,23 +166,25 @@ def _pieces(text: str) -> Iterator[str]:
                 yield run
                 run = ""
             yield ch
+            opens = not wide
             continue
         run += ch
-        if _breaks_after(run, text[index + 1 : index + 2]):
+        if _breaks_after(run, text[index + 1 : index + 2], opens=opens):
             yield run
             run = ""
     if run:
         yield run
 
 
-def _breaks_after(run: str, following: str) -> bool:
-    """Whether a line may break after ``run``, the character after it being ``following``."""
+def _breaks_after(run: str, following: str, *, opens: bool) -> bool:
+    """Whether a line may break after ``run``, the character after it being ``following``;
+    ``opens`` says ``run`` starts the text or follows a breakable space."""
     last = run[-1]
     if last not in _BREAK_AFTER or following in _BREAK_AFTER:
         return False
     if last == "-" and following.isdecimal():
         return False
-    return not (run in ("-", "\u2010") and following.isalpha())
+    return not (opens and run in ("-", "\u2010") and following.isalpha())
 
 
 def overlong_word(

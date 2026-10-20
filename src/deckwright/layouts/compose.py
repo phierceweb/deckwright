@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import dataclasses
 
-from pf_core.exceptions import AppError, FlowException
+from pw_foundation.exceptions import AppError, FlowException
 
-from deckwright.errors import LayoutError
 from deckwright.imagery.paint import paint_backdrop
+from deckwright.errors import LayoutError
 from deckwright.layouts.components import RevealItem, as_body_result, get_component
-from deckwright.layouts.chrome import CHROME_ORDER, ChromeBand, ChromeField, chrome_bands
+from deckwright.layouts.chrome import (
+    CHROME_ORDER,
+    ChromeBand,
+    ChromeField,
+    chrome_bands,
+    statement_fields,
+)
+from deckwright.layouts.chrome_ink import write_chrome
 from deckwright.layouts.place import (
     Placed,
     check_placements,
@@ -21,8 +28,6 @@ from deckwright.layouts.registry import SlideCtx
 from deckwright.spec.model import Placement
 from deckwright.theme.model import Rect
 from deckwright.layouts.motion import apply_click_reveals, apply_reveal, apply_transition
-from deckwright.utils.color import contrast_ratio, required_ratio
-from deckwright.utils.shapes import ALIGN, ANCHOR, para, textbox
 
 
 def render_slide(ctx: SlideCtx) -> None:
@@ -36,11 +41,20 @@ def render_slide(ctx: SlideCtx) -> None:
     paint_backdrop(ctx)
     ctx.manifest.origin = None
     bands = _chrome(ctx)
-    area = content_rect(grid=ctx.grid, chrome=bands, reserved=ctx.theme.reserve)
+    if ctx.spec.chrome_preset == "side":
+        # The chrome is a rail, not a header: the body takes the columns beside it.
+        area = content_rect(grid=ctx.grid, reserved=ctx.theme.reserve)
+        # Two gutters: one reads as the rail's own edge, not a gap between columns.
+        start = _rail(ctx).right + 2 * ctx.grid.gutter
+        area = Rect(start, area.top, area.right - start, area.height)
+    else:
+        area = content_rect(grid=ctx.grid, chrome=bands, reserved=ctx.theme.reserve)
     placed: list[Placed] = []
     for i, placement in enumerate(ctx.spec.place, start=1):
         where = f"slide {ctx.spec.index} placement {i} ({placement.component})"
         rect = resolve_at(placement.at, grid=ctx.grid, area=area, where=where)
+        if ctx.spec.chrome_preset == "side" and placement.at and "box" not in placement.at:
+            rect = _beside(rect, grid=ctx.grid, area=area)
         # A box: is exact geometry the author wrote, so it is never narrowed — it
         # meets the reserved regions in check_placements instead.
         if "box" not in placement.at and not placement.bleed:
@@ -54,18 +68,37 @@ def render_slide(ctx: SlideCtx) -> None:
     for i, (placement, item) in enumerate(zip(ctx.spec.place, placed, strict=True), start=1):
         made = _draw(ctx, placement, item.rect, origin=_origin(ctx, placement, i))
         drawn.append((placement, made))
-        groups.extend(made)
-    _write_chrome(ctx, bands)
+        if not placement.still:
+            groups.extend(made)
+    framed = write_chrome(ctx, bands)
+    last: list[list[RevealItem]] = [
+        [(framed[band.name], "text")] for band in bands if band.field.build == "last"
+    ]
     if any(p.reveals for p, _ in drawn):
+        if last:
+            raise LayoutError(
+                f"slide {ctx.spec.index}: a chrome line that builds and a 'reveals:' trigger "
+                f"would share the slide's one animation timeline — drop one"
+            )
         apply_click_reveals(ctx, drawn)
     else:
-        apply_reveal(ctx, groups)
+        apply_reveal(ctx, groups, last)
     apply_transition(ctx)
 
 
 def _chrome(ctx: SlideCtx) -> tuple[ChromeBand, ...]:
     """Where every chrome line the slide carries goes. Nothing is drawn yet."""
     fields = _chrome_fields(ctx)
+    rail = None
+    if ctx.spec.chrome_preset == "statement":
+        fields = {name: fields[name].merge(f) for name, f in statement_fields().items()}
+    elif ctx.spec.chrome_preset == "side":
+        # The rail takes the whole stack: a theme's own placing of a line gives way to it.
+        fields = {
+            name: dataclasses.replace(f, at=None, auto_height=False, anchor=None)
+            for name, f in fields.items()
+        }
+        rail = _rail(ctx)
     lines, faces = {}, {}
     for name in CHROME_ORDER:
         text = getattr(ctx.spec, name)
@@ -75,41 +108,40 @@ def _chrome(ctx: SlideCtx) -> tuple[ChromeBand, ...]:
             faces[name] = ctx.theme.font_for(style)
     if not lines:
         return ()
-    return chrome_bands(lines, fields=fields, grid=ctx.grid, faces=faces, slide=ctx.spec.index)
-
-
-def _write_chrome(ctx: SlideCtx, bands: tuple[ChromeBand, ...]) -> None:
-    """Write the chrome lines.
-
-    Stacked lines share one frame, a paragraph each, so a title wrapping wider than the
-    build-time estimate pushes the subtitle down instead of drawing through it. A line
-    placed with an ``at:`` gets its own frame, which is what lets it carry an anchor.
-    """
-    # Every colour is settled, and every plate painted, before the first frame exists:
-    # a plate added later would be a shape drawn over the line it exists to carry.
-    paint = {band.name: _chrome_paint(ctx, band) for band in bands}
-    # One origin for the whole chrome, each line a part of it: stacked lines really do
-    # share a frame, so a per-line origin would name the same shape three times.
-    ctx.manifest.origin = f"s{ctx.spec.index}.chrome"
-    for run in _runs([band for band in bands if band.stacked]):
-        frame = _stack(run)
-        tf = textbox(ctx.slide, frame.left, frame.top, frame.width, frame.height)
-        for i, band in enumerate(run):
-            _chrome_para(ctx, tf, band, paint[band.name], first=(i == 0), part=band.name)
-    for band in bands:
-        if band.stacked:
-            continue
-        rect = band.rect
-        tf = textbox(
-            ctx.slide,
-            rect.left,
-            rect.top,
-            rect.width,
-            rect.height,
-            anchor=ANCHOR[band.field.anchoring],
+    bands = chrome_bands(
+        lines,
+        fields=fields,
+        grid=ctx.grid,
+        faces=faces,
+        slide=ctx.spec.index,
+        rail=rail,
+        preset=ctx.spec.chrome_preset,
+    )
+    if rail is not None and max(band.rect.bottom for band in bands) > rail.bottom:
+        raise LayoutError(
+            f"slide {ctx.spec.index}: 'chrome: side' stacks its lines in the left third, and "
+            f"they reach {max(b.rect.bottom for b in bands):.2f}in, past the "
+            f"{rail.bottom:.2f}in bottom margin — shorten them, or move the chrome yourself"
         )
-        _chrome_para(ctx, tf, band, paint[band.name], first=True, part=band.name)
-    ctx.manifest.origin = None
+    return bands
+
+
+def _beside(rect: Rect, *, grid, area: Rect) -> Rect:
+    """``rect``'s columns, read as fractions of the band beside a side rail rather than of
+    the whole content width: ``cols: full`` is the rest of the slide."""
+    scale = area.width / grid.content_w
+    return Rect(
+        area.left + (rect.left - grid.left) * scale, rect.top, rect.width * scale, rect.height
+    )
+
+
+def _rail(ctx: SlideCtx) -> Rect:
+    """``chrome: side``'s column: the left third, from where the body starts to the bottom."""
+    grid = ctx.grid
+    band = Rect(
+        grid.left, grid.body_top, grid.content_w, grid.slide_h - grid.bottom - grid.body_top
+    )
+    return resolve_at({"cols": "left-third"}, grid=grid, area=band, where="chrome: side")
 
 
 def _chrome_fields(ctx: SlideCtx) -> dict[str, ChromeField]:
@@ -118,86 +150,6 @@ def _chrome_fields(ctx: SlideCtx) -> dict[str, ChromeField]:
         name: (ctx.theme.chrome.get(name) or ChromeField()).merge(ctx.spec.chrome.get(name))
         for name in CHROME_ORDER
     }
-
-
-def _chrome_paint(ctx: SlideCtx, band: ChromeBand) -> tuple[str, str]:
-    """Settle one chrome line's ink and the colour it will sit on.
-
-    A named pair lends its ink only: the paper stays whatever the slide actually painted,
-    so borrowed ink cannot go invisible while the manifest claims paper never laid down.
-    An unasked-for colour may move to suit where the line landed.
-    """
-    pair = ctx.theme.palette.pair(band.field.pair) if band.field.pair else ctx.pair
-    ink = ctx.theme.palette.role(band.field.ink) if band.field.ink else pair.fg
-    named = band.field.ink or band.field.pair
-    # The threshold QA will hold this line to, so a subtitle small enough to need
-    # 4.5:1 is not settled against a title's 3:1 and then warned about.
-    need = required_ratio(band.size_pt)
-    if named:
-        paper = ctx.behind(band.rect, ink=ink)
-        if contrast_ratio(ink, paper) < need:
-            raise LayoutError(
-                f"slide {ctx.spec.index}: chrome {band.name!r} is inked {ink} from "
-                f"{named!r}, which reads at {contrast_ratio(ink, paper):.2f}:1 on the "
-                f"{paper} this slide paints — below {need}:1. Choose a colour that "
-                f"suits this background, or place a panel behind the line."
-            )
-        return ink, paper
-    ink, paper = ctx.ink_at(band.rect, preferred=ink, required=need)
-    if contrast_ratio(ink, paper) < need:
-        return ctx.pair.fg, ctx.plate(band.rect)
-    return ink, paper
-
-
-def _chrome_para(
-    ctx: SlideCtx,
-    tf,
-    band: ChromeBand,
-    paint: tuple[str, str],
-    *,
-    first: bool,
-    part: str | None = None,
-) -> None:
-    """Write one chrome line in the ink :func:`_chrome_paint` settled on."""
-    ink, paper = paint
-    style = ctx.style(band.field.rung or band.name)
-    para(
-        tf,
-        band.text,
-        style.size,
-        ctx.rgb(ink),
-        bold=style.bold,
-        italic=style.italic,
-        align=ALIGN[band.field.alignment],
-        first=first,
-        space_after=0,
-        font=ctx.theme.font_for(style),
-    )
-    ctx.manifest.record(tf._parent, part=part, text=band.text, font_pt=style.size, fg=ink, bg=paper)
-
-
-def _runs(bands: list[ChromeBand]) -> list[list[ChromeBand]]:
-    """Consecutive stacked bands grouped by measure.
-
-    Only lines of the same measure can share a frame, so a field narrowed to its own
-    columns starts a new one.
-    """
-    runs: list[list[ChromeBand]] = []
-    for band in bands:
-        measure = (band.rect.left, band.rect.width)
-        if runs and (runs[-1][0].rect.left, runs[-1][0].rect.width) == measure:
-            runs[-1].append(band)
-        else:
-            runs.append([band])
-    return runs
-
-
-def _stack(bands: list[ChromeBand]) -> Rect:
-    """The single rect the stacked chrome bands cover."""
-    top = min(band.rect.top for band in bands)
-    bottom = max(band.rect.bottom for band in bands)
-    first = bands[0].rect
-    return Rect(first.left, top, first.width, bottom - top)
 
 
 def _origin(ctx: SlideCtx, placement: Placement, index: int) -> str:
@@ -253,10 +205,11 @@ def _draw(
     ctx.rect = rect
     ctx.align = placement.align
     ctx.anchor = placement.anchor
+    ctx.still = placement.still
     ctx.manifest.bleeding = placement.bleed
     ctx.manifest.goto = placement.goto
     ctx.manifest.origin = origin
-    ctx.manifest.record_placement(origin, placement.component, rect)
+    ctx.manifest.record_placement(origin, placement.component, rect, bleed=placement.bleed)
     # Shape ids, not object ids: lxml frees element proxies and hands their addresses
     # to later shapes, so an identity test reads old shapes as new.
     before = {s.shape_id for s in ctx.slide.shapes}

@@ -11,6 +11,7 @@ dist/
 htmlcov/
 .DS_Store
 .deckwright-cache/
+docs/pw-foundation
 docs/pf-core
 
 # AI / agent workspace

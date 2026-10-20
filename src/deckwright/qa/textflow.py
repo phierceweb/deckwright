@@ -15,8 +15,8 @@ from html import unescape
 from pathlib import Path
 from typing import Any
 
-from pf_core.log import get_logger, log_exception
-from pf_core.utils.env import resolve_int
+from pw_foundation.log import get_logger, log_exception
+from pw_foundation.utils.env import resolve_int
 
 from deckwright.errors import RenderError
 from deckwright.compile.record import box_of

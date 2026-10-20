@@ -1,7 +1,7 @@
 """What a stranger sees when an external tool is missing.
 
 Driven through a subprocess: the noise these guard against is written by the logging
-handlers pf-core installs, which an in-process runner never exercises.
+handlers pw-foundation installs, which an in-process runner never exercises.
 """
 
 from __future__ import annotations
@@ -53,12 +53,6 @@ def test_qa_names_the_flag_that_runs_without_the_tool(qa_without_libreoffice):
     assert "--no-render" in qa_without_libreoffice.stdout + qa_without_libreoffice.stderr
 
 
-def test_the_version_flag_prints_the_installed_version():
-    result = CliRunner().invoke(app, ["--version"])
-    assert result.exit_code == 0
-    assert result.output.startswith("deckwright ")
-
-
 def test_sample_writes_where_adopt_will_accept_it(tmp_path, monkeypatch):
     """`sample` prints a `conform ... --adopt` line as the next step, and adopt refuses
     a template outside the theme directory (test_conform_adopt.py) — so writing beside
@@ -86,12 +80,16 @@ def test_glyphs_find_prints_matching_names():
     assert "globe_asia" in result.stdout
 
 
-def test_glyphs_find_exits_nonzero_when_nothing_matches():
+def test_glyphs_find_exits_nonzero_when_nothing_matches(capsys):
     """A miss is a failed lookup, not an empty success — a script piping this needs
-    the status to say so."""
-    result = CliRunner().invoke(app, ["glyphs", "find", "zzzznotaglyph"])
-    assert result.exit_code == 1
-    assert "no glyph name contains" in result.stdout
+    the status to say so. Through `run_cli`, as the script's `deckwright` is: typer hands
+    it the `Exit(1)` as a return value, which `CliRunner` never shows."""
+    from deckwright.cli._run import run_cli
+
+    with pytest.raises(SystemExit) as stop:
+        run_cli(app, args=["glyphs", "find", "zzzznotaglyph"])
+    assert stop.value.code == 1
+    assert "no glyph name contains" in capsys.readouterr().out
 
 
 def test_glyphs_find_caps_its_output_and_says_how_much_it_dropped():

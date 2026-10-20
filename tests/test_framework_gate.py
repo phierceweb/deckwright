@@ -4,6 +4,7 @@ source that breaks it, and against source that only mentions it."""
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -98,3 +99,34 @@ def test_every_exemption_names_the_file_and_the_rule_it_covers():
             f"exemption ({rule}, {filename}) explains itself without naming either the "
             f"rule or the file it covers: {reason!r}"
         )
+
+
+def _resolves(dotted: str) -> bool:
+    """Whether `dotted` names a module, or an attribute of the longest importable prefix."""
+    import importlib
+
+    parts = dotted.split(".")
+    for cut in range(len(parts), 0, -1):
+        try:
+            target = importlib.import_module(".".join(parts[:cut]))
+        except ImportError:
+            continue
+        for name in parts[cut:]:
+            if not hasattr(target, name):
+                return False
+            target = getattr(target, name)
+        return True
+    return False
+
+
+def test_every_replacement_the_gate_names_exists():
+    """A failure is the whole lesson, so a replacement that does not import teaches the wrong fix —
+    which a framework rename makes of every name in the tables at once."""
+    module = _gate_module()
+    advice = [use for use, _ in module.BANNED_IMPORTS.values()]
+    advice += [use for use, _ in module.BANNED_RAISES.values()]
+    advice += [use for _, _, use, _ in module.BANNED_CALLS]
+    named = {m for text in advice for m in re.findall(r"\b[a-z_]+(?:\.[A-Za-z_]+)+", text)}
+
+    assert any(n.startswith("pw_foundation.") for n in named), named
+    assert sorted(n for n in named if not _resolves(n)) == []

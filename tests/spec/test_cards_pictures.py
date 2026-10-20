@@ -249,6 +249,8 @@ def test_a_card_is_placed_with_the_words_before_the_figures(tmp_path):
 
 
 def test_a_full_slide_keeps_a_cards_words_and_names_each_figure_it_has_no_room_for(tmp_path):
+    """The table has no room in either layout and is named; the picture finds room beside
+    the words."""
     prs, slide = _slide()
     _box(slide, ["A slide title"], top=0.2, size=36)
     _plate(slide, text=["The question", "What went wrong"])
@@ -257,7 +259,7 @@ def test_a_full_slide_keeps_a_cards_words_and_names_each_figure_it_has_no_room_f
     picture._element._nvXxPr.cNvPr.set("descr", "A red tile")
     drafted, (doc,) = _place(_save(prs, tmp_path))
     assert doc["place"][0]["bullets"]["items"] == ["The question", "What went wrong"]
-    assert "#   a picture — draft.media/slide1-1.png: A red tile" in drafted.text
+    assert [e["at"]["cols"] for e in doc["place"] if "image" in e] == ["right-half"]
     assert "#   r39c0 | r39c1" in drafted.text
     assert list(drafted.media) == ["draft.media/slide1-1.png"]
 
@@ -296,8 +298,9 @@ def test_a_picture_filling_a_layouts_picture_placeholder_is_a_picture(tmp_path):
     assert not any("placeholder" in item for item in content.dropped)
 
 
-def test_a_picture_never_pushes_a_slides_words_off_it(tmp_path):
-    """Words that fit the slide alone stay placed; the picture is named, its file written."""
+def test_a_picture_that_would_push_words_off_goes_beside_them(tmp_path):
+    """Stacked, the picture pushed lines off the slide and was named instead; beside the
+    words, every line and the picture both fit."""
     prs, slide = _slide()
     _box(slide, ["A slide title"], top=0.2, size=36)
     words = [f"Line {n} of the argument, long enough to wrap across the column." for n in range(9)]
@@ -305,8 +308,24 @@ def test_a_picture_never_pushes_a_slides_words_off_it(tmp_path):
     slide.shapes.add_picture(_png(), Inches(6), Inches(1.5), Inches(3), Inches(2))
     drafted, (doc,) = _place(_save(prs, tmp_path))
     assert [line for e in doc["place"] for line in e.get("bullets", {}).get("items", [])] == words
+    assert [(e["at"]["cols"], next(k for k in e if k != "at")) for e in doc["place"]] == [
+        ("left-half", "bullets"),
+        ("right-half", "image"),
+    ]
+    assert drafted.spilled == 0
+
+
+def test_a_picture_is_still_named_where_the_words_need_the_whole_width(tmp_path):
+    """Halving the measure would push more words off than the picture does: it stays named."""
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    words = [f"Line {n} of the argument, long enough to wrap across the column." for n in range(14)]
+    _box(slide, words, top=1.5, width=5, height=5, size=16)
+    slide.shapes.add_picture(_png(), Inches(6), Inches(1.5), Inches(3), Inches(2))
+    drafted, (doc,) = _place(_save(prs, tmp_path))
+    assert [line for e in doc["place"] for line in e.get("bullets", {}).get("items", [])] == words
+    assert not [e for e in doc["place"] if "image" in e]
     assert "#   a picture — draft.media/slide1-1.png\n" in drafted.text
-    assert list(drafted.media) == ["draft.media/slide1-1.png"]
 
 
 def test_a_picture_stays_when_leaving_it_out_would_save_no_words(tmp_path):
@@ -316,3 +335,152 @@ def test_a_picture_stays_when_leaving_it_out_would_save_no_words(tmp_path):
     slide.shapes.add_picture(_png(), Inches(6), Inches(1.5), Inches(3), Inches(2))
     _, (doc,) = _place(_save(prs, tmp_path))
     assert [e["image"]["src"] for e in doc["place"] if "image" in e] == ["draft.media/slide1-1.png"]
+
+
+def test_a_text_box_where_a_moved_groups_plate_is_drawn_is_that_plates_card(tmp_path):
+    """The plate's own numbers say 1in; the group draws it at 5in, 4in, and a slide-level
+    text box there lies on it."""
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    group = slide.shapes.add_group_shape()
+    _plate(group)
+    off = group._element.grpSpPr.find(
+        "{http://schemas.openxmlformats.org/drawingml/2006/main}xfrm/"
+        "{http://schemas.openxmlformats.org/drawingml/2006/main}off"
+    )
+    off.set("x", str(Inches(5))), off.set("y", str(Inches(4)))
+    _box(slide, ["Heading", "Body line"], left=5.5, top=4.2)
+    assert harvest(_save(prs, tmp_path))[0].cards == ({"heading": "Heading", "body": "Body line"},)
+
+
+def test_a_slide_sized_panel_its_group_draws_small_is_a_card_plate(tmp_path):
+    """9.4in by 6.2in by its own numbers, which no card is; its group draws it at 40%."""
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    group = slide.shapes.add_group_shape()
+    _plate(group, left=0.2, top=1.0, width=9.4, height=6.2)
+    _box(group, ["Heading", "Body line"], left=1, top=2, size=18)
+    xfrm = group._element.grpSpPr.get_or_add_xfrm()
+    xfrm.get_or_add_ext().cx = round(xfrm.get_or_add_chExt().cx * 0.4)
+    xfrm.get_or_add_ext().cy = round(xfrm.get_or_add_chExt().cy * 0.4)
+    assert harvest(_save(prs, tmp_path))[0].cards == ({"heading": "Heading", "body": "Body line"},)
+
+
+def test_a_heading_box_and_a_body_box_on_one_plate_are_one_card(tmp_path):
+    """Read one box at a time, the heading became a one-line card and the body a loose line."""
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    _plate(slide)
+    _box(slide, ["Body line"], top=2.0, height=0.6)
+    _box(slide, ["Heading"], top=1.2, height=0.6)
+    content = harvest(_save(prs, tmp_path))
+    assert content[0].cards == ({"heading": "Heading", "body": "Body line"},)
+    assert content[0].blocks == () and content[0].dropped == ()
+
+
+def test_three_lines_across_the_boxes_on_one_plate_stay_words(tmp_path):
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    _plate(slide)
+    _box(slide, ["Heading"], top=1.1, height=0.5)
+    _box(slide, ["One line", "and another"], top=1.8, height=1.0)
+    content = harvest(_save(prs, tmp_path))
+    assert content[0].cards == ()
+    assert content[0].blocks == (("Heading",), ("One line", "and another"))
+
+
+def test_a_box_on_two_plates_joins_neither_plates_card(tmp_path):
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    _plate(slide)
+    _plate(slide, left=0.8, top=0.9, width=4.5, height=2.4)
+    _box(slide, ["Heading"], top=1.2, height=0.6)
+    _box(slide, ["Body line"], top=2.0, height=0.6)
+    content = harvest(_save(prs, tmp_path))
+    assert content[0].cards == ()
+
+
+def test_a_slide_of_cards_drafts_into_one_that_builds(tmp_path):
+    """Each card is given the rows its type needs, so a slide of them does not draft into
+    plates too shallow to set their words in."""
+    from deckwright.compile import build_deck
+
+    prs, slide = _slide()
+    _box(slide, ["A slide title"], top=0.2, size=36)
+    for n in range(5):
+        _plate(
+            slide,
+            left=0.5,
+            top=1.2 + 1.2 * n,
+            width=9,
+            height=1.1,
+            text=[
+                f"Step {n + 1}",
+                "What happens at this step, what it needs from the one before it, and what "
+                "it hands to the one after.",
+            ],
+        )
+    drafted, _ = _place(_save(prs, tmp_path))
+    spec = tmp_path / "draft.deck.yaml"
+    spec.write_text(drafted.text)
+    assert build_deck(spec).deck.is_file()
+
+
+def test_a_card_drafted_with_its_icon_is_given_room_for_it(tmp_path):
+    from deckwright.compile import build_deck
+    from deckwright.spec.extract import SlideContent
+
+    body = "What happens at this step, and what it hands to the one after."
+    slide = SlideContent(
+        index=1,
+        cards=tuple({"heading": f"Step {n}", "body": body, "icon": "home"} for n in range(1, 4)),
+    )
+    spec = tmp_path / "draft.deck.yaml"
+    spec.write_text(draft_spec([slide], title="Draft", theme="base").text)
+    assert build_deck(spec).deck.is_file()
+
+
+_STEP = (
+    "What happens at this step, what it needs from the one before it, what it hands to the "
+    "one after it, and who signs it off before anything moves on to the next of them all."
+)
+
+
+def _wide_slide():
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _box(slide, ["Steps and pictures"], left=0.5, top=0.2, width=12, height=1, size=36)
+    for n in range(2):
+        slide.shapes.add_picture(_png(), Inches(7), Inches(1.5 + 2.9 * n), Inches(5), Inches(2.8))
+    return prs, slide
+
+
+def _three_cards(slide):
+    for n in range(3):
+        _plate(
+            slide, left=0.5, top=1.5 + 1.93 * n, width=6, height=1.83, text=[f"Step {n + 1}", _STEP]
+        )
+
+
+def _a_table(slide):
+    rows = slide.shapes.add_table(5, 3, Inches(0.5), Inches(1.5), Inches(6), Inches(5)).table
+    for r in range(5):
+        for c in range(3):
+            rows.cell(r, c).text = f"Head {c}" if r == 0 else "what happens at this"
+
+
+@pytest.mark.parametrize("words", [_three_cards, _a_table], ids=["cards", "table"])
+def test_words_drafted_beside_the_pictures_are_sized_for_the_half_they_land_in(tmp_path, words):
+    from deckwright.compile import build_deck
+
+    prs, slide = _wide_slide()
+    words(slide)
+    drafted, (doc,) = _place(_save(prs, tmp_path))
+    assert {e["at"]["cols"] for e in doc["place"]} == {"left-half", "right-half"}
+    spec = tmp_path / "draft.deck.yaml"
+    spec.write_text(drafted.text)
+    for name, data in drafted.media.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_bytes(data)
+    assert build_deck(spec).deck.is_file()

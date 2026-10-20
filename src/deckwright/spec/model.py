@@ -52,6 +52,7 @@ class Placement:
     reveals: str | None = None
     goto: str | None = None  # a slide id, or a relative jump in GOTO_JUMPS
     morph: str | None = None  # shared with its namesake on the next slide, for Morph to pair
+    still: bool = False  # `animate: none`: on screen when the slide arrives, out of its build
     bleed: bool = False
     align: str = "left"
     anchor: str = "top"
@@ -78,6 +79,7 @@ class SlideSpec:
     transition: str | None = None
     place: tuple[Placement, ...] = ()
     chrome: dict[str, ChromeField] = field(default_factory=dict)
+    chrome_preset: str | None = None  # `chrome: side` or `chrome: statement`
 
 
 @dataclass(frozen=True)

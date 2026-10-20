@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Bootstrap deckwright: venv (Python 3.12+), editable install, .env, rule symlinks.
-# Self-contained — works whether pf-core is pip-installed or a sibling checkout.
+# Bootstrap deckwright: venv (Python 3.12+), editable install, .env, pw-foundation wiring.
+# Self-contained — works whether pw-foundation is pip-installed or a sibling checkout.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -29,7 +29,7 @@ else
   ok ".venv exists ($(.venv/bin/python --version | tr -d '\r'))"
 fi
 
-info "Installing (editable, with dev extras) — pf-core resolves from PyPI..."
+info "Installing (editable, with dev extras) — pw-foundation resolves from PyPI..."
 .venv/bin/python -m pip install --quiet --upgrade pip
 GIT_TERMINAL_PROMPT=0 .venv/bin/python -m pip install -e ".[dev]"
 ok "dependencies installed"
@@ -39,32 +39,6 @@ if [[ -f .env.example && ! -f .env ]]; then
   ok "copied .env.example -> .env"
 fi
 
-# Wire AI-assistant rule dirs to .ai/ (Claude Code / Cursor read these).
-for tool in .claude .cursor; do
-  mkdir -p "$tool"
-  for d in rules skills; do
-    [[ -e "$ROOT/.ai/$d" ]] || continue
-    rm -rf "${tool:?}/$d"
-    ln -s "../.ai/$d" "$tool/$d"
-    ok "$tool/$d -> ../.ai/$d"
-  done
-done
-
-# Link pf-core's module docs where assistants look. Re-resolves every run, so
-# venv rebuilds and editable-vs-wheel installs both stay correct.
-PF_DOCS="$(.venv/bin/python -c 'import pf_core, pathlib; print(pathlib.Path(pf_core.__file__).parent / "docs")' 2>/dev/null || true)"
-if [[ -n "$PF_DOCS" && -d "$PF_DOCS" ]]; then
-  mkdir -p docs
-  ln -sfn "$PF_DOCS" docs/pf-core
-  ok "docs/pf-core -> $PF_DOCS"
-fi
-
-# Ensure the structural-gate config exists (stamped by the scaffold; self-heals).
-if [[ ! -f .pf-guards.toml ]]; then
-  printf '[tool.pf_guards]\nroot = "src/deckwright"\n' > .pf-guards.toml
-  ok "created .pf-guards.toml"
-fi
-
 # Install the commit gates (structural gate + ruff) when this is a git repo.
 if [[ -d .git && -x .venv/bin/pre-commit ]]; then
   .venv/bin/pre-commit install >/dev/null
@@ -72,6 +46,14 @@ if [[ -d .git && -x .venv/bin/pre-commit ]]; then
 else
   info "not a git repo yet — run 'git init && .venv/bin/pre-commit install' to enable the commit gates"
 fi
+
+# pw-foundation's wiring: docs/pw-foundation -> the installed package's docs, its starter
+# rules into .ai/rules/ (an edited rule is kept), .claude/ and .cursor/ -> .ai/, and
+# .pw-guards.toml. A leftover .pf-guards.toml or docs/pf-core link from pf-core is migrated.
+.venv/bin/pw-setup || {
+  echo "FAILED: pw-setup could not finish the wiring — fix each '!' line above, then re-run bin/setup" >&2
+  exit 1
+}
 
 # --- generate ---------------------------------------------------------------
 # The glyph bundle is committed, so this only confirms it arrived intact; it is a

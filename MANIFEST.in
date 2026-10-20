@@ -6,10 +6,13 @@ graft docs
 graft examples
 
 # Never. templates/ holds real brand templates and the themes derived from them on a
-# maintainer's machine, and docs/pf-core is a symlink into the installed framework.
+# maintainer's machine, and docs/pw-foundation is a symlink into the installed framework
+# (docs/pf-core on a checkout bin/setup has not migrated yet).
 # `python -m build` packs the WORKING TREE, not the git index, so .gitignore does not
 # exclude either of them from a dist. tests/test_dist.py is the gate that proves it.
 prune templates
+prune docs/pw-foundation
+exclude docs/pw-foundation
 prune docs/pf-core
 exclude docs/pf-core
 recursive-exclude examples *.png

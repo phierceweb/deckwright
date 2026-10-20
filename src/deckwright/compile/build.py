@@ -9,8 +9,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-from pf_core.log import get_logger
-from pf_core.utils.io import atomic_write_bytes, atomic_write_text
+from pw_foundation.log import get_logger
+from pw_foundation.utils.io import atomic_write_bytes, atomic_write_text
 
 import deckwright.components  # noqa: F401 — import registers the built-in body components
 from deckwright.compile.background import flatten_master_background
@@ -120,6 +120,7 @@ def build_deck(
             background=slide_spec.background.pair,
             section=slide_spec.section,
             notes=slide_spec.notes,
+            chrome=slide_spec.chrome_preset,
         )
         ctx = SlideCtx(
             slide=slide,

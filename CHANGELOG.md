@@ -3,6 +3,122 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.7.0 — 2026-10-19
+
+- On pw-foundation 1.0 in place of pf-core.
+- The command line's exit codes and messages are unchanged and now deckwright's own: `2` for
+  a usage error, `1` for a failure, `130` when interrupted. typer is a direct dependency.
+- `bin/setup` wires a checkout with `pw-setup`, which links `docs/pw-foundation` and migrates a
+  leftover `.pf-guards.toml` and `docs/pf-core` link. The structural gate reads `.pw-guards.toml`.
+
+### Spec
+
+- `chrome: side` stacks a slide's kicker, title and subtitle in the left third and gives the
+  body the columns beside it, `cols: full` being the rest; `chrome: statement` centres the
+  title at the display rung, for a slide that is its title.
+- A placement's `animate: none` keeps it on screen while the rest of the slide builds.
+- A chrome line with its own frame takes `build: last`, arriving after everything the slide
+  builds — on a slide with no `animate:`, as its one click.
+- `carry: previous` starts a slide from the slide before's `morph:` placements, a placement of
+  the same name replacing its copy in place; `drop:` leaves named copies behind. A carried copy
+  is on screen when the slide lands, whatever the slide builds.
+
+### Motion
+
+- A chart building `by_category` or `by_series` is followed by the slide's other placements,
+  one group per click on the same timeline: the bars, then the claim. Written to the schema;
+  PowerPoint playback, like that of `build: last`, is unchecked.
+- `by_category` and `by_series` are refused on a slide with no chart that builds, whatever else
+  it holds.
+
+### Components
+
+- `equation` frames its fallback line at the placement's width and aligns it there, so
+  LibreOffice sets it on one line when it substitutes the theme's face.
+- `card` honours `anchor:`: its type sits at the top, middle or bottom of the plate, and
+  its icon moves with the type and follows `align:`.
+- `versus` keeps a value joined by a no-break space on one line, sizing its plate for
+  `0.3 nm` whole.
+- A `callouts` dot on a slide painted `accent-1` gives way to the next accent clearing 3:1,
+  else the slide's ink, so the dots no longer vanish into the ground.
+- A `card`, `bullets`, `code` or `document` fit refusal prints its two heights to as many
+  decimals as it takes to tell them apart.
+
+### Layout
+
+- A chrome line's ink is tried, and any plate laid under it, only where its words can
+  land: as wide as a line that does not wrap, at its box's anchor when it has one, and as
+  high as a stacked line rises when the lines above it wrap shorter than estimated. A shape
+  beside a short subtitle no longer gets a strip of slide paper across it, and a plate is
+  named `s<n>.chrome.<line>.plate`.
+
+### Render and QA
+
+- `rhythm` (INFO) counts the run test: a run of slides sharing a ground, a mass and the
+  title's place; slides ending on a band under the body; a title that never moves; and runs
+  of one-group-per-click builds.
+- `chrome-overlap` and `chrome-plate` (WARN) report a placement that a chrome line's words
+  can land on, or that the plate under one covers.
+- `morph-unpaired` reports a new name only where a name of the same component from the slide
+  before has gone — a renamed shape — and no longer a shape entering a morph sequence.
+- The contact sheet numbers each slide in a strip above it, clear of the slide.
+- `.beats.md` reads a table's beat from its cells and a list's from the item it reveals.
+
+### Starting a deck
+
+- `bin/run new` writes eight slides in eight compositions — a statement, a side title over an
+  unbuilt list, cards built in order, a question over a chart and its claim beside it among
+  them — each commented with when it fits, and names the theme's grounds and canvas in its
+  header.
+- `examples/title-treatments.deck.yaml` builds on every theme in the corpus.
+
+### Documentation
+
+- `treatments.md` gains Compositions — where a slide's weight and title go, chosen by its job,
+  with a spec per row — the claim-or-evidence-first choice, a footer row in the costume table,
+  levers rotated rather than stopped at the cheapest, and the motion run test's number and
+  levers. `lessons.md` names what each kind of click is for. `CLAUDE.md` routes a new deck
+  through `new`, a theme preview and a per-slide plan before the per-slide docs.
+- `treatments.md`'s run test counts what the eye sees — ground, mass and title position —
+  and its placement examples carry `cols:`. Corrections across `authoring.md`,
+  `components.md`, `errors.md`, `flows.md`, `choosing.md` and `theme.md`: what each
+  component reveals per click, the extra axes click of a chart build, a `by_category`
+  slide holding the chart alone, `reveals:` needing a pointer, YAML punctuation inside
+  braces, `base`'s fade, the ratio past which `versus` stops drawing to scale, and a theme's
+  canvas being its template's.
+
+### Reading decks
+
+- `extract` measures a shape inside a group where the group draws it, moved and scaled: a
+  hand-grouped placement keeps its box without a manifest, and a text box on a grouped plate
+  is that plate's card.
+- `extract` names an icon by the outline it draws, from the drafting theme's icons,
+  `DECKWRIGHT_ICON_DIR` and the shipped set: an `icon:` placement comes back with its name,
+  `ink:`, `size:` and alt text, and a card keeps its icon.
+- A line over an image comes back on the rung its size matches, and a chrome line drawn in a
+  frame of its own comes back as the slide's `chrome:` block.
+- With the manifest found, a draft carries the deck's `sections:`, and each slide's `section:`
+  and `chrome:` preset.
+- A heading box and a body box lying on one plate come back as one card.
+- A drafted card is given the rows its type and icon need, so a slide of cards drafts into
+  one that builds.
+- A draft carries a slide's `lang:`, a placement's `bleed:` and a table's column `widths:`, so
+  a deck with Han text, a bleed or uneven columns drafts into one that builds.
+- Where pictures would push a slide's words off, the draft tries the words in the left half
+  and the pictures down the right, and keeps whichever layout loses fewest words and then
+  places most pictures.
+- A placement the slide's build leaves out drafts as `animate: none`, and a chrome line the
+  build reveals as `build: last`.
+- An `image` with two or more `over:` lines no longer reads back as hand-edited.
+- A `morph:` name holding a `#` reads back whole in `extract`, `.content.md` and `.beats.md`.
+
+### Type
+
+- Fit estimates wrap a hyphenated word after its hyphens, as LibreOffice does, so a long one
+  is no longer sized a line short.
+- Fit estimates keep a hyphen with the ideograph, emoji or fullwidth character before it, and
+  break after it.
+
 ## v0.6.0 — 2026-10-04
 
 - On pf-core 0.25.

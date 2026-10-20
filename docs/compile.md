@@ -293,7 +293,11 @@ so a diff across two builds shows an animation that moved to a different slide â
 a count of animated slides reports as no change. It reads `clicks` off each recorded
 animation rather than counting steps, because those differ: `animate: together` fades every
 group onto one click, an `after_previous` chain spends one for the whole build, a chart build
-spends one per part plus one for its axes, and an interactive `reveals:` spends none.
+spends one per part plus one for its axes, and an interactive `reveals:` spends none. A list
+built one item per click steps through its shape as `<name> Â¶<n>`, and each beat reads that
+item. A chrome line `build: last` is recorded as an animation of its own after a `together`
+click or a chart's build, so this view, `qa`'s beat-size check and `rhythm` read the slide as
+written rather than as `one_at_a_time`.
 
 **Read-back** (`compile/readback.py`) compares a deck on disk against the manifest that
 built it. `_edited` hashes the file and compares against `deck_hash`; the shape comparison
