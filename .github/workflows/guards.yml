@@ -57,9 +57,8 @@ jobs:
       - name: doctor
         run: python -m deckwright.cli doctor
 
-  # The only job that builds the real exercise catalogue. Everything above runs
-  # without LibreOffice, Poppler or a browser — which is why nothing above proves the
-  # library still produces a deck anyone can open.
+  # The only job that renders and QAs the exercise catalogue; the unit suite above builds
+  # it, with a browser, but has no LibreOffice or Poppler.
   demo:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -99,7 +98,7 @@ jobs:
       - name: qa summary
         if: always()
         run: cat "out/demo/render/base capabilities/qa.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: capability-demo

@@ -25,6 +25,7 @@ from deckwright.qa.geometry import (
 from deckwright.conform.sample import is_sample
 from deckwright.qa.package import check_package
 from deckwright.theme import load_theme
+from tests.ooxml import PACKAGE_ROOTS, validate_deck
 
 SAMPLES = pathlib.Path(__file__).resolve().parents[1] / "templates"
 # The aspect is exactly what a fixed percentage stops fitting at, so a -4-3 file earns its
@@ -160,6 +161,62 @@ def test_powerpoint_would_open_what_the_build_saved(built):
     manifest holds — PowerPoint repairs the file and drops the build."""
     broken = check_package(built.deck)
     assert broken == [], f"{built.template}: {[f.detail for f in broken]}"
+
+
+def _source(built) -> pathlib.Path:
+    """The template the build started from: a name in the theme directory, or a path."""
+    return SAMPLES / built.template
+
+
+def test_every_part_the_build_wrote_is_valid_ooxml(built):
+    """No schema fault in the build is its own (`docs/testing.md`)."""
+    report = validate_deck(built.deck)
+    own, _ = report.split(validate_deck(_source(built)))
+    assert own == {}, f"{built.template}: {own}"
+    assert any(p.startswith("ppt/slides/") for p in report.valid)
+
+
+def test_the_templates_own_parts_are_reported_apart(built):
+    """A fault the template handed the build is an `xfail` naming the part and its first
+    error, which `-rx` shows."""
+    report = validate_deck(built.deck)
+    checked = set(report.valid) | set(report.invalid)
+    assert any(p.startswith("ppt/slideMasters/") for p in checked)
+    assert any(p.startswith("ppt/theme/") for p in checked)
+    _, inherited = report.split(validate_deck(_source(built)))
+    if inherited:
+        named = "; ".join(f"{p}: {e[0]}" for p, e in sorted(inherited.items()))
+        pytest.xfail(f"{built.template}: {named}")
+
+
+# Roots a template's build may carry that no vendored schema declares, beyond the package's
+# own: SVG media, a template's customXml and document properties, and Microsoft parts.
+_UNCHECKED_ROOTS = PACKAGE_ROOTS | {
+    "{http://schemas.openxmlformats.org/officeDocument/2006/custom-properties}Properties",
+    "{http://schemas.openxmlformats.org/officeDocument/2006/customXml}datastoreItem",
+    "{http://schemas.microsoft.com/office/2006/metadata/contentType}contentTypeSchema",
+    "{http://schemas.microsoft.com/office/2006/metadata/properties}properties",
+    "{http://schemas.microsoft.com/sharepoint/v3/contenttype/forms}FormTemplates",
+    "{http://schemas.microsoft.com/office/powerpoint/2015/10/main}revInfo",
+    "{http://schemas.microsoft.com/office/drawing/2012/chartStyle}chartStyle",
+    "{http://schemas.microsoft.com/office/drawing/2012/chartStyle}colorStyle",
+    "{http://www.w3.org/2000/svg}svg",
+}
+
+
+def test_what_the_build_leaves_unjudged_is_known(built):
+    """Every unchecked root is of a kind above and every passed-over namespace Microsoft's;
+    anything else is content nobody has looked at."""
+    report = validate_deck(built.deck)
+    strange = sorted(set(report.unchecked.values()) - _UNCHECKED_ROOTS)
+    assert strange == [], f"{built.template}: unchecked roots nobody has looked at: {strange}"
+    foreign = sorted(
+        ns
+        for seen in report.passed_over.values()
+        for ns in seen
+        if not ns.startswith("http://schemas.microsoft.com/")
+    )
+    assert foreign == [], f"{built.template}: passed over and not Microsoft's: {foreign}"
 
 
 def test_every_picture_and_chart_the_build_placed_says_what_it_shows(built):

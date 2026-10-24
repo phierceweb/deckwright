@@ -1,7 +1,12 @@
 # OOXML schemas — ISO/IEC 29500-4:2016
 
-The PresentationML schema and its transitive imports, used by
-`tests/test_ooxml_schema.py` to validate the raw XML `deckwright.motion` writes.
+The PresentationML schema and the Office Math schema, each with its transitive imports.
+`tests/ooxml.py` compiles one schema from `pml.xsd` that validates the raw XML
+`tests/test_ooxml_schema.py` exercises and every part of a built deck whose root it
+declares: the closure reaches `dml-chart.xsd` through `dml-main.xsd`, so charts validate
+through the same schema as slides, layouts, masters and themes. `shared-math.xsd`, compiled
+apart, judges the Office Math inside them. `docs/testing.md` names the attributes rewritten
+in a copy before validation.
 
 `deckwright` authors `<p:timing>` and `<p:transition>` as raw strings, because
 python-pptx models neither. Nothing else can check that output: LibreOffice
@@ -11,11 +16,13 @@ render sees only the final state of a slide.
 Fourteen files: the closure of `pml.xsd`'s `schemaLocation` imports, and of
 `shared-math.xsd`'s, which validates the Office Math an `equation:` writes. They
 are not packaged into the wheel, but they do ship in the sdist, which carries a
-runnable suite — `tests/test_ooxml_schema.py` fails rather than skips when the
-schema is absent, so the notice below travels with them.
+runnable suite, given the tools `CONTRIBUTING.md` names —
+`tests/test_ooxml_schema.py` fails rather than skips when the schema is absent, so
+the notice below travels with them. What goes unchecked, and what a verdict records
+as passed over, is in `docs/testing.md`.
 
 `wml.xsd` also names `../mce/mc.xsd`, for the one attribute `mc:Ignorable`. That
-file is not vendored: the test supplies a declaration of that attribute itself.
+file is not vendored: `tests/ooxml.py` supplies a declaration of that attribute itself.
 
 `xml.xsd` is the W3C schema for the `xml:` namespace, as distributed with
 ISO/IEC 29500-4. Copyright © World Wide Web Consortium; see

@@ -255,12 +255,71 @@ required attribute and asserts the gate reddens. Without that control, a validat
 silently passed everything would look identical to one that works.
 
 `pml.xsd` has no `mc:AlternateContent`, so a slide carrying one never validates whole. A
-writer that emits one — an equation, a morph, a 3D model — validates through `_branch(root,
-"Choice")` and `_branch(root, "Fallback")`: each is the slide one reader sees, with the
-wrapper replaced by that branch. The vendored schemas carry no extension namespace, so
-`_branch` removes what the Choice's `Requires` names and validates the ISO structure around
-it. Its negative control breaks one branch at a time: that branch must redden and the other
-still pass. A harness that dropped the wrapper, or read one branch for both, fails it.
+writer that emits one — an equation, a morph — validates through `branch(root,
+"Choice")` and `branch(root, "Fallback")` in `tests/ooxml.py`: each is the slide one reader
+sees, with the wrapper replaced by that branch. The vendored schemas carry no extension
+namespace, so `branch` removes what the Choice's `Requires` names and validates the ISO
+structure around it. Its negative control breaks one branch at a time: that branch must
+redden and the other still pass. A harness that dropped the wrapper, or read one branch for
+both, fails it.
+
+`validate_deck` in `tests/ooxml.py` checks every XML part of a built `.pptx` — XML by its
+declared content type, by a `.xml` or `.rels` name whatever the type says, or as a VML
+drawing — whose root the vendored schemas declare (`tests/schemas/ooxml/SOURCE.md` says which
+schema reaches which root). A part must be XML 1.0 in UTF-8 or UTF-16, and is held to the
+root its content type promises: no other type, generic, unlisted or not XML at all, shelters
+a root an Office type owns, and no unlisted Office type shelters a declared one. The table of
+content types and roots is pinned against ISO/IEC 29500 in the tests. Each part is judged on
+each view of its markup compatibility, one per Choice position and then the Fallback, every
+wrapper taking the same branch in a view; a reader mixing one wrapper's Choice with another's
+Fallback is not modelled. What an `mc:Ignorable` names is dropped from every view as a reader
+drops it, unless it is a namespace the views judge, and text a reader keeps stays where
+markup compatibility puts it. Markup compatibility is judged too: a wrapper that is not
+Choices then at most one Fallback, or holds text; a Choice or Fallback outside a wrapper; an
+element of the namespace other than those three; an attribute on them other than a Choice's
+`Requires` and the namespace's own; a Choice with no `Requires`; a `Requires` naming a prefix
+declared nowhere or a namespace every reader understands; a `MustUnderstand` naming one no
+schema here has; a `ProcessContent` naming one nothing ignores; and any of these attributes
+naming an undeclared prefix. Each Office Math element whose parent is not Office Math is judged
+by the math schema on its own; each DrawingML run property inside it stands in the slot
+Word's `w:rPr` has, so its place and count are judged, and is judged as DrawingML in a run of
+its own; a WordprocessingML element in the maths is a fault. Two attributes are rewritten in a
+copy first: the chart axis ids python-pptx writes signed where the schema wants
+`xsd:unsignedInt`, and the `a:buSzPct` PowerPoint writes in thousandths of a percent where the
+schema wants `N%`; any other value is the schema's to name. A part that cannot be parsed, has
+a DOCTYPE, has no content type, or holds a root its content type does not allow is a fault
+under its own name, as is a `[Content_Types].xml` that is absent, cannot be read or repeats
+an entry, and a member whose name repeats another or differs from it only in case. An
+embedded workbook is a package of its own and is not opened. libxml2 names the first fault in
+a content model and does not judge the siblings after it, so one fault can stand for several.
+
+What a verdict passes over is recorded beside it. A part whose root nothing declares is
+listed unchecked: the package's content types, relationships and document properties, SVG
+and VML drawings, a template's `customXml`, and Microsoft parts the ISO schemas do not define,
+such as `p1510:revInfo` and `cs:chartStyle`. Per part, every namespace the views do not judge
+— anything `pml.xsd` does not reach beyond Office Math and markup compatibility — is listed,
+on an element or an attribute, with an element in no namespace as one more entry; and, apart
+from those, the tag at the top of each ISO subtree the schemas could not reach: one directly
+inside an `extLst` entry or under an element they do not define, unless it is a global element
+a lax wildcard reaches, and any under an element a reader's view drops. The catalogue test
+pins all three sets, so one more is a change to look at. The corpus test requires every
+unchecked root to be of those kinds and every passed-over namespace to be Microsoft's, and
+does not assert on the unreached tags, since Office writes ISO colour elements inside its own
+extensions.
+
+`tests/test_ooxml_schema.py` builds the capability catalogue against `base` on a cache of its
+own, requires every part valid and every `.xml` and `.rels` member accounted for, and holds
+each rule above to a negative control: one part of each kind the build holds is broken by an
+element no schema allows and by a value no type allows, and that part alone must be named,
+under the branch that carries the fault; every other rule gets a case that breaks it and
+asserts it is named. The test ids are the inventory. `tests/test_templates.py` requires each
+brand template's build valid apart from faults the template handed it, reading the template's
+own verdicts for that. A fault is the template's only in a part the build carried over —
+never a slide, notes slide or chart — whose digest, its content type and its canonical form
+with blank text between elements dropped as python-pptx reads a part, equals the template's,
+and whose errors are the template's; it is reported as an `xfail` naming the part and its
+first error, which `-rx` shows. `tests/test_templates_gate.py` hands those assertions stock
+files broken in each way that rule distinguishes.
 
 **Schema-valid is a floor, not proof.** Only real PowerPoint says whether a file opens
 without a repair prompt. See [`motion.md`](motion.md#verification).

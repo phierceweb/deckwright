@@ -161,14 +161,8 @@ without complaint, but PowerPoint rejects it — it opens with "needs repair" an
 strips the animation. A reveal build needs the full main-sequence skeleton **and** a
 `<p:bldLst>` (omitting the bldLst was the original repair cause).
 
-Verification is four layers, and only the last is real:
-
-| Layer | Catches | Where |
-|---|---|---|
-| **XSD validation** | Required-attribute omissions, wrong child order, bad enums, empty lists. | `tests/test_ooxml_schema.py`, against the vendored ISO/IEC 29500-4:2016 schemas |
-| **Structural readback** | Literal `presetID`/`filter`/`delay`/`spid` values. | `tests/utils/`, `tests/layouts/` |
-| **Corpus** | That a build survives every brand template in `templates/`. | `tests/test_templates.py` — gitignored, and **CI never has it** |
-| **Real PowerPoint** | Repair prompts, playback, direction, timing. | A human, per change |
+Verification is four layers, and only the last is real: see
+[`motion.md`](motion.md#verification).
 
 The XSD layer is not optional garnish. `<a:chart>` requires `bldStep`; a `<p:bldLst>`
 with no children and a `<p:childTnLst>` with no children are invalid too. None of the

@@ -3,6 +3,17 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.8.0 — 2026-10-22
+
+- The capability catalogue's cover carries speaker notes, so a `demo` or `conform` deck holds
+  a notes slide.
+- The test suite validates every XML part of a built deck whose root the ISO/IEC 29500-4:2016
+  schemas declare, and records what it passes over.
+- The unit suite builds the whole capability catalogue against `base`, so it needs a
+  Chrome-family browser.
+- The template corpus validates each brand template's build the same way, and reports apart a
+  fault in a part carried over unchanged from the template.
+
 ## v0.7.0 — 2026-10-19
 
 - On pw-foundation 1.0 in place of pf-core.

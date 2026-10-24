@@ -12,6 +12,7 @@ def title_slides() -> dict[str, dict[str, Any]]:
             "kicker": "A COVER",
             "title": "The words a title carries",
             "subtitle": "And the line beneath it",
+            "notes": "Spoken over the cover, never shown on it.",
             "chrome": {
                 "kicker": {"at": {"box": {"x": "6%", "y": "50%", "w": "50%", "h": "5%"}}},
                 "title": {

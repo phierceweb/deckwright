@@ -178,9 +178,9 @@ Four layers, and **only the last is real**.
 
 | Layer | Catches | Where |
 |---|---|---|
-| XSD validation | Required-attribute omissions, wrong child order, bad enums, empty lists. | `tests/test_ooxml_schema.py` against the schemas vendored in `tests/schemas/ooxml/` |
+| XSD validation | Required-attribute omissions, wrong child order, bad enums, empty lists. | `tests/test_ooxml_schema.py` against the schemas vendored in `tests/schemas/ooxml/`, one writer at a time and then every part of the built catalogue through `tests/ooxml.py` |
 | Structural readback | Literal `presetID` / `filter` / `delay` / `spid` values. | `tests/utils/`, `tests/layouts/` |
-| Corpus | That a build survives every brand template in `templates/`. | `tests/test_templates.py` — gitignored, and CI never has it |
+| Corpus | That a build survives every brand template in `templates/`, and that the parts it writes are schema-valid. | `tests/test_templates.py`, over the gitignored `templates/`, which CI never has |
 | Real PowerPoint | Repair prompts, playback, direction, timing. | A human, per change |
 
 What LibreOffice actively *hides*: wrong element order (it repairs it), schema

@@ -29,7 +29,8 @@ bin/setup        # venv + editable install + .env + pre-commit hooks
 
 Rendering and QA additionally use local external tools — LibreOffice
 (`soffice`), Poppler (`pdftoppm`, `pdftotext`), and a Chrome/Chromium for HTML
-panels. Everything else, including the full unit-test suite, runs without them.
+panels. Everything else runs without LibreOffice and Poppler, but the unit suite needs
+the browser: it builds the capability catalogue, whose `document:` exercise starts one.
 
 ## Before you open a pull request
 

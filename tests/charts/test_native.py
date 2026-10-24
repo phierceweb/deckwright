@@ -1,4 +1,3 @@
-import copy
 import dataclasses
 import re
 
@@ -14,6 +13,7 @@ from deckwright.charts.model import _BUBBLE_CHART_TYPES, _XY_CHART_TYPES, ChartS
 from deckwright.charts.native import add_native_chart
 from deckwright.theme.chartstyle import ChartStyle
 from deckwright.theme.palette import build_palette
+from tests.ooxml import assert_chart_valid
 
 # A non-default style exercising every knob, so a chart built from it differs from the
 # default look in every dimension at once.
@@ -1414,23 +1414,6 @@ def test_a_single_named_series_grows_no_chart_title(ctx_factory, theme, chart_ty
     assert deleted.get("val") == "1"
 
 
-_CHART_SCHEMA = None
-
-
-def _assert_chart_valid(chart_space):
-    """Validate against dml-chart.xsd, with python-pptx's signed axis ids made unsigned in a copy."""
-    global _CHART_SCHEMA
-    if _CHART_SCHEMA is None:
-        import pathlib
-
-        xsd = pathlib.Path(__file__).parents[1] / "schemas" / "ooxml" / "dml-chart.xsd"
-        _CHART_SCHEMA = etree.XMLSchema(etree.parse(str(xsd)))
-    checked = copy.deepcopy(chart_space)
-    for ax_id in checked.iter(qn("c:axId"), qn("c:crossAx")):
-        ax_id.set("val", str(abs(int(ax_id.get("val")))))
-    _CHART_SCHEMA.assertValid(checked)
-
-
 def _accents(ctx_factory, theme, *accents):
     """A palette whose accents make the right label ink obvious without measuring it."""
     roles = dict(theme.palette.roles)
@@ -1463,7 +1446,7 @@ def test_labels_on_a_dark_area_fill_are_inked_white(ctx_factory, theme):
     assert own is not None
     assert own.find(qn("c:showVal")).get("val") == "1"
     assert _label_inks(own) == ["FFFFFF"]
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 def test_labels_on_a_pale_fill_keep_the_dark_ink(ctx_factory, theme):
@@ -1484,7 +1467,7 @@ def test_each_wedge_label_is_inked_for_its_own_wedge(ctx_factory, theme):
     inks = [by_point.get(str(i), series_ink) for i in range(3)]
     assert inks == [["FFFFFF"], ["2D0937"], ["FFFFFF"]]
     assert all(d.find(qn("c:showCatName")).get("val") == "1" for d in own.findall(qn("c:dLbl")))
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 def test_a_pie_labels_position_is_pinned_to_center(ctx_factory):
@@ -1499,7 +1482,7 @@ def test_a_pie_labels_position_is_pinned_to_center(ctx_factory):
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
     assert chart.plots[0].data_labels.position == XL_DATA_LABEL_POSITION.CENTER
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 def test_a_doughnuts_labels_take_no_position_at_all(ctx_factory):
@@ -1513,7 +1496,7 @@ def test_a_doughnuts_labels_take_no_position_at_all(ctx_factory):
     )
     chart = add_native_chart(ctx, spec, ctx.body_rect).chart
     assert chart.plots[0].data_labels.position is None
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 def test_labels_beside_a_clustered_column_stay_on_the_slides_ink(ctx_factory, theme):
@@ -1538,7 +1521,7 @@ def test_a_stacked_series_whose_labels_are_off_stays_off(ctx_factory, theme):
     assert _label_inks(first) == ["FFFFFF"]
     assert second.find(qn("c:showVal")).get("val") == "0"
     assert second.findall(qn("c:dLbl")) == []
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 @pytest.mark.parametrize(("base", "expected"), [("1F5FA8", "FFFFFF"), ("2E7DC4", "2D0937")])
@@ -1606,7 +1589,7 @@ def test_an_area_charts_edge_labels_are_moved_in_off_the_axis(ctx_factory, theme
     moved = _point_offsets(own)
     assert sorted(moved) == [0, 3]
     assert moved[0] > 0 > moved[3]
-    _assert_chart_valid(chart._chartSpace)
+    assert_chart_valid(chart._chartSpace)
 
 
 def test_a_wider_edge_label_is_moved_further(ctx_factory, theme):
