@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Lint: ruff (lint + layout), mypy, pw-foundation's structural gate, and the two project
+# gates pre-commit runs — import direction, and refusing what pw-foundation already provides.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+"$ROOT/bin/py" -m ruff check src tests
+"$ROOT/bin/py" -m ruff format --check src tests
+"$ROOT/bin/py" -m mypy            # reads [tool.mypy]: src only
+"$ROOT/bin/py" -m pw_foundation.guards   # reads .pw-guards.toml
+"$ROOT/bin/py" bin/check-layers
+"$ROOT/bin/py" bin/check-framework

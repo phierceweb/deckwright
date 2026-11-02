@@ -1,0 +1,261 @@
+"""Turn a slide's reveal groups into PowerPoint timing, and give it a transition.
+
+Everything here runs after the last shape exists, because all of it needs shape ids. A
+spec says how many beats an argument has; ``theme.motion`` says what a beat looks like.
+"""
+
+from __future__ import annotations
+
+from deckwright.errors import LayoutError
+from deckwright.layouts.components import RevealItem, shape_id
+from deckwright.layouts.registry import SlideCtx
+from deckwright.motion.transition import MORPH
+from deckwright.motion import (
+    add_chart_build,
+    add_click_build,
+    add_click_reveals,
+    add_click_sequence,
+    add_transition,
+)
+from deckwright.spec.model import Placement
+
+_CHART_ANIMATIONS = ("by_category", "by_series")
+# A wipe runs along one axis; across a stroke that has no extent on it, nothing is seen to move.
+_ACROSS = {"wiperight": "wipeup", "wipeup": "wiperight"}
+_STROKE_RATIO = 8
+_ANIMATIONS = ("none", "together", "one_at_a_time", *_CHART_ANIMATIONS)
+
+
+def apply_click_reveals(
+    ctx: SlideCtx, drawn: list[tuple[Placement, list[list[RevealItem]]]]
+) -> None:
+    """Keep each ``reveals:`` placement hidden until the placement it names is clicked.
+
+    A slide holds one timing tree, so this and the main-sequence build of ``animate:``
+    are mutually exclusive.
+
+    Raises:
+        LayoutError: the slide also asks for ``animate:``, a ``reveals:`` names an id
+            no placement carries or its own, or either end draws nothing revealable.
+    """
+    if ctx.spec.animate not in (None, "none"):
+        raise LayoutError(
+            f"slide {ctx.spec.index}: 'reveals:' and 'animate: {ctx.spec.animate}' "
+            f"cannot share a slide — a slide carries one animation timeline, and "
+            f"these are different kinds. Drop one."
+        )
+    shapes = {
+        p.id: list(dict.fromkeys(shape_id(g) for group in made for g in group))
+        for p, made in drawn
+        if p.id is not None
+    }
+    pairs: list[tuple[int, int]] = []
+    wired: list[tuple[int, list[int]]] = []
+    for placement, made in drawn:
+        if not placement.reveals:
+            continue
+        where = f"slide {ctx.spec.index} ({placement.component})"
+        if placement.reveals == placement.id:
+            raise LayoutError(f"{where}: 'reveals: {placement.reveals}' names itself")
+        if placement.reveals not in shapes:
+            known = ", ".join(sorted(shapes)) or "none on this slide"
+            raise LayoutError(
+                f"{where}: 'reveals: {placement.reveals}' names no placement on this "
+                f"slide; ids here: {known}"
+            )
+        trigger = shapes[placement.reveals]
+        targets = list(dict.fromkeys(shape_id(g) for group in made for g in group))
+        if not trigger or not targets:
+            raise LayoutError(
+                f"{where}: 'reveals:' needs both placements to draw something that can "
+                f"be revealed, and one of them reported no shapes"
+            )
+        # Every shape the trigger placement drew listens: a card's plate is drawn
+        # first and its words last, so wiring only the first leaves the words dead.
+        pairs.extend((trig, target) for trig in trigger for target in targets)
+        wired.append((trigger[0], targets))
+    cycle = _reveal_cycle(
+        {p.id: p.reveals for p, _ in drawn if p.id is not None and p.reveals is not None}
+    )
+    if cycle:
+        raise LayoutError(
+            f"slide {ctx.spec.index}: {' waits on '.join(cycle)} waits on {cycle[0]} — "
+            f"every placement in that ring is hidden until one of the others is "
+            f"clicked, so none of them can ever be. Give one of them no 'reveals:'."
+        )
+    add_click_reveals(ctx.slide, pairs)
+    for trigger_spid, targets in wired:
+        ctx.manifest.record_animation("click_reveals", [targets], clicks=0, trigger=trigger_spid)
+
+
+def _reveal_cycle(reveals: dict[str, str]) -> list[str] | None:
+    """The first ring in the hidden-until-clicked graph, or ``None``.
+
+    ``reveals`` maps a placement to the one whose click reveals it, so a chain is
+    legitimate staging and only a ring is unreachable.
+    """
+    for start in sorted(reveals):
+        walked: list[str] = []
+        node: str | None = start
+        while node is not None and node not in walked:
+            walked.append(node)
+            node = reveals.get(node)
+        if node is not None:
+            return walked[walked.index(node) :]
+    return None
+
+
+def apply_reveal(
+    ctx: SlideCtx, groups: list[list[RevealItem]], last: list[list[RevealItem]] | None = None
+) -> None:
+    """Turn reveal groups into a PowerPoint click build.
+
+    ``last`` is the chrome lines that ask to arrive on the slide's final clicks, after
+    everything else. A chart building by category or series has left its build pending on
+    ``ctx``; it is written here so that what follows it shares its one timeline.
+    """
+    animate = ctx.spec.animate
+    if animate is not None and animate not in _ANIMATIONS:
+        raise LayoutError(
+            f"slide {ctx.spec.index}: unknown animate {animate!r}; "
+            f"expected one of {', '.join(_ANIMATIONS)}"
+        )
+    last = list(last or [])
+    motion = ctx.theme.motion
+    if animate in _CHART_ANIMATIONS:
+        if ctx.chart_build is None:
+            still = sum(1 for p in ctx.spec.place if p.component == "chart")
+            if still:
+                which = (
+                    "its only chart is 'animate: none' — drop that"
+                    if still == 1
+                    else "its charts are all 'animate: none' — drop it from one"
+                )
+                raise LayoutError(
+                    f"slide {ctx.spec.index}: animate {animate!r} builds the slide's chart, "
+                    f"and {which}, or build the slide with one_at_a_time"
+                )
+            raise LayoutError(
+                f"slide {ctx.spec.index}: animate {animate!r} only applies to a native chart"
+            )
+        _chart_then(ctx, ctx.chart_build, groups, last)
+        return
+    elif animate in (None, "none"):
+        groups = []
+    if not groups and not last:
+        return
+    if animate == "together" and not last:
+        # add_click_build fades every shape onto one click, so the groups are not beats.
+        flat = list(dict.fromkeys(shape_id(g) for group in groups for g in group))
+        add_click_build(ctx.slide, flat, motion.stagger_ms)
+        ctx.manifest.record_animation("click_build", [flat], clicks=1)
+        return
+    if animate == "together":
+        groups = [[item for group in groups for item in group]] if groups else []
+    sequence = groups + last
+    beat = motion.beat_ms if motion.advance == "after_previous" else None
+    add_click_sequence(ctx.slide, _resolve_roles(ctx, sequence), motion.stagger_ms, beat_ms=beat)
+    if animate == "together" and groups:
+        ctx.manifest.record_animation("click_build", groups, clicks=1)
+        ctx.manifest.record_animation("line_build", last, clicks=0 if beat else len(last))
+        return
+    ctx.manifest.record_animation(
+        "click_sequence" if groups else "line_build",
+        sequence,
+        clicks=1 if beat is not None else len(sequence),
+    )
+
+
+def _chart_then(
+    ctx: SlideCtx,
+    build: tuple[int, str, int, str],
+    groups: list[list[RevealItem]],
+    last: list[list[RevealItem]],
+) -> None:
+    """The pending chart ``build``, then ``groups`` and ``last`` one per click on its
+    timeline."""
+    sequence = groups + last
+    spid, by, parts, kind = build
+    add_chart_build(
+        ctx.slide,
+        spid,
+        by=by,
+        parts=parts,
+        kind=kind,
+        then=_resolve_roles(ctx, sequence),
+        stagger_ms=ctx.theme.motion.stagger_ms,
+    )
+    ctx.manifest.record_animation("chart_build", [[spid]], clicks=parts + 1 if parts >= 1 else 1)
+    if groups:
+        ctx.manifest.record_animation("click_sequence", groups, clicks=len(groups))
+    if last:
+        ctx.manifest.record_animation("line_build", last, clicks=len(last))
+
+
+def _resolve_roles(ctx: SlideCtx, groups: list[list[RevealItem]]) -> list[list[RevealItem]]:
+    """Turn each component's motion *role* into the theme's wire-format entrance.
+
+    A component says "I am a line being drawn"; the theme decides that lines wipe, so
+    neither the component nor the spec ever names an OOXML preset.
+
+    Raises:
+        LayoutError: a component reported a role the theme does not bind.
+    """
+    roles = ctx.theme.motion.roles
+    shapes = {shape.shape_id: shape for shape in ctx.slide.shapes}
+    resolved: list[list[RevealItem]] = []
+    for group in groups:
+        out: list[RevealItem] = []
+        for item in group:
+            if not isinstance(item, tuple):
+                out.append(item)
+                continue
+            try:
+                kind = roles[item[1]]
+            except KeyError:
+                raise LayoutError(
+                    f"slide {ctx.spec.index}: component {ctx.component!r} reports "
+                    f"motion role {item[1]!r}, which the theme does not bind; known "
+                    f"roles: {', '.join(sorted(roles))}"
+                ) from None
+            kind = _along(shapes.get(item[0]), kind)
+            out.append((item[0], kind, item[2]) if len(item) == 3 else (item[0], kind))
+        resolved.append(out)
+    return resolved
+
+
+def _along(shape, kind: str) -> str:
+    """``kind``, turned to the axis a stroke actually runs along."""
+    if kind not in _ACROSS or shape is None:
+        return kind
+    width, height = shape.width or 0, shape.height or 0
+    run, cross = (width, height) if kind == "wiperight" else (height, width)
+    return _ACROSS[kind] if run * _STROKE_RATIO < cross else kind
+
+
+def apply_transition(ctx: SlideCtx) -> None:
+    """Give the slide the transition the show arrives on.
+
+    Which transition is the theme's; a slide may only refuse it.
+
+    Raises:
+        LayoutError: the slide named anything other than ``none``.
+    """
+    asked = ctx.spec.transition
+    if asked is not None and asked not in ("none", MORPH):
+        raise LayoutError(
+            f"slide {ctx.spec.index}: transition {asked!r} — a slide may only say "
+            f"'none', for a deliberate hard cut, or 'morph', to glide what it shares with "
+            f"the slide before. Which transition a deck uses is the theme's "
+            f"('motion.transition'), so that every deck on the brand moves the same way."
+        )
+    want = ctx.theme.motion.transition
+    if asked == MORPH:
+        add_transition(ctx.slide, MORPH, speed=want.speed)
+        ctx.manifest.record_transition(MORPH)
+        return
+    if asked == "none" or want.kind == "none":
+        ctx.manifest.record_transition("none")
+        return
+    add_transition(ctx.slide, want.kind, direction=want.direction, speed=want.speed)
+    ctx.manifest.record_transition(want.kind)

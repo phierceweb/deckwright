@@ -1,0 +1,137 @@
+theme: base
+title: Title treatments
+out: ../out/title-treatments/deckwright Title Treatments.pptx
+---
+kicker: FLUSH-LEFT TOP RAIL
+title: The default, unchanged
+subtitle: No chrome block, so every line stacks from the top margin at the content width
+notes: 'The regression reference. 38 of 127 corpus titles use this treatment; it is
+
+  what deckwright produced for every deck of every theme before this change.
+
+  '
+place:
+- at: {cols: full, rows: {from: 0, to: 7}}
+  bullets:
+    heading: What moves from here
+    columns: 2
+    items:
+    - 'A chrome line takes an at:, in canvas fractions'
+    - "It takes an align: and an anchor:"
+    - "It takes a rung: off the type ramp"
+    - "It takes a pair:, so it can reverse out of a panel"
+    - A placed line no longer pushes the body down
+    - A slide overrides the theme field by field
+---
+kicker: CENTRED TOP BANNER
+title: Centred on the canvas axis
+subtitle: The frame spans the whole canvas and the ink floats in it
+notes: '29 percent of corpus titles, and the whole reading of two templates. The frame
+
+  is the full canvas width, not the content width, so the ink centres on the canvas
+
+  axis rather than on the margins.
+
+  '
+chrome:
+  kicker: {at: {box: {x: 0%, y: 5.5%, w: 100%, h: 5%}}, align: center}
+  title: {at: {box: {x: 0%, y: 10.5%, w: 100%, h: 10%}}, align: center}
+  subtitle: {at: {box: {x: 0%, y: 21.5%, w: 100%, h: 5%}}, align: center}
+place:
+- at: {cols: {from: 1, to: 11}, rows: {from: 2, to: 7}}
+  stats:
+    columns: 3
+    items:
+    - {value: '37', label: corpus titles centred on the canvas axis}
+    - {value: '12', label: centred inside a column instead}
+    - {value: '0', label: deckwright could express before this change}
+---
+kicker: AN EPIC OF ANCIENT GREECE
+title: Hero cover
+subtitle: Display type, low on the canvas, off a fixed baseline
+notes: 'One corpus template puts its largest text at 63 percent of canvas height, and
+
+  hero covers run 7.2 to 18.4 points per inch of canvas height against the content
+
+  title band of 4.3 to 5.3. The title here is anchored bottom, so the type grows
+
+  upward off its baseline instead of downward from its box top.
+
+  '
+background: inverse
+chrome:
+  kicker: {at: {box: {x: 5.5%, y: 50%, w: 50%, h: 5%}}, anchor: bottom}
+  title: {at: {box: {x: 5.5%, y: 55%, w: 75%, h: 13%}}, rung: display, anchor: bottom}
+  subtitle: {at: {box: {x: 5.5%, y: 69%, w: 60%, h: auto}}}
+---
+title: Offset column title
+subtitle: The measure is the column, so the title wraps where the column ends
+notes: 'A quarter of corpus titles start at x 0.44 or further right, and one template
+
+  alternates sides slide to slide. The title lives in the right-hand columns; the
+
+  body has the left. Neither knows about the other.
+
+  '
+chrome:
+  title: {at: {cols: {from: 7, to: 12}}}
+  subtitle: {at: {cols: {from: 7, to: 12}, rows: {from: 2, to: 4}}}
+place:
+- at: {cols: left-half, rows: band}
+  callouts:
+    items:
+    - head: 'The chrome is not a band any more'
+      body: A placed line is exact geometry, so it sits beside the body rather than above it.
+    - head: 'The measure is the column'
+      body: 62 of 95 corpus design titles wrap narrower than 0.85 of the canvas width.
+    - head: 'The body starts at body_top'
+      body: content_rect counts only the stacked lines, and there are none on this slide.
+---
+kicker: CENSUS OF INDIA
+title: Reversed out of a panel
+subtitle: The ink comes from the panel's own pair, not the slide's
+notes: 'Nine corpus titles sit inside a colour panel, inset 0.042 to 0.091 of canvas
+
+  width from the panel edge, reversed out of it. The panel is a placement; the chrome
+
+  names the same pair, so the palette has already checked the two colours against
+
+  each other.
+
+  '
+chrome:
+  kicker: {at: {box: {x: 9%, y: 30%, w: 30%, h: 5%}}, pair: accent-3}
+  title: {at: {box: {x: 9%, y: 36%, w: 30%, h: 20%}}, pair: accent-3}
+  subtitle: {at: {box: {x: 9%, y: 57%, w: 30%, h: auto}}, pair: accent-3}
+place:
+- at: {box: {x: 0%, y: 0%, w: 45%, h: 100%}}
+  bleed: true
+  panel: {pair: accent-3}
+- at: {cols: right-half, rows: {from: 1, to: 9}}
+  bullets:
+    heading: What the panel is
+    items:
+    - A placement, sized in canvas fractions
+    - Filled from a declared palette pair
+    - Bleeding off three edges
+    - Carrying no text of its own
+---
+title: Right-aligned, sunk
+subtitle: Flush to the right margin, below the top band
+notes: 'One template right-aligns the title on every content slide it has, ink flush at
+
+  0.933 to 0.937 of canvas width. Three more sink the chrome below the top band. Both
+
+  are the same two keys.
+
+  '
+chrome:
+  title: {at: {box: {x: 28%, y: 30%, w: 65.5%, h: 11%}}, align: right}
+  subtitle: {at: {box: {x: 28%, y: 42%, w: 65.5%, h: 5%}}, align: right}
+place:
+- at: {cols: full, rows: bottom-third}
+  align: right
+  bullets:
+    items:
+    - A placement carries align and anchor too
+    - The bullets on this row are set right

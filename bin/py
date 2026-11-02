@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The interpreter the project's tooling runs on: the venv if there is one, otherwise
+# whatever python3 is active. Contributors using uv, conda or a venv under another
+# name get a working `bin/lint`, `bin/test` and pre-commit without editing anything.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+for candidate in "${VIRTUAL_ENV:-}/bin/python" "$ROOT/.venv/bin/python"; do
+  [[ -n "${candidate%/bin/python}" && -x "$candidate" ]] && exec "$candidate" "$@"
+done
+command -v python3 >/dev/null || { echo "bin/py: no python3 on PATH" >&2; exit 1; }
+exec python3 "$@"

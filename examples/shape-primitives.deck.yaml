@@ -1,0 +1,153 @@
+theme: base
+title: Shape primitives
+out: ../out/shape-primitives/deckwright Shape Primitives.pptx
+---
+kicker: SHAPE PRIMITIVES
+title: A disc, a plate, a line and a join
+subtitle: Every size comes from the placement or the type ramp, never an inch
+notes: 'The corpus is built from shapes deckwright could not draw: 1810 ellipses across
+
+  eight of eleven templates, 132 rounded-rect cards, 89 lines and connectors. These
+  four components are that vocabulary.
+
+  '
+place:
+- at: {cols: full, rows: {from: 0, to: 1}}
+  rule: {color: accent-1, weight: 1.5}
+- at: {rows: {from: 1, to: 7}}
+  split:
+  - card:
+      heading: ellipse
+      body: A disc, sized off its placement's short side. Label centred, ink from its own pair.
+      shadow: true
+  - card:
+      heading: card
+      body: This plate. A rounded rect with a heading, a line of copy and an icon slot.
+      shadow: true
+  - card:
+      heading: connector
+      body: A line joining two placements by their id, straight, elbowed or curved.
+      shadow: true
+  - card:
+      heading: rule
+      body: A divider, spanning its placement, weighted as a multiple of the theme's line.
+      shadow: true
+- at: {cols: full, rows: {from: 8, to: 9}}
+  rule: {}
+---
+kicker: CONNECTOR
+title: A join names the two ends, not a coordinate
+subtitle: Move either placement and the line follows it
+notes: 'The connector attaches to the edge of each placement that faces the other, so
+
+  nothing in the spec repeats a coordinate. The gap between two cards is a placement
+  of its own, which is where the line lives.
+
+  '
+place:
+- at: {cols: {from: 0, to: 3}, rows: {from: 2, to: 6}}
+  id: discover
+  card: {heading: Discover, body: Read the corpus., pair: accent-3}
+- at: {cols: {from: 3, to: 4}, rows: {from: 2, to: 6}}
+  connector: {from: discover, to: design, arrow: end}
+- at: {cols: {from: 4, to: 7}, rows: {from: 2, to: 6}}
+  id: design
+  card: {heading: Design, body: Name the vocabulary., pair: accent-3}
+- at: {cols: {from: 7, to: 8}, rows: {from: 2, to: 6}}
+  connector: {from: design, to: ship, arrow: end}
+- at: {cols: {from: 8, to: 11}, rows: {from: 2, to: 6}}
+  id: ship
+  card: {heading: Ship, body: Register the component., pair: accent-3}
+---
+kicker: CONNECTOR
+title: An elbow, where the two ends do not line up
+subtitle: PowerPoint routes the bend; the spec names only the two placements
+notes: 'A connector draws between rectangles rather than inside its own, so a line that
+
+  has to cross the space the two ends occupy declares bleed: true. The elbow is one
+  native shape, not two, so PowerPoint reroutes it if the deck is hand-edited later.
+
+  '
+place:
+- at: {cols: left-third, rows: top-third}
+  id: read
+  card: {heading: Read the corpus, body: '1810 ellipses, 132 cards, 89 lines.'}
+- at: {cols: mid-third, rows: mid-third}
+  id: name
+  card: {heading: Name the vocabulary, body: 'Four components, one grammar.'}
+- at: {cols: right-third, rows: bottom-third}
+  id: draw
+  card: {heading: Draw it, body: Sized off the placement and the ramp.}
+- at: {box: {x: 0%, y: 0%, w: 100%, h: 100%}}
+  bleed: true
+  connector: {from: read, to: name, kind: elbow, arrow: end, color: accent-1}
+- at: {box: {x: 0%, y: 0%, w: 100%, h: 100%}}
+  bleed: true
+  connector: {from: name, to: draw, kind: elbow, arrow: end, color: accent-1}
+---
+kicker: ELLIPSE
+title: The commonest mark in the corpus
+subtitle: A numbered badge, a bare dot, and a disc the size of its placement
+notes: 'A label is refused rather than clipped when the disc it is given cannot hold
+
+  it: the check is the line height against the inscribed square, not the diameter.
+
+  '
+place:
+- at: {cols: left-half, rows: {from: 1, to: 4}}
+  split:
+  - ellipse: {label: '1'}
+  - ellipse: {label: '2', pair: accent-3}
+  - ellipse: {label: '3', pair: surface}
+- at: {cols: right-half, rows: {from: 1, to: 4}}
+  card:
+    heading: Sized off the placement
+    body: Each disc fills the short side of its slot.
+- at: {cols: left-half, rows: {from: 5, to: 9}}
+  ellipse: {label: '4', size: 0.9, rung: stat, shadow: true}
+  align: center
+  anchor: middle
+- at: {cols: right-half, rows: {from: 5, to: 9}}
+  card:
+    heading: A fraction of the short side
+    body: 'size: 0.9 shrinks it; align and anchor centre it in its placement.'
+---
+background: inverse
+kicker: LEGIBLE ON EITHER PAPER
+title: The same declarations, reversed out
+subtitle: A pair carries its own ink, so a light plate on a dark slide still reads
+notes: 'Every primitive takes its colour from a declared palette pair, which the
+
+  palette contrast-checked at construction. A stroke has no pair: the default walks the
+  theme''s quiet roles until one clears WCAG''s 3:1 non-text minimum against the paper
+  this slide happens to use.
+
+  '
+place:
+- at: {cols: left-third, rows: {from: 1, to: 6}}
+  card:
+    heading: On the page pair
+    body: White plate, dark type, on a dark slide.
+    pair: page
+    shadow: true
+- at: {cols: mid-third, rows: {from: 1, to: 6}}
+  card:
+    heading: On the surface pair
+    body: The theme's light surface, edged only when it would vanish.
+    pair: surface
+- at: {cols: right-third, rows: {from: 1, to: 6}}
+  card:
+    heading: On an accent pair
+    body: The accent's own ink, chosen when the theme loaded.
+    pair: accent-3
+- at: {cols: full, rows: {from: 7, to: 8}}
+  rule: {}
+- at: {cols: {from: 0, to: 1}, rows: {from: 9, to: 12}}
+  id: badge
+  ellipse: {label: '5'}
+  anchor: middle
+- at: {cols: {from: 1, to: 6}, rows: {from: 9, to: 12}}
+  connector: {from: badge, to: closing, arrow: end}
+- at: {cols: right-half, rows: {from: 9, to: 12}}
+  id: closing
+  card: {heading: A join across the divider, body: A disc that fills its placement joins exactly.}

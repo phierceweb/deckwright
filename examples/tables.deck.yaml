@@ -1,0 +1,201 @@
+theme: base
+title: Tables
+sections: [Rules, Reaching, Density]
+out: ../out/tables/Tables.pptx
+---
+kicker: FEATURE CHECK
+title: Four things a table can now say
+subtitle: valign, down, rules, density — on a real brand template
+background: inverse
+---
+section: Rules
+kicker: RULES:ROWS
+title: The default, unchanged
+subtitle: A hairline under every row but the last
+place:
+  - at: {cols: {from: 0, to: 11}, rows: {from: 0, to: 7}}
+    table:
+      header: [Dish, Category, Served, Price]
+      align: [left, left, center, right]
+      widths: [3, 2, 2, 1]
+      rows:
+        - [Bruschetta al pomodoro, Starter, All day, $8]
+        - [Tagliatelle al ragu, Main, From 6pm, $18]
+        - [Branzino al forno, Main, From 6pm, $26]
+        - [Tiramisu, Dessert, All day, $9]
+      total: [{text: Four courses, emphasis: true}, "", "", $61]
+---
+section: Rules
+kicker: RULES:HEADER
+title: One line, under the band
+subtitle: The rows are parted by their spacing, not by rules
+place:
+  - at: {cols: {from: 0, to: 11}, rows: {from: 0, to: 7}}
+    table:
+      rules: header
+      header: [Dish, Category, Served, Price]
+      align: [left, left, center, right]
+      widths: [3, 2, 2, 1]
+      rows:
+        - [Bruschetta al pomodoro, Starter, All day, $8]
+        - [Tagliatelle al ragu, Main, From 6pm, $18]
+        - [Branzino al forno, Main, From 6pm, $26]
+        - [Tiramisu, Dessert, All day, $9]
+      total: [{text: Four courses, emphasis: true}, "", "", $61]
+---
+section: Rules
+kicker: RULES:NONE
+title: Nothing at all
+subtitle: Banding does the separating, and the total keeps only its weight
+place:
+  - at: {cols: {from: 0, to: 11}, rows: {from: 0, to: 7}}
+    table:
+      rules: none
+      banding: true
+      header: [Dish, Category, Served, Price]
+      align: [left, left, center, right]
+      widths: [3, 2, 2, 1]
+      rows:
+        - [Bruschetta al pomodoro, Starter, All day, $8]
+        - [Tagliatelle al ragu, Main, From 6pm, $18]
+        - [Branzino al forno, Main, From 6pm, $26]
+        - [Tiramisu, Dessert, All day, $9]
+      total: [{text: Four courses, emphasis: true}, "", "", $61]
+---
+section: Reaching
+kicker: RULES:GRID + DOWN
+title: A label that reaches down
+place:
+  - at: {cols: full, rows: top-two-thirds}
+    table:
+      rules: grid
+      valign: top
+      density: 0.7
+      header: [Stage, Step, Owner, Days]
+      align: [left, left, left, right]
+      widths: [2, 4.2, 1.6, 1]
+      rows:
+        - [{text: Discovery, down: 2, valign: middle, emphasis: true}, Interviews and a read of what already exists, Ana, "6"]
+        - [A written brief either side can argue with, Ana, "3"]
+        - [{text: Build, down: 2, valign: middle, emphasis: true}, "The first slice, end to end", Bo, "14"]
+        - [Everything the first slice deferred, Bo, "9"]
+        - [{text: Ship, valign: middle, emphasis: true}, "Cutover, rollback, and the morning after", Cy, "2"]
+---
+section: Reaching
+kicker: DOWN
+title: A comparison grid
+place:
+  - at: {cols: full, rows: top-two-thirds}
+    table:
+      rules: header
+      valign: top
+      density: 0.7
+      banding: true
+      header: [Area, Criterion, Rebuild, Extend]
+      align: [left, left, center, center]
+      widths: [1.6, 4, 1.7, 1.7]
+      rows:
+        - [{text: Cost, down: 2, valign: middle, emphasis: true}, Money out before anything ships, "£120k", "£38k"]
+        - [What it costs to run for a year, "£14k", "£22k"]
+        - [{text: Risk, down: 2, valign: middle, emphasis: true}, Work that has never been done here before, High, Low]
+        - [How much of it can be undone, None, All of it]
+        - [{text: Verdict, valign: middle, emphasis: true}, "", "No", {text: Recommended, pair: accent-1, emphasis: true}]
+---
+section: Reaching
+kicker: DOWN, STACKED
+title: Reaches that stack
+place:
+  - at: {cols: {from: 0, to: 10}, rows: top-two-thirds}
+    table:
+      rules: header
+      valign: top
+      density: 0.7
+      header: [Phase, What it covers, Who]
+      widths: [1.4, 4, 1.2]
+      rows:
+        - [{text: Discovery, down: 2, valign: middle, emphasis: true}, {text: "Interviews, a read of what exists, and a brief either side can argue with", down: 2, valign: middle}, Ana]
+        - [Bea]
+        - [{text: Build, emphasis: true}, "The first slice, end to end", Bo]
+        - [{text: Ship, emphasis: true}, "Cutover and the morning after", Cy]
+---
+section: Density
+kicker: DENSITY 1.0
+title: The default padding
+subtitle: A full quarter of figures, at the density every table has had until now
+place:
+  - at: {cols: {from: 0, to: 11}, rows: {from: 0, to: 7}}
+    table:
+      banding: true
+      header: [Region, Q1, Q2, Q3, Q4]
+      align: [left, right, right, right, right]
+      rows:
+        - [Northern, "520", "610", "588", "640"]
+        - [Southern, "310", "356", "402", "418"]
+        - [Eastern, "180", "204", "196", "232"]
+        - [Western, "170", "170", "184", "190"]
+      total: [{text: Total, emphasis: true}, "1,180", "1,340", "1,370", "1,480"]
+---
+section: Density
+kicker: DENSITY 0.55
+title: Tightened to what real decks use
+subtitle: The same table at the padding the corpus's own tables are set in
+place:
+  - at: {cols: {from: 0, to: 11}, rows: {from: 0, to: 7}}
+    table:
+      density: 0.55
+      banding: true
+      header: [Region, Q1, Q2, Q3, Q4]
+      align: [left, right, right, right, right]
+      rows:
+        - [Northern, "520", "610", "588", "640"]
+        - [Southern, "310", "356", "402", "418"]
+        - [Eastern, "180", "204", "196", "232"]
+        - [Western, "170", "170", "184", "190"]
+      total: [{text: Total, emphasis: true}, "1,180", "1,340", "1,370", "1,480"]
+---
+section: Density
+kicker: DENSITY 0.5
+title: Nine columns, which the default refuses
+subtitle: Tightening the padding is the fix the error message names
+place:
+  - at: {cols: full, rows: {from: 0, to: 7}}
+    table:
+      density: 0.5
+      rules: header
+      header: [Month, Signups, Trials, Paid, Churn, MRR, ARPU, NPS, Tickets]
+      align: [left, right, right, right, right, right, right, right, right]
+      rows:
+        - [January, "1,204", "418", "96", "11", "£8.2k", "£85", "41", "212"]
+        - [February, "1,388", "462", "118", "9", "£9.6k", "£81", "44", "198"]
+        - [March, "1,502", "511", "140", "14", "£11.4k", "£81", "39", "241"]
+        - [April, "1,610", "548", "162", "12", "£13.1k", "£81", "47", "230"]
+      total: [{text: Q1 + April, emphasis: true}, "5,704", "1,939", "516", "46", "£42.3k", "£82", "43", "881"]
+---
+section: Density
+kicker: VALIGN
+title: The default that changed
+subtitle: Every cell in the corpus's real tables is middle-anchored; ours were top
+place:
+  - at: {cols: left-half, rows: {from: 0, to: 7}}
+    table:
+      valign: top
+      rules: header
+      header: [valign, "top"]
+      align: [left, left]
+      widths: [1.2, 3]
+      rows:
+        - [Short, One line beside a cell that wraps across three or four of them because the column is narrow]
+        - [Also short, "And another"]
+  - at: {cols: right-half, rows: {from: 0, to: 7}}
+    table:
+      rules: header
+      header: [valign, "middle (default)"]
+      align: [left, left]
+      widths: [1.2, 3]
+      rows:
+        - [Short, One line beside a cell that wraps across three or four of them because the column is narrow]
+        - [Also short, "And another"]
+---
+title: Everything above is a real PowerPoint table
+subtitle: Selectable text, editable cells, merged spans that PowerPoint sees as merged
+background: inverse

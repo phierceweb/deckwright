@@ -1,0 +1,358 @@
+# Testing
+
+How this library is tested: what the template test guards, what only a unit test can
+guard, and how to tell a test that fails when the behaviour breaks from one that cannot
+fail at all.
+
+This is about the **library's own test suite**. For checks that run against a *built
+deck* — bounds, safe zones, min font size, contrast, render overflow — see
+[`qa.md`](qa.md). `deckwright qa` is a product feature; this doc is about `bin/test`.
+
+---
+
+## Table of Contents
+
+- [Running the suite](#running-the-suite)
+- [Why these rules](#why-these-rules)
+- [The template test is the primary guard](#the-template-test-is-the-primary-guard)
+- [What only a unit test can guard](#what-only-a-unit-test-can-guard)
+- [Tests that cannot fail](#tests-that-cannot-fail)
+- [Proving one either way](#proving-one-either-way)
+- [Fixtures that dodge the defect they name](#fixtures-that-dodge-the-defect-they-name)
+- [Redundant tests](#redundant-tests)
+- [Raw OOXML has its own gate](#raw-ooxml-has-its-own-gate)
+- [Adding a capability](#adding-a-capability)
+- [Adding a unit test](#adding-a-unit-test)
+
+## Running the suite
+
+`bin/test` runs pytest through the project's interpreter and passes its arguments on.
+
+- **A whole-suite run spreads across every core** when `pytest-xdist` is installed, as it is
+  with the `[dev]` extras: `bin/test` adds `-n auto --dist loadgroup`. Each brand template's
+  tests form one xdist group, so its `conform` run builds once, on one worker, and
+  `tests/test_templates.py` takes as long as its slowest template rather than the sum of all
+  of them.
+- **Selected tests run in one process**: a path or node id, `-k`, `--lf`. Starting a worker
+  per core costs more than a handful of tests take. `--pdb`, `--trace`, `--collect-only`,
+  and anything already passing `-n`, `-p` or `--dist` reach pytest untouched, so a selection
+  worth spreading takes the flags itself:
+  `bin/test tests/test_templates.py -n auto --dist loadgroup`.
+- **`bin/test -n0`** runs the whole suite serially, which is also what happens without
+  xdist installed.
+
+A test must stay safe beside a copy of itself on another worker: take paths from `tmp_path`,
+set environment through `monkeypatch`, and write a shared cache through an atomic replace, as
+the panel and media caches do. A new expensive module-scoped fixture gets an `xdist_group`
+per parameter, as the one in `tests/test_templates.py` does, or each worker that draws one of
+its tests builds it again.
+
+`extract` on a deck still beside its build fills what the file does not show from the spec
+the build kept, which would let a test of what the file alone gives back pass on the spec's
+word. An autouse fixture in `tests/conftest.py` keeps that spec unread; a test of it is
+marked `kept_spec`, as `tests/spec/test_snapshot.py` is.
+
+## Why these rules
+
+Real defects have shipped through a green suite. Every one was a *template-variance*
+defect — the code trusting something a synthetic fixture always gets right — and every
+one was found by building a deck on a real template and looking at the render, not by
+adding tests.
+
+Draw both lessons, not one. Unit tests are the only guard on a large share of this
+codebase — guard clauses, error types, defaults, manifest vocabulary — so "write fewer
+unit tests" is the wrong conclusion. But a test count is not a measure of safety, and
+tests written against machinery invented alongside them mostly assert that the
+machinery agrees with itself.
+
+Do not add figures to this doc. Counts of tests, exercises, templates, or coverage rot
+on the next commit and settle nothing; the rules below are what survives, and each one
+names the mutation that defeats the test it argues against.
+
+To see which lines the suite never runs, install `coverage` and `pytest-cov` into a scratch
+directory on `PYTHONPATH` and pass `--cov=deckwright` to `bin/test`. The project pins
+neither, and a line that runs is not a line that is guarded: the mutation is still the test.
+
+## The template test is the primary guard
+
+`tests/test_templates.py` builds every capability in
+`src/deckwright/conform/` against **every brand template in `templates/`** — the
+same directory decks resolve `theme:` from, with `-4-3` twins skipped and a generated
+`deckwright sample` refused by its own `docProps` mark. It then asserts on the resulting
+deck and its manifest: every exercise builds, the deck reads back, the package holds no
+duplicate shape id or broken relationship, no ink is unreadable on what was really
+painted behind it, nothing lands outside the slide or intrudes on a reserved region, and
+the derived theme bound a real brand accent.
+
+It answers the one question nothing else can — *can the library build a deck on a design
+it did not choose?* Each run re-derives the theme by measurement, so what it exercises is
+genuine brand variance rather than a fixture shaped to pass.
+
+**The guard is worth exactly the variety of `templates/`.** Read that off the directory;
+`deckwright doctor` reports it. One template is not a variance test, and neither is one
+template plus its 4:3 twin. `templates/` is gitignored, so the module skips where it is
+empty and **a green suite on a machine with no brand template proves almost nothing**.
+
+**Read every finding, not only the errors.** A contrast assertion that filtered to errors
+once stayed green while every line of a deck sat at 1.0:1 against its real backdrop, with
+the warnings the suite was choosing not to look at.
+
+**A check that reads what the code recorded can agree with itself.** Assertions that read
+`Theme.palette` answered "our defaults exist" rather than anything about the template — a
+blank `Presentation()` passed nearly all of them. They now read `derive`'s own `bind` and
+resolve each slot against the template's `clrScheme`, so an unbound accent is an empty
+result rather than a default one. Never assert a template's properties through a loaded
+`Theme`.
+
+Because a rule nobody can see rots the same way twice, **`tests/test_templates_gate.py`**
+hands those assertion functions a blank Office file and fails if they accept it, with the
+generated sample as the negative control — they must reject the blank *and* accept a
+designed template. It needs no template, browser or build, so it runs in CI and on a
+fresh clone, which is where a rotted assertion would go unnoticed longest.
+
+### What it structurally cannot cover
+
+- Any path a *successful* build does not execute — every `raise`, every validation
+  message, every "template is malformed" branch.
+- Values nothing downstream observes — a default that only affects appearance, a manifest
+  field no check reads, a CLI line nobody asserts on.
+- Anything behind a capability with no exercise. Missing exercise, missing coverage.
+- **What a renderer does with what the compiler wrote.** It reads the deck back out of the
+  file; it never opens one. A table row that is entirely a vertical merge is legal OOXML,
+  builds against every template and reads back correct — and LibreOffice imports it
+  wrongly, dropping a row and moving the table. **Build a deck and look at it before
+  calling a capability done**, whatever this test says.
+
+## What only a unit test can guard
+
+Write one when the behaviour is unreachable from a successful build, or invisible in its
+output:
+
+- **Guard clauses and their error type.** Every validation raise in `spec/parse.py`,
+  `spec/_slide.py`, `spec/_checks.py`, `theme/load.py`, `theme/chartstyle.py`,
+  `charts/model.py` and the components is unit-tested and only unit-tested. Neutering
+  one to `if False:` passes the rest of the suite. A `ThemeError` degrading into a raw
+  `TypeError` is a real regression nothing else sees.
+- **Silent acceptance of unknown keys.** Replacing an `unknown = sorted(set(cfg) - set(_KEYS))`
+  check with `unknown = []` is invisible everywhere except its own unit test — and a spec
+  field silently dropped is the failure the parser exists to prevent.
+- **Defaults and constants with no downstream assertion.** A build succeeds with any of
+  them mutated. Pin the value with a literal, never by reading the constant back.
+- **Values that only exist in the manifest.** Its geometry and contrast are checked; its
+  vocabulary is not. An unknown `rendered` value written straight through corrupts the QA
+  contract silently.
+- **Wiring between layers that end-to-end output hides.** `tests/compile/test_build_body.py`
+  reaches no unique source lines and is still the sole guard on the `animate:` → manifest
+  wiring; a coverage-only reading would delete it.
+
+Use a **real template** wherever behaviour depends on template variance. Swapping the
+major and minor font faces in `theme/clrscheme.py` is invisible to any synthetic fixture,
+because stock Office uses the same face for both.
+
+## Tests that cannot fail
+
+Three shapes. They are written as sketches rather than file references on purpose: the
+shape is what recurs, and a citation rots the moment a test is renamed.
+
+Recognise one by asking what single source line you would change to redden it. If the
+answer is "nothing", or "the test itself", it is one of these.
+
+### True by construction
+
+Holds for every possible implementation.
+
+```python
+# The key can only appear if the source contained it — true for any parser
+# that does not fabricate keys.
+assert "chart" not in slide.content
+
+# (L+0.05)/(L+0.05) for ANY luminance function, including `return 0.5`.
+assert contrast_ratio(x, x) == 1.0
+
+# python-pptx already defaults a bubble plot's dLbls to True. Skipping the
+# labelling entirely leaves this green.
+assert chart.plots[0].has_data_labels is True
+
+# `height` is derived from `rect`, so anything built from it satisfies both
+# bounds. Returning `rect.height` outright passes.
+assert 0 < result.height <= rect.height
+```
+
+Assert what our code *writes* — the themed font, colour, number format.
+
+### Circular — asserting a property with the function under test
+
+```python
+# WRONG — `accent_on` decides using this same `contrast_ratio`.
+assert contrast_ratio(accent, inverse.bg) >= AA_LARGE
+
+# RIGHT — a literal value for a literal palette.
+assert ctx.accent(size_pt=24) == "1F3864"
+```
+
+The wrong version passes with `contrast_ratio` forced to 21.0, with `required_ratio`
+forced to 0.0, and with the give-way branch deleted — the exact behaviour it claims to
+test.
+
+### Vacuous negative
+
+`not hasattr`, `x not in y`, `== []` over a surface the code never writes, or with a
+fallback that swallows the failure.
+
+```python
+# The `or ""` holds whenever labels are absent ENTIRELY, so gutting
+# `_style_data_labels` to an immediate return leaves this green.
+assert '"%"' not in (labels.number_format or "")
+```
+
+Never put `or ""`, `or {}`, or `.get(k, default)` inside an assertion about what the code
+produced. Assert the object is present first.
+
+## Proving one either way
+
+Break the line the test claims to guard, clear `__pycache__` — a stale `.pyc` makes a
+mutated file keep passing — and run the test alone. Then run its directory: if a sibling
+reddens and the test itself does not, the behaviour is guarded and the test is redundant
+rather than a hole. That distinction decides whether to delete it or rewrite it.
+
+## Fixtures that dodge the defect they name
+
+A cache-staleness test whose fixture wrote the edited template to a *sibling filename*
+never hit the stale key it existed to catch: the mutation it guards against passed the
+whole suite. It now edits the template in place.
+
+When a test names a defect, construct the exact condition that defect requires. If the
+setup takes a shortcut, the test measures the shortcut — and reports green for precisely
+the bug it was written to catch.
+
+## Redundant tests
+
+Do not write a test asserting internal arithmetic a template build already proves
+end-to-end, and do not write one a neighbour already covers strictly.
+
+Two shapes to watch for: a test asserting three fields where a sibling asserts the whole
+object, and a per-case test standing beside a parametrized sibling that already covers
+its case.
+
+Prove redundancy before deleting — delete the test, re-apply the mutation it claimed to
+guard, and confirm the suite still reddens. "It looks redundant" is how a real guard gets
+thrown away. Coverage is not the criterion in either direction: several files reaching no
+unique source lines are load-bearing under mutation (`tests/qa/test_model.py`,
+`tests/layouts/test_compose_geometry.py`, `tests/compile/test_build_body.py`) — the lines
+run elsewhere, but nothing elsewhere asserts on the *values*.
+
+## Raw OOXML has its own gate
+
+`src/deckwright/motion/` writes `<p:timing>` and `<p:transition>` as raw strings, because
+python-pptx models neither. **No other layer in this project can check that output.**
+
+- LibreOffice converts schema-invalid timing to PDF without complaint.
+- `deckwright qa` renders the final state of a slide, which a build mid-reveal and a
+  transition are both invisible to.
+- A `filter` string is `xsd:string`, so a typo validates and silently does nothing.
+
+The gap is not hypothetical: a missing required attribute on chart builds reached
+delivered files because nothing mechanical looked.
+
+`tests/test_ooxml_schema.py` validates every writer against the ISO/IEC 29500-4:2016
+schemas vendored in `tests/schemas/ooxml/`, and carries a negative control that strips a
+required attribute and asserts the gate reddens. Without that control, a validator that
+silently passed everything would look identical to one that works.
+
+`pml.xsd` has no `mc:AlternateContent`, so a slide carrying one never validates whole. A
+writer that emits one — an equation, a morph — validates through `branch(root,
+"Choice")` and `branch(root, "Fallback")` in `tests/ooxml.py`: each is the slide one reader
+sees, with the wrapper replaced by that branch. The vendored schemas carry no extension
+namespace, so `branch` removes what the Choice's `Requires` names and validates the ISO
+structure around it. Its negative control breaks one branch at a time: that branch must
+redden and the other still pass. A harness that dropped the wrapper, or read one branch for
+both, fails it.
+
+`validate_deck` in `tests/ooxml.py` checks every XML part of a built `.pptx` — XML by its
+declared content type, by a `.xml` or `.rels` name whatever the type says, or as a VML
+drawing — whose root the vendored schemas declare (`tests/schemas/ooxml/SOURCE.md` says which
+schema reaches which root). A part must be XML 1.0 in UTF-8 or UTF-16, and is held to the
+root its content type promises: no other type, generic, unlisted or not XML at all, shelters
+a root an Office type owns, and no unlisted Office type shelters a declared one. The table of
+content types and roots is pinned against ISO/IEC 29500 in the tests. Each part is judged on
+each view of its markup compatibility, one per Choice position and then the Fallback, every
+wrapper taking the same branch in a view; a reader mixing one wrapper's Choice with another's
+Fallback is not modelled. What an `mc:Ignorable` names is dropped from every view as a reader
+drops it, unless it is a namespace the views judge, and text a reader keeps stays where
+markup compatibility puts it. Markup compatibility is judged too: a wrapper that is not
+Choices then at most one Fallback, or holds text; a Choice or Fallback outside a wrapper; an
+element of the namespace other than those three; an attribute on them other than a Choice's
+`Requires` and the namespace's own; a Choice with no `Requires`; a `Requires` naming a prefix
+declared nowhere or a namespace every reader understands; a `MustUnderstand` naming one no
+schema here has; a `ProcessContent` naming one nothing ignores; and any of these attributes
+naming an undeclared prefix. Each Office Math element whose parent is not Office Math is judged
+by the math schema on its own; each DrawingML run property inside it stands in the slot
+Word's `w:rPr` has, so its place and count are judged, and is judged as DrawingML in a run of
+its own; a WordprocessingML element in the maths is a fault. Two attributes are rewritten in a
+copy first: the chart axis ids python-pptx writes signed where the schema wants
+`xsd:unsignedInt`, and the `a:buSzPct` PowerPoint writes in thousandths of a percent where the
+schema wants `N%`; any other value is the schema's to name. A part that cannot be parsed, has
+a DOCTYPE, has no content type, or holds a root its content type does not allow is a fault
+under its own name, as is a `[Content_Types].xml` that is absent, cannot be read or repeats
+an entry, and a member whose name repeats another or differs from it only in case. An
+embedded workbook is a package of its own and is not opened. libxml2 names the first fault in
+a content model and does not judge the siblings after it, so one fault can stand for several.
+
+What a verdict passes over is recorded beside it. A part whose root nothing declares is
+listed unchecked: the package's content types, relationships and document properties, SVG
+and VML drawings, a template's `customXml`, and Microsoft parts the ISO schemas do not define,
+such as `p1510:revInfo` and `cs:chartStyle`. Per part, every namespace the views do not judge
+— anything `pml.xsd` does not reach beyond Office Math and markup compatibility — is listed,
+on an element or an attribute, with an element in no namespace as one more entry; and, apart
+from those, the tag at the top of each ISO subtree the schemas could not reach: one directly
+inside an `extLst` entry or under an element they do not define, unless it is a global element
+a lax wildcard reaches, and any under an element a reader's view drops. The catalogue test
+pins all three sets, so one more is a change to look at. The corpus test requires every
+unchecked root to be of those kinds and every passed-over namespace to be Microsoft's, and
+does not assert on the unreached tags, since Office writes ISO colour elements inside its own
+extensions.
+
+`tests/test_ooxml_schema.py` builds the capability catalogue against `base` on a cache of its
+own, requires every part valid and every `.xml` and `.rels` member accounted for, and holds
+each rule above to a negative control: one part of each kind the build holds is broken by an
+element no schema allows and by a value no type allows, and that part alone must be named,
+under the branch that carries the fault; every other rule gets a case that breaks it and
+asserts it is named. The test ids are the inventory. `tests/test_templates.py` requires each
+brand template's build valid apart from faults the template handed it, reading the template's
+own verdicts for that. A fault is the template's only in a part the build carried over —
+never a slide, notes slide or chart — whose digest, its content type and its canonical form
+with blank text between elements dropped as python-pptx reads a part, equals the template's,
+and whose errors are the template's; it is reported as an `xfail` naming the part and its
+first error, which `-rx` shows. `tests/test_templates_gate.py` hands those assertions stock
+files broken in each way that rule distinguishes.
+
+**Schema-valid is a floor, not proof.** Only real PowerPoint says whether a file opens
+without a repair prompt. See [`motion.md`](motion.md#verification).
+
+## Adding a capability
+
+A new component, chart kind, layout, or slide-level feature gets an entry in
+the family module in `src/deckwright/conform/` that owns the shape. That is the test.
+
+1. Add a key to `EXERCISE` — a plain-content slide dict written the way a real deck would
+   use the feature. No brand words: the point is what the *template* can carry.
+2. Keep it minimal but representative. `conform` builds each exercise as its own one-slide
+   deck so a failure names itself, then builds one whole deck from everything that passed.
+3. Run `bin/test tests/test_templates.py -n auto --dist loadgroup`. The feature is now
+   driven against every template you hold, and its geometry, contrast and reserved-region
+   behaviour checked on each.
+
+Do not follow this with a unit test for the same feature's arithmetic. It is redundant by
+construction — see [Redundant tests](#redundant-tests).
+
+## Adding a unit test
+
+Before writing it, answer both:
+
+1. **What single line would I change to make this test fail?** If the answer is "nothing"
+   or "the test itself", it is one of the shapes above. Do not write it.
+2. **Does a successful template build already execute this line and observe its result?**
+   If yes, that is the guard. Do not write it.
+
+Then verify the first answer by hand: break the line, watch the test go red, put it back.
+A test never observed failing has never been tested.

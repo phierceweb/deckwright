@@ -1,0 +1,751 @@
+# Changelog
+
+Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
+release; `main` is the development line.
+
+## v0.10.0 — 2026-11-02
+
+- The library is the same as v0.9.0's.
+- The repository's history is consolidated into a single commit and starts at this release.
+  Earlier tags are no longer published: replace an older clone and pin to `v0.10.0`.
+
+## v0.9.0 — 2026-11-01
+
+- Plates, lines and scrims reference none of the template's effect styles, so a brand's
+  shadow, glow or bevel no longer lands on every shape deckwright draws.
+- `extract` on a deck still beside its build reads the spec that build kept: on a slide
+  still where the build put it, a placement whose shapes and words are unchanged comes back
+  as its own component with its spec's fields, `align:`, `anchor:`, `bleed:` and a morph
+  placement's `id:`, and each slide's draft names the placements filled this way. What the
+  file states and `extract` reads, such as `reveals:`, alt text and a card's `pair:`, still
+  comes from the file. A kept spec naming an `extends:` module is not used, and never
+  imported.
+- A build keeps its spec byte for byte.
+- The capability catalogue draws an elbow connector and a preset icon.
+
+## v0.8.0 — 2026-10-22
+
+- The capability catalogue's cover carries speaker notes, so a `demo` or `conform` deck holds
+  a notes slide.
+- The test suite validates every XML part of a built deck whose root the ISO/IEC 29500-4:2016
+  schemas declare, and records what it passes over.
+- The unit suite builds the whole capability catalogue against `base`, so it needs a
+  Chrome-family browser.
+- The template corpus validates each brand template's build the same way, and reports apart a
+  fault in a part carried over unchanged from the template.
+
+## v0.7.0 — 2026-10-19
+
+- On pw-foundation 1.0 in place of pf-core.
+- The command line's exit codes and messages are unchanged and now deckwright's own: `2` for
+  a usage error, `1` for a failure, `130` when interrupted. typer is a direct dependency.
+- `bin/setup` wires a checkout with `pw-setup`, which links `docs/pw-foundation` and migrates a
+  leftover `.pf-guards.toml` and `docs/pf-core` link. The structural gate reads `.pw-guards.toml`.
+
+### Spec
+
+- `chrome: side` stacks a slide's kicker, title and subtitle in the left third and gives the
+  body the columns beside it, `cols: full` being the rest; `chrome: statement` centres the
+  title at the display rung, for a slide that is its title.
+- A placement's `animate: none` keeps it on screen while the rest of the slide builds.
+- A chrome line with its own frame takes `build: last`, arriving after everything the slide
+  builds — on a slide with no `animate:`, as its one click.
+- `carry: previous` starts a slide from the slide before's `morph:` placements, a placement of
+  the same name replacing its copy in place; `drop:` leaves named copies behind. A carried copy
+  is on screen when the slide lands, whatever the slide builds.
+
+### Motion
+
+- A chart building `by_category` or `by_series` is followed by the slide's other placements,
+  one group per click on the same timeline: the bars, then the claim. Written to the schema;
+  PowerPoint playback, like that of `build: last`, is unchecked.
+- `by_category` and `by_series` are refused on a slide with no chart that builds, whatever else
+  it holds.
+
+### Components
+
+- `equation` frames its fallback line at the placement's width and aligns it there, so
+  LibreOffice sets it on one line when it substitutes the theme's face.
+- `card` honours `anchor:`: its type sits at the top, middle or bottom of the plate, and
+  its icon moves with the type and follows `align:`.
+- `versus` keeps a value joined by a no-break space on one line, sizing its plate for
+  `0.3 nm` whole.
+- A `callouts` dot on a slide painted `accent-1` gives way to the next accent clearing 3:1,
+  else the slide's ink, so the dots no longer vanish into the ground.
+- A `card`, `bullets`, `code` or `document` fit refusal prints its two heights to as many
+  decimals as it takes to tell them apart.
+
+### Layout
+
+- A chrome line's ink is tried, and any plate laid under it, only where its words can
+  land: as wide as a line that does not wrap, at its box's anchor when it has one, and as
+  high as a stacked line rises when the lines above it wrap shorter than estimated. A shape
+  beside a short subtitle no longer gets a strip of slide paper across it, and a plate is
+  named `s<n>.chrome.<line>.plate`.
+
+### Render and QA
+
+- `rhythm` (INFO) counts the run test: a run of slides sharing a ground, a mass and the
+  title's place; slides ending on a band under the body; a title that never moves; and runs
+  of one-group-per-click builds.
+- `chrome-overlap` and `chrome-plate` (WARN) report a placement that a chrome line's words
+  can land on, or that the plate under one covers.
+- `morph-unpaired` reports a new name only where a name of the same component from the slide
+  before has gone — a renamed shape — and no longer a shape entering a morph sequence.
+- The contact sheet numbers each slide in a strip above it, clear of the slide.
+- `.beats.md` reads a table's beat from its cells and a list's from the item it reveals.
+
+### Starting a deck
+
+- `bin/run new` writes eight slides in eight compositions — a statement, a side title over an
+  unbuilt list, cards built in order, a question over a chart and its claim beside it among
+  them — each commented with when it fits, and names the theme's grounds and canvas in its
+  header.
+- `examples/title-treatments.deck.yaml` builds on every theme in the corpus.
+
+### Documentation
+
+- `treatments.md` gains Compositions — where a slide's weight and title go, chosen by its job,
+  with a spec per row — the claim-or-evidence-first choice, a footer row in the costume table,
+  levers rotated rather than stopped at the cheapest, and the motion run test's number and
+  levers. `lessons.md` names what each kind of click is for. `CLAUDE.md` routes a new deck
+  through `new`, a theme preview and a per-slide plan before the per-slide docs.
+- `treatments.md`'s run test counts what the eye sees — ground, mass and title position —
+  and its placement examples carry `cols:`. Corrections across `authoring.md`,
+  `components.md`, `errors.md`, `flows.md`, `choosing.md` and `theme.md`: what each
+  component reveals per click, the extra axes click of a chart build, a `by_category`
+  slide holding the chart alone, `reveals:` needing a pointer, YAML punctuation inside
+  braces, `base`'s fade, the ratio past which `versus` stops drawing to scale, and a theme's
+  canvas being its template's.
+
+### Reading decks
+
+- `extract` measures a shape inside a group where the group draws it, moved and scaled: a
+  hand-grouped placement keeps its box without a manifest, and a text box on a grouped plate
+  is that plate's card.
+- `extract` names an icon by the outline it draws, from the drafting theme's icons,
+  `DECKWRIGHT_ICON_DIR` and the shipped set: an `icon:` placement comes back with its name,
+  `ink:`, `size:` and alt text, and a card keeps its icon.
+- A line over an image comes back on the rung its size matches, and a chrome line drawn in a
+  frame of its own comes back as the slide's `chrome:` block.
+- With the manifest found, a draft carries the deck's `sections:`, and each slide's `section:`
+  and `chrome:` preset.
+- A heading box and a body box lying on one plate come back as one card.
+- A drafted card is given the rows its type and icon need, so a slide of cards drafts into
+  one that builds.
+- A draft carries a slide's `lang:`, a placement's `bleed:` and a table's column `widths:`, so
+  a deck with Han text, a bleed or uneven columns drafts into one that builds.
+- Where pictures would push a slide's words off, the draft tries the words in the left half
+  and the pictures down the right, and keeps whichever layout loses fewest words and then
+  places most pictures.
+- A placement the slide's build leaves out drafts as `animate: none`, and a chrome line the
+  build reveals as `build: last`.
+- An `image` with two or more `over:` lines no longer reads back as hand-edited.
+- A `morph:` name holding a `#` reads back whole in `extract`, `.content.md` and `.beats.md`.
+
+### Type
+
+- Fit estimates wrap a hyphenated word after its hyphens, as LibreOffice does, so a long one
+  is no longer sized a line short.
+- Fit estimates keep a hyphen with the ideograph, emoji or fullwidth character before it, and
+  break after it.
+
+## v0.6.0 — 2026-10-04
+
+- On pf-core 0.25.
+
+### Components
+
+- `code` measures its lines in the theme's mono face, inside the plate's padding and
+  rounded corners. **A listing with a line wider than its plate is refused** unless it sets
+  `wrap: true`, and a wrapped listing's plate is as deep as the rows its lines wrap to.
+- `code` draws a tab as spaces to the next multiple of four columns, does not charge a
+  line's trailing spaces, and charges a space its face may lack a full em.
+- `code` sets its rows exactly 1.55 times the type size apart, the advance its plate is
+  sized for, and moves the leading above its first row from the plate's top margin to its
+  bottom one.
+- Courier New, Liberation Mono and Cousine have a width table of their own, covering
+  accents, Greek, Cyrillic, arrows and box drawing. A `mono` face without it is charged the
+  widest monospace advance measured for Latin, and the widest glyph of its class beyond it.
+- `code` refuses a placement too narrow for its plate's padding to leave room for a line.
+
+### Type
+
+- Fit estimates break a line where LibreOffice does: never beside a no-break, figure or
+  narrow no-break space unless a hyphen or en dash comes before it, nor after a hyphen before
+  a digit, between two hyphens, or after a hyphen opening a word. An overlong word in text
+  carrying CJK keeps its kinsoku.
+
+### Render and QA
+
+- `overflow` reports a line set on a plate — a `code` listing — that the render does not
+  hold inside that plate.
+
+## v0.5.0 — 2026-09-30
+
+- On pf-core 0.24.
+
+### Spec
+
+- An unquoted `yes`, `no`, `on` or `off` in copy — a table cell, bullet, chart category or
+  title — prints as written. Fields that take `true` or `false` read those words by the
+  truth they spell. **`banding`, `wrap`, a cell's `emphasis` and a `versus` side's
+  `highlight` refuse a value that is not a boolean**, where a quoted `'no'` turned them on.
+- Optional copy written `no` or `off` — a bullets heading, a stat label or caption, a
+  callout or flow body, a `versus` note, an image's `over` text — is set instead of dropped.
+- A key YAML reads as a date, a boolean or a number, written beside a misspelt key, is
+  refused with the unknown-key message, naming the key as YAML read it, in a spec and a
+  theme alike.
+
+### Theme and conform
+
+- A theme with a non-finite chart number; a NUL, over-long name or symlink loop in
+  `template:` or `icons:`; `nan%` or `inf%` in `scale:`; a type size at or below zero,
+  `line_weight_pt: 0` included; a `reference_height` too small to divide by; or a face that
+  is not one name is a `ThemeError` naming the key and its value.
+- `conform` skips an accent that stands off the page it derived by neither 3:1 contrast nor
+  35 ΔE, as it skips unedited stock accents, and its report names each accent skipped.
+  **Re-adopting a template whose accent matches its page changes that theme's accents.**
+- `conform` loads its theme and flattens a template's master picture once per run instead of
+  once per exercise.
+- `conform` reports each pair of accents it binds that sit closer than 35 ΔE.
+- A theme that binds its own `page` and no `line` gets a line derived from that page. **On a
+  dark or coloured page, rules, table rules and edges drawn in the default line change
+  colour**: a rule is drawn in `muted`, as it is on a light page.
+
+### Components
+
+- `equation:` sets one display equation from a LaTeX subset, written as PowerPoint stores an
+  equation: Office Math in an `mc:AlternateContent` Choice, and a Fallback of one line of
+  UnicodeMath, which readers without Office Math and every check read.
+- A `document:` card's corners and shadow blend on a dark or coloured slide, where they sat
+  on a white matte.
+- A `document:` card shows the pictures its markdown names from the markdown's own folder:
+  `![alt](path)`, an `<img>` or `srcset`, an SVG `<image>`, a `<video>` poster, or a CSS
+  `url()`. One named from anywhere else is refused.
+- A `document:` card draws a markdown table as ruled, padded cells.
+- **A `bullets` list is measured item by item as its items wrap, with the space after each
+  item, and a list whose tallest column would run past its placement is refused**, naming
+  the bullets and the lines they wrap to.
+- `swatches` reads `columns:`: 1 to 8 chips per row, clamped to the number of roles. Any
+  other value is refused. A row after the first starts below the labels of the row above.
+- `diverge` paints each direction in the first accent, then the label ink, that stands off
+  the ground behind its bars.
+
+### Charts
+
+- `highlight: true` shows on a pie or doughnut: the marked wedge keeps the first accent and
+  the rest fade that same accent toward the chart's ground, at two alternating depths, each
+  still standing off the ground itself. On a chart with several series the marked row keeps
+  each series' colour and the other rows fade. A highlight needs no second accent.
+- No two touching pie or doughnut wedges share a colour, the last and first included. Where
+  the accents run short, a wedge takes a tint or shade of an accent.
+- A `ChartSpec` built in code with a highlight its kind cannot show is refused.
+- A pie's data labels are pinned to `ctr`, so a small wedge's label no longer lands outside
+  the pie in the ink chosen for the wedge it named.
+
+### Motion
+
+- A click-to-reveal trigger is written in PowerPoint's own form: its sequence advances on a
+  click of the trigger alone, not on the slide's next click.
+- A slide takes `transition: morph`, written as PowerPoint's Morph transition with a fade as
+  its fallback, and a placement takes `morph: <name>`, which names its shapes alike on each
+  slide that carries the name, for Morph to pair.
+
+### Render and QA
+
+- `render` rasterises each page to a whole number of pixels, so a dark slide no longer shows a
+  light line down its right edge.
+- `qa` reports `series-colour` when two series in one chart share a fill.
+- `qa` reports `morph-unpaired`: a `morph:` name with no namesake on the slide before, or a
+  morph slide that names nothing.
+- `qa` reports `link-contrast`: the template's link colour, which Keynote draws, against each
+  linked shape's ground.
+- `render` links each typeface the deck names that fontconfig has installed under that name
+  into LibreOffice's profile, so those faces, and CJK text, render in their own type.
+- `render` writes a stamp beside its output, and `qa` reuses a render whose stamp matches the
+  deck on disk instead of converting the deck again.
+- `qa`'s `text-fit` measures `bullets` columns and counts paragraph spacing; the manifest
+  records `space_after_pt`.
+- `qa`'s `shape-id` and `shape-name` count ids per `mc:AlternateContent` branch. `extract`
+  reads a wrapped shape from its Fallback, and a build's paragraph builds judge a wrapped
+  shape by its Choice.
+- `qa`'s package checks resolve a relationship target that names its part from the package
+  root.
+
+### Reading decks
+
+- `diff` reads a copy saved under another name against its build, when the copy sits beside
+  the manifest: a built deck carries its build id.
+- `diff` no longer reports a table's cells or a chart's parts gone from an untouched deck, and
+  reports a slide deleted, pasted in, duplicated or moved as one line.
+- `diff` reports a shape `restyled` or `relabelled`, and a slide `retimed`: its build's clicks,
+  revealed shapes or triggers changed, or its transition did.
+- The manifest records the transition each slide arrives on.
+- The manifest records both lines of a `swatches` label, the role and its hex, so `diff` no
+  longer reports every chip retyped.
+- `extract` drafts a deck deckwright built as the placements that built it — card, bullets,
+  prose, table, chart, image, rule and panel — each at the box its manifest recorded, with
+  its `id:`, `morph:`, `reveals:` and a plate's `pair:`, and the slide's `animate:` and
+  `transition: morph`. Another component comes back as bullets of its words, or as an
+  image when it holds only a picture, and the draft says so; so does a reveal a spec
+  cannot state, which is left out.
+- `extract` drafts a chart from any deck as a `chart:` block with its kind and data, and a
+  filled shape holding a heading and a line, or a text box lying on one, as a `card:`.
+- `extract` drafts a picture as an `image:` with its alt text or decorative flag, a photo in
+  a picture placeholder included, and writes its file to a `<draft>.media` folder beside
+  the draft. An existing folder is refused without `--force`, and replaced with it. A
+  picture that would push a slide's words off it is named instead.
+- A slide holding more than the grid bands names each table row, chart and picture left
+  over; a slide read back by placement names what was added to it by hand.
+- `extract --as md` lists each picture's alt text, a card's words, and a chart's data.
+
+### Development
+
+- `bin/test` runs the suite in parallel when pytest-xdist is installed; `bin/test -n0` runs
+  it serially.
+- `lxml` and `rich` are declared dependencies, and `pytest-xdist` is a dev dependency.
+
+## v0.4.0 — 2026-09-14
+
+### Accessibility
+
+- `image`, `icon`, `document` and `chart` take `alt:`, written as the shape's alternative
+  text, and `decorative: true`, written as Office's decorative flag. Giving both is refused.
+- A slide's background image or theme art, and a `card`'s picture icon beside its words,
+  are marked decorative. `card` takes `alt:` and `decorative:` for its icon.
+- Pictures no longer carry their file name as alternative text.
+- `qa` reports `alt-text`: a picture or chart with neither alt text nor the decorative
+  flag, or with only a file name. WARN.
+- The manifest records `alt` and `decorative` per shape.
+- `extract` writes each dropped figure's alt text into the draft as a comment.
+
+### Links
+
+- A slide takes `id:`, and a placement takes `goto:` naming a slide id or a relative jump
+  (`first`, `previous`, `next`, `last`). Every shape the placement drew jumps when clicked.
+  A goto naming no slide, its own slide, or sitting on a `reveals:` trigger is refused.
+- `qa` reports `link`: a jump to a slide the show no longer contains, an unknown relative
+  jump, or a web link that is not an `http`, `https` or `mailto` address.
+- Copy takes `[words](address)` links to `http`, `https` or `mailto` addresses, in the
+  line's own ink and underlined. `code` keeps markup as written; a chart refuses a link;
+  `\[` escapes a bracket. `extract` writes linked runs back as markup.
+- The manifest records `goto` and `links` per shape, and a linked line's text as its words.
+- `relationship` no longer reports an empty `r:id`, which PowerPoint writes for click
+  actions that relate to nothing.
+
+### CJK
+
+- Chinese, Japanese and Korean text is measured at one em per ideograph, kana, hangul
+  syllable and fullwidth form, instead of the widest Latin glyph, and wraps where the
+  renderer breaks it: between ideographs and kana, at spaces in Korean, with kinsoku
+  (closing punctuation and small kana never start a line, opening brackets never end one)
+  and a trailing full stop or comma hanging past a full line.
+- Each run carrying CJK is written with its `lang` and the theme's face for its script. The
+  theme takes those faces from `type.ea` (`ja`, `ko`, `zh-Hans`, `zh-Hant`), else from the
+  template's `fontScheme` script entries.
+- The deck and each slide take `lang:`. **Han-only text with no `lang:` is refused on a theme
+  that sets Japanese and Chinese in different faces**, which most brand templates do.
+- `qa`'s `font-substituted` reads the fonts the rendered PDF embeds (Poppler `pdffonts`),
+  falling back to `fc-list`. A face installed but unreachable by LibreOffice is now reported.
+- `qa` reports `cjk-unrendered`: a slide with CJK text whose render embeds no CJK font. ERROR.
+
+### Reading decks
+
+- `inspect` and `diff` read a shape stored inside `mc:AlternateContent` from its fallback.
+  `inspect` listed nothing for one, and `diff` reported it `gone`.
+
+## v0.3.0 — 2026-09-12
+
+- Licensed **Apache-2.0**, replacing MIT, with a `NOTICE` file. The distribution's
+  `license` metadata is `Apache-2.0`.
+- `python-pptx` is pinned to `~=1.0.2`.
+
+### Theme and conform
+
+- `conform` derives `inverse` against the page a slide shows. A dark master gets a light
+  `inverse` and its own `inverse-ink`; a light-page template derives as before.
+  **Re-adopting a dark-page template changes its inverse surfaces.**
+- Loading a theme whose `inverse` is within 3:1 of its `page` logs
+  `theme_inverse_matches_page`. Re-adopting its template rebinds `inverse` and
+  `inverse-ink`, bound or left at the default; `conform` without `--adopt` reports it.
+- Re-adopting a theme keeps its comments and layout: only the lines whose values change
+  are rewritten. A change a line edit cannot make, such as a flow-style `bind:`, rewrites
+  the file and logs `theme_comments_dropped` when it had comments.
+- `conform`'s report names the `page`, `ink` and `inverse` of the theme it wrote, each
+  with its contrast, instead of the colour scheme's pair; an unbound one is marked
+  `(default)`.
+- A template outside the theme directory whose filename is already taken there is refused
+  without printing an `mv` over it, by `conform --adopt` and by a `theme:` naming it.
+- A template symlinked into the theme directory is adopted where the link is.
+
+### Spec
+
+- A number in a spec prints as it was written: `1.10` and `2.50` stay as typed in a table
+  or a stat. What YAML 1.1 reads in another base — `007`, `0x1F`, `1:30` — loads as the
+  text written, and an unquoted `crop: 16:9` is that aspect. A whole-number field such as
+  a column index refuses one by name.
+
+### Colour
+
+- **Text a component sets on the slide is inked for what is painted under it**: prose, bullets,
+  callouts, captions, `nav`, `fanout`, `diverge`, `code`, `grid` and a chart's labels, axis text
+  and legend over a `panel` or a picture, and a table's body cells on an inverse band. The
+  manifest records that ground, and a picture's scrim is part of it.
+- A `bleed:` card, disc, callout dot, `versus` or `fanout` plate, `diverge` plate or bar, or
+  `grid` bar is the ground for text laid over it, as a panel is. A disc covers its inscribed
+  square.
+- Text over a picture laid on top of a panel is inked for the picture.
+
+### Type
+
+- Width tables for Poppins, Open Sans, Montserrat, Amatic, Sniglet, Bebas Neue and Barlow
+  Semi Condensed. **Decks in those faces lay out against their real widths**, so prose,
+  cards, tables and titles take less room than the conservative estimate gave them.
+- A fit refusal whose estimate ran on a face with no width table says so.
+- **A `card` heading or body, a `stats` value or label, or a `flow` step holding a run wider
+  than its frame is refused**, naming the run and the width it needs, measured without the
+  sizing margin. A run ends at a space, after a hyphen or dash, and at each CJK character.
+  A word that fits its line is no longer counted as two lines by the wrap estimate that
+  sizes cards, flow steps, discs, chrome lines, prose, table rows, picture text and swatch
+  captions, and that `qa`'s `text-fit` check measures against.
+
+### Components
+
+- `nav` with no `items:` takes the deck's `sections:`, and with no `active:` marks the
+  slide's own `section:` when it is one of the items.
+- `SlideCtx.text_ink` and `SlideCtx.accent_at` return an ink for a box and the ground painted
+  under it, for components written outside the package; `ctx.painted` takes a `Disc` for a round
+  fill.
+
+### Motion
+
+- **`animate: one_at_a_time` reveals a single-column `bullets` list one bullet per click**, as a
+  PowerPoint build by paragraph in one text box. A list with several columns still reveals a
+  column per click, and `together` is unchanged.
+- Every component reports a motion role for each shape it reveals, so `motion.roles`
+  binds how text, surfaces, lines, figures and charts enter; a chart's own build takes the
+  `datum` entrance. **The lines in a `fanout` and between `flow` steps now wipe by default**,
+  as `rule` and `connector` do; a vertical stroke wipes along its length.
+
+### Charts
+
+- Area, doughnut and bubble charts print their data labels.
+- An area chart's first and last data labels are moved in off the plot edge, so they do not
+  sit on the value axis.
+- `xy-scatter-smooth` and `xy-scatter-smooth-no-markers` draw curves.
+- A data label drawn on a series' fill (pie and doughnut wedges, area bands, stacked bars,
+  `inside_end` bars) is inked for that fill, per wedge where wedges differ.
+- A chart with one named series is not titled with that series' name.
+- A chart's data labels, axis text and legend are recorded in the manifest with the ink and
+  ground they are drawn on, so `qa`'s `contrast` and `min-font` checks cover them.
+- **A bar or column chart's value axis starts at zero** when every value is zero or more.
+  `y_min` still overrides it; line, area, radar, scatter and bubble keep automatic scaling.
+
+### QA
+
+- `qa` warns `fill-ground` when a shape filled to stand off its ground (an inverse or accent
+  panel, card or disc, a plate, a bar, a dot) is separated from it by neither luminance nor
+  colour.
+
+### Errors
+
+- **Slides whose chapters run out of the order `sections:` lists are refused**, naming both.
+- A `theme:` naming a `.pptx`, at a path or by bare filename, is refused with the theme already
+  adopted from it, or else the `conform --adopt` command that onboards it, paths quoted and the
+  move into the theme directory included. A theme file that is not UTF-8 text is a
+  `ThemeError`.
+- Commands printed by `sample` and by `conform --adopt`'s refusal quote their paths.
+- An exception from a component's own code keeps its traceback and ends with a line
+  naming the slide and component. A component's `LayoutError` is unchanged.
+
+## v0.2.0 — 2026-09-04
+
+- **The project is `deckwright`.** The package, the `deckwright` command, the
+  `DECKWRIGHT_*` variables and the `.deckwright-cache` directory follow the name. A
+  `.env` carrying `PPTXKIT_*` needs its prefix changed; a `.pptxkit-cache` left behind
+  can be deleted. Decks and manifests already built are unaffected — a `.pptx` never
+  carried the package name.
+- On pf-core 0.22.
+
+### Extract
+
+- `deckwright extract <deck>.pptx` drafts a `.deck.yaml` from a deck deckwright did not build.
+  Kickers, titles, subtitles, body text, tables and speaker notes convert; every shape it
+  cannot turn into words is named in a `# not converted:` comment on the slide it came
+  from, repeats collapsed into `N × kind`. `--as md` writes a plain transcript instead,
+  `--out` chooses where it lands, and `--theme` is loaded, so the draft's `rows:` spans
+  that theme's grid and an unknown name fails before anything is written. `out:` defaults
+  to `out/<slug>/<title> v1.pptx`, the same slug `deckwright new` uses.
+
+- `extract` walks grouped shapes, reads chrome back out of the shape names `build`
+  writes, so a deck deckwright built keeps its kicker, title and subtitle, and takes a
+  slide's first block as its title when it is one line set larger than everything else
+  on the slide. Shapes overlapping vertically are one row, read left to right. An element
+  python-pptx cannot build — `p:contentPart`, `mc:AlternateContent` — is named by its
+  tag.
+
+- `extract` recovers a slide's `background:` when the colour painting the whole canvas is
+  one the named theme declares. A colour it does not declare is written into the draft as
+  a comment naming the hex.
+
+- The bullet marker `build` writes is taken off again on the way in, so a deck survives
+  any number of extract-and-rebuild round trips. The draft is not otherwise a fixed point
+  — a columned list comes back as one placement per column — but its words are. A leading
+  dot in a deck deckwright did not build is left as content.
+
+- `build` refuses an `--out` (or an `out:`) that is the spec being compiled, or that names
+  any `.yaml`/`.yml` path — a deck written over its spec leaves nothing to rebuild it from.
+  Rebuilding over an existing `.pptx` is unchanged. The spec snapshot under `.build/` is
+  now taken before the deck is written rather than after.
+
+- `extract` refuses a destination that already holds a file, so the second run over a
+  deck does not replace the draft you edited after the first; `--force` overwrites. That
+  refusal and an `--as` that is neither `yaml` nor `md` are both raised before the deck
+  is read.
+
+- An extracted draft builds as written. A table placement gets the rows its own height
+  will demand at build; every other placement gets a fixed two.
+  A slide holding more than the grid can band runs its blocks together and columns a long
+  list; whatever still does not fit is written in as comment lines.
+
+### Motion
+
+- `qa` reads a deck's timing: `beats` reports each animated slide's rhythm, `beat-size`
+  warns when one beat of a staged build reveals more than `DECKWRIGHT_MAX_BEAT_SHAPES`
+  (default 6), and `dead-trigger` reports an interactive reveal that cannot fire or that
+  reveals what is already on screen. `animate: together`, a chart build and a `reveals:`
+  trigger are exempt from `beat-size`: one click is what each of them declares.
+
+- Every build writes `<deck>.beats.md` beside `<deck>.content.md` — the reveal order in
+  words, click by click, each section headed by its slide's title.
+
+- The manifest records the **clicks** an animation spends, which is not the number of
+  beats its components grouped: `animate: together` and an `after_previous` chain spend
+  one, a chart build spends one per part plus one for its axes, and an interactive
+  `reveals:` spends none and names its trigger.
+
+- A ring of `reveals:` is refused at build. Chains still build — click one to reveal the
+  next is real staging.
+
+### Charts
+
+- A pie or doughnut carrying more than one series is refused by name. python-pptx
+  keeps only the first, so the second reached a strict `zip` and came out as a bare
+  traceback.
+
+- A radar series carries no `c:smooth`. python-pptx writes one for every connected
+  kind and `CT_RadarSer` has no such child, so the chart part did not validate.
+
+- A chart's `labels:` names the series that print their data labels, so a flat reference
+  series stops stamping the same number over every point.
+
+- A chart's value axis takes the same number format its data labels do, so a line whose
+  points read `11.2%` sits against a scale reading `0.0%`.
+
+- Chart data labels keep their decimal places, read off the data — `11.2, 9.6, 5.1, 4.8`
+  labels to one place, whole numbers to none. `decimals:` overrides it, `0` included, and
+  the `*-stacked-100` kinds are no exception: their axis shows the computed share while
+  each label prints its own series value.
+
+- `qa` warns as `chart-datapoints` when a bar or column chart plots fewer than four
+  values, quoting `choosing.md`'s rule. A warning, not a refusal.
+
+- A chart legend goes under the plot on every kind but the bar family, which keeps the
+  column it reserves beside its category labels. The bar family's legend gets a measured
+  column out of the same budget as those labels, and the plot keeps at least 45% of the
+  frame.
+
+- A data label takes a position only where the chart group offers one: `inside_end` is
+  written for the bar family and a pie, the line and scatter kinds sit above their point,
+  and area, doughnut and radar are left without one. A theme naming a `label_position`
+  does not get to write it into a group that has none.
+
+- `versus` sizes each plate in proportion to its value, so a side 60% larger is 60%
+  wider. Values with no number keep the even split, and so do two written in
+  different units — `2 days` against `4 hours` reads 2 against 4 and would draw the
+  longer span smaller. A magnitude suffix is part of the unit: `$1.2M` and `$480K` do
+  not compare, and neither does a singular against its own plural: the unit is matched
+  whole, because no string rule separates `hrs`/`hr` from `ms`/`m`. The smaller plate
+  never drops below the width its longest word needs, so a lopsided pair widens rather
+  than breaking type mid-word; a placement too narrow for both sides is refused.
+
+- The chart block's `annotate:` key is gone; a deck still carrying one is refused by
+  name. For a callout on one point, place a `callouts` or `prose` beside the chart.
+
+### Type and colour
+
+- A typo in a theme's `scale:`, `scale.margin:` or `type:` block is refused by name.
+  Only the top level was checked, so a misspelled key was dropped and the built-in
+  default stood — the theme read as though it had been honoured.
+
+- The packaged `base` theme sets larger type. At its 7.5in reference height: body 14 →
+  16pt, caption 12 → 14, subtitle 16 → 18, lead 18 → 20, head 19 → 22, stat 32 → 34.
+  `kicker`, `title`, `display` and `hero` are unchanged. A deck on `theme: base` reflows
+  on its next build: copy that only just fitted may overflow, and a placement whose
+  contents no longer fit their band fails the build rather than shipping short.
+
+- A theme with no `template:` sets colours: `bind:` accepts a literal `RRGGBB` for any
+  role, so a palette is a theme of five lines. A slot name in such a theme is refused,
+  naming the two ways out; `marks:` still needs a template.
+
+- A `bind:` to a literal accent is kept even where it equals a colour Microsoft ships.
+  The stock-accent guard applies to template slots only.
+
+- A type-ramp rung reaches the theme's monospace face with `face: mono`, alongside
+  `face: body` and `face: heading`. A `face:` matching an alias only in case is a literal
+  typeface and warns.
+
+- The `caption` rung takes a half step of the modular scale — 14.3pt at the default
+  reference height, up from 12.8pt — so it no longer shares a step with the bold,
+  capitalised `kicker`.
+
+### Layout
+
+- `swatches` reserves the depth its caption actually wraps to rather than a flat two
+  label lines, so a placement that would have held it is no longer refused.
+
+- A placement's `anchor:` applies to the shapes that placement drew and to nothing else,
+  so editing one slide cannot move another.
+
+- A mark's contrast plate stays inside the placement that asked for it.
+
+- A chrome box may declare `h: auto` and take the depth its text wraps to.
+
+- `prune` matches layouts by part name, so it cannot drop a layout a slide is still on.
+
+- A `section:` that resumes after another chapter has begun is refused, naming both
+  slides. A slide carrying no `section:` of its own does not break the run it falls in.
+
+### QA and doctor
+
+- `deckwright qa` adds `placeholder`: recorded text and speaker notes that read like copy
+  nobody meant to ship — four phrases `deckwright new` seeds, plus `lorem`, `ipsum`, `TODO`,
+  `FIXME`, `[insert` and a run of three or more `x` in either case. WARN.
+
+- `deckwright qa` adds `font-substituted`: one finding per theme face the rendering machine
+  cannot set. It runs only when `qa` renders, and is silent when fontconfig cannot be
+  asked. WARN.
+
+- A line the rendered page does not hold is asked for again inside the shape's own
+  box before `overflow` reports it. pdftotext merges side-by-side placements row by
+  row, so two `prose` in adjacent columns spliced each other's wrapped lines and the
+  slide was reported twice over.
+
+- `qa` falls back to the `theme` *name* a manifest records when the `theme_path` it
+  records is not there, so a deck handed over on its own is checked against the
+  packaged `base` rather than refused. A name resolves against the reader's own theme
+  directory first, so `theme-substituted` reports a file that answered to the name but
+  hashes differently from the one the deck was built against.
+
+- `deckwright doctor` reports whether this machine has the faces the `base` theme sets type
+  in; without fontconfig, or when `base` did not load, that row is a `SKIP`.
+
+- `deckwright doctor` loads the `base` theme it resolved. One that resolves but will not
+  parse is a `WARN` naming the file and the loader's message.
+
+### Theme and conform
+
+- `deckwright conform` resolves the `+mj-lt` and `+mn-lt` font references a template may
+  carry against its own font scheme. `load_theme` warns when a theme on disk already
+  holds one and names the template to re-adopt.
+
+- Counts and margins in `scale:`, point sizes in `type:`, millisecond timings in
+  `motion:`, and every block that must be a mapping are checked at load; a value that will
+  not convert raises `ThemeError` naming the key and the value. `deckwright doctor` prints
+  its full table even when a check raises.
+
+### Rendering and the CLI
+
+- `render` resolves the deck path as well as `--outdir`, so a relative input works from
+  any directory, and a relative `--outdir` lands where the render created it. An input
+  that is not there is reported as itself.
+
+- A conversion that writes no PDF is reported instead of rasterising the previous run's,
+  and the failure names the leftover process.
+
+- `render` leaves no `render/share` directory behind: LibreOffice starts in the
+  throwaway profile it already owns.
+
+- `deckwright glyphs find <substring>` searches the 4,001 glyph names and the alias tables.
+  Hyphens and underscores match either way; `--limit` caps the output and a capped run
+  says how many it dropped.
+
+- Build errors from inside a composite name the component the author wrote — a `flow`
+  reported `component 'card'` — and the chrome-box error names its slide.
+
+- fc-list (fontconfig) is a new optional external tool; the `doctor` fonts row and the
+  `font-substituted` check are silent without it. `DECKWRIGHT_FC_LIST` and
+  `DECKWRIGHT_FC_LIST_TIMEOUT_S` point at another binary and cap the call.
+
+- Every external tool deckwright reads — pdftotext, fc-list, LibreOffice, pdftoppm — is
+  decoded as UTF-8 rather than the platform locale, and the CLI's own output degrades
+  instead of raising on a console that cannot encode a deck's em dashes.
+
+### Documentation
+
+- `treatments.md` says the claim should land a beat before the evidence, and applies the
+  run test to `animate:`. `choosing.md` gives the recipe for staging a table's total row
+  into its own beat.
+
+- `motion.md` marks `motion.advance` as a theme key beside the slide-level `animate:` and
+  `reveals:`; `placement.md` states that `anchor` moves what a placement drew inside its
+  rect, with the measured positions; `components.md` gives the icon sizing arithmetic;
+  `qa.md` says `#N` counts shapes as drawn, so a contrast plate takes `#1`.
+
+## v0.1.0 — 2026-08-29
+
+Initial public release.
+
+- Python 3.12+, on pf-core 0.21.
+- `deckwright build` compiles a declarative `.deck.yaml` against a theme into a branded
+  `.pptx`, a build manifest, and a `.content.md` of the deck's words.
+- Twenty-two slide components, 29 native chart kinds, imagery with fit/crop and scrim
+  solving, HTML panels rendered through headless Chrome, and animation — builds,
+  click-to-reveal and slide transitions.
+- The built-in `base` theme ships inside the package, so `theme: base` resolves with no
+  checkout. A file of the same name in `DECKWRIGHT_THEME_DIR` takes precedence.
+- Default faces are Helvetica and Courier New, which resolve to metric clones in
+  Keynote, PowerPoint and LibreOffice alike.
+- `deckwright conform <template>.pptx --adopt <name>` derives a theme from a brand template
+  and drives every capability through it.
+- `deckwright sample` writes a small brand template to conform against, so the walkthrough
+  needs no brand file. It lands in the theme directory, where `--adopt` can read it.
+- `deckwright qa` checks geometry bounds, reserved regions, WCAG contrast, minimum font
+  size and render-based overflow against a built deck's manifest.
+- `render` and `qa` write into `render/<deck>/` beside the deck, so two decks in one
+  directory never overwrite each other's slides.
+- A built deck carries only the slide layouts it uses; `build --keep-layouts` retains
+  the rest, and the media only they reach.
+- Speaker notes declare their notes master on the presentation, which Keynote requires
+  to open the file.
+- `deckwright doctor` reports the version, the glyph bundle, theme resolution and the
+  external tools, naming the install command for anything missing. `--version` prints
+  it on its own.
+- An absent external tool names the binary, the `DECKWRIGHT_*` variable that overrides it
+  and the install command for the platform; `qa` also names `--no-render`, which runs
+  every check that needs no tool.
+- ~4,000 Material Symbols ship as one archive; `deckwright glyphs verify` checks it against
+  its manifest and `deckwright glyphs sync` re-vendors it from upstream — the one command
+  that uses the network.
+- Supporting commands: `render`, `shot`, `inspect`, `diff`, `new`, `demo`.
+- One directory for a brand: `templates/` holds the `.pptx` and the theme derived
+  from it, side by side. `theme: <name>` resolves `<name>.theme.yaml` there, and a
+  theme names its template by bare filename — nothing is ever copied. A template is
+  adopted where it lives; adopting one from elsewhere is refused.
+- Re-running `conform --adopt` on the same template is a refresh that keeps hand
+  edits; `--force` re-derives and discards them.
+- The suite's primary guard drives every template in that directory
+  (`tests/test_templates.py`, `DECKWRIGHT_TEMPLATES_MIN` to require a minimum).
+- Headless Chrome runs sandboxed. `DECKWRIGHT_CHROME_NO_SANDBOX=1` passes
+  `--no-sandbox`, which is implied when running as root.
+- Every rendered card carries a content policy: no frames, objects or embeds, no
+  script but deckwright's own height probe, and images and fonts from `data:`/`http(s):`
+  only. A `file://` URL in card markdown no longer renders a local file into the deck.
+- Importing `deckwright` no longer touches the root logger; handlers land on the
+  `deckwright` logger, and an application that configured logging first keeps its own.
+- All text is read and written as UTF-8 regardless of the platform locale.
+- Every XML part of a `.pptx` is parsed with entity expansion and network access
+  refused, so a package from someone else cannot amplify or forge through a DTD.
+- The sdist ships a runnable suite: `tests/`, `docs/` and `examples/` travel with
+  it, and brand templates and derived brand themes are excluded from both dists.

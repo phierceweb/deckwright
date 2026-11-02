@@ -1,0 +1,34 @@
+theme: base
+title: Smoke Test
+sections:
+- Complexity
+- Consistency
+- Stability
+out: ../out/smoke/Smoke.pptx
+---
+background: inverse
+kicker: JULY 2026
+title: Smoke Test
+subtitle: Proving the compiler end to end
+---
+background: inverse
+kicker: PART 1 OF 3
+title: Complexity
+subtitle: Too big to hold at once.
+section: Complexity
+---
+kicker: COMPLEXITY
+title: A page slide
+subtitle: A kicker, a title and a subtitle, on the page background
+section: Complexity
+notes: This slide exists to prove the chrome renders.
+---
+background: inverse
+title: Thanks
+place:
+- at: {cols: full}
+  bullets:
+    items:
+    - The reviewers
+    - The engineers
+    - Everyone who filed a bug

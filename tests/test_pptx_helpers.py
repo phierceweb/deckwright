@@ -1,0 +1,309 @@
+"""Tests for the generic deck / animation helpers."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import qn
+
+import re
+
+import pytest
+
+import deckwright.components  # noqa: F401 — registers the built-in components
+from deckwright.errors import LayoutError
+from deckwright.imagery.draw import paint_scrim
+from deckwright.imagery.scrim import Scrim
+from deckwright.layouts.components import get_component
+from deckwright.layouts.place import Reserved
+from deckwright.motion import (
+    add_chart_build,
+    add_click_build,
+    add_click_reveals,
+    add_click_sequence,
+)
+from deckwright.theme.model import Rect
+from deckwright.utils.deck import delete_slide
+from deckwright.utils.shapes import bring_to_front, rect
+
+
+def _blank_slide(prs):
+    return prs.slides.add_slide(prs.slide_layouts[6])
+
+
+def test_delete_slide_removes_one():
+    prs = Presentation()
+    _blank_slide(prs)
+    _blank_slide(prs)
+    before = len(list(prs.slides._sldIdLst))
+    delete_slide(prs, 0)
+    assert len(list(prs.slides._sldIdLst)) == before - 1
+
+
+def test_add_click_reveals_appends_timing():
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    box = slide.shapes.add_textbox(0, 0, 100, 100)
+    add_click_reveals(slide, [(box.shape_id, box.shape_id)])
+    assert slide._element.find(qn("p:timing")) is not None
+
+
+def test_a_reveal_with_no_pairs_is_refused_before_anything_is_written():
+    """No pairs leaves the tmRoot's `<p:childTnLst/>` empty, and `CT_TimeNodeList`
+    requires a child — a tree that reveals nothing is not a tree with nothing in it."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+
+    with pytest.raises(LayoutError, match="needs at least one"):
+        add_click_reveals(slide, [])
+    assert slide._element.find(qn("p:timing")) is None
+
+
+def test_a_second_timing_tree_on_one_slide_is_refused():
+    """``CT_Slide`` allows one ``<p:timing>``; two charts both asked to build append two — an
+    invalid file that LibreOffice converts happily and ``check_package`` reports clean."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    one = slide.shapes.add_textbox(0, 0, 100, 100)
+    two = slide.shapes.add_textbox(0, 0, 100, 100)
+    add_chart_build(slide, one.shape_id, "category", parts=2)
+
+    with pytest.raises(LayoutError, match="already carries an animation"):
+        add_chart_build(slide, two.shape_id, "category", parts=2)
+    assert len(slide._element.findall(qn("p:timing"))) == 1
+
+
+def test_timing_is_inserted_before_ext_lst_not_appended_after_it():
+    """``CT_Slide`` is an xsd:sequence — ``timing`` precedes ``extLst``, and a bare append lands
+    after it. LibreOffice silently repairs the order on import, so no render shows the corruption.
+    """
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    box = slide.shapes.add_textbox(0, 0, 100, 100)
+    slide._element.append(slide._element.makeelement(qn("p:extLst"), {}))
+
+    add_click_build(slide, [box.shape_id])
+
+    tags = [el.tag.split("}")[1] for el in slide._element]
+    assert tags.index("timing") < tags.index("extLst")
+
+
+def _texty(slide, words: str):
+    box = slide.shapes.add_textbox(0, 0, 100, 100)
+    box.text_frame.text = words
+    return box
+
+
+def _wordless(slide):
+    return slide.shapes.add_shape(MSO_SHAPE.OVAL, 0, 0, 100, 100)
+
+
+def _grp_ids(slide) -> dict[str, str | None]:
+    """The `grpId` on each entrance node, keyed by the spid its `spTgt` names."""
+    ids: dict[str, str | None] = {}
+    for node in slide._element.find(qn("p:timing")).iter(qn("p:cTn")):
+        if node.get("nodeType") not in ("clickEffect", "withEffect", "afterEffect"):
+            continue
+        (spid,) = {t.get("spid") for t in node.iter(qn("p:spTgt"))}
+        ids[spid] = node.get("grpId")
+    return ids
+
+
+def test_bld_p_is_written_only_for_shapes_that_carry_text():
+    """[MS-OI29500] 19.5.16(c): a bldP's spid must name an sp holding a `t` element, so naming a
+    picture, connector or text-free icon is a claim the shape cannot honour."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    worded = _texty(slide, "a heading")
+    empty = slide.shapes.add_textbox(0, 0, 100, 100)  # an sp with no text
+    add_click_build(slide, [worded.shape_id, empty.shape_id])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:bldP spid="(\d+)"', xml) == [str(worded.shape_id)]
+    # Both still animate — only the build-list entry is withheld.
+    assert xml.count('<p:spTgt spid="%d"' % empty.shape_id) == 2
+
+
+def _alternate_content(slide, choice_words: str, fallback_words: str) -> int:
+    """One shape stored as PowerPoint stores an equation: a Choice and a Fallback copy
+    under one id, each carrying its own words."""
+    mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+    choice, fallback = _texty(slide, choice_words), _texty(slide, fallback_words)
+    fallback._element.nvSpPr.cNvPr.set("id", str(choice.shape_id))
+    alternate = parse_xml(
+        f'<mc:AlternateContent xmlns:mc="{mc}"><mc:Choice Requires="a14"'
+        ' xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"/>'
+        "<mc:Fallback/></mc:AlternateContent>"
+    )
+    choice._element.addprevious(alternate)
+    alternate[0].append(choice._element)
+    alternate[1].append(fallback._element)
+    return choice.shape_id
+
+
+@pytest.mark.parametrize(
+    "choice, fallback, entries",
+    [("", "only the fallback has words", 0), ("the choice has words", "", 1)],
+)
+def test_a_shape_in_markup_compatibility_earns_a_bld_p_by_its_choice(choice, fallback, entries):
+    """PowerPoint reads the Choice, so words only the Fallback holds are no paragraph
+    build the shape it draws can honour."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    spid = _alternate_content(slide, choice, fallback)
+    add_click_build(slide, [spid])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:bldP spid="(\d+)"', xml) == [str(spid)] * entries
+
+
+def test_a_slide_of_only_text_free_shapes_writes_no_build_list_and_no_grp_id():
+    """`CT_BuildList` requires a child, so an empty `<p:bldLst/>` is invalid. With no
+    build list there is nothing for `grpId` to name, and the schema makes it optional."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    one = slide.shapes.add_textbox(0, 0, 100, 100)
+    two = slide.shapes.add_textbox(0, 0, 100, 100)
+    add_click_build(slide, [one.shape_id, two.shape_id])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert "<p:bldLst" not in xml
+    assert "grpId" not in xml
+
+
+def test_grp_id_is_decided_per_shape_not_per_slide():
+    """`grpId` names a build-list entry, and on a mixed slide only the worded shape has one —
+    deciding it once for the whole slide writes it onto the icon's node, where it names nothing."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    worded = _texty(slide, "a heading")
+    icon = _wordless(slide)
+    add_click_build(slide, [worded.shape_id, icon.shape_id])
+
+    assert _grp_ids(slide) == {str(worded.shape_id): "0", str(icon.shape_id): None}
+    timing = slide._element.find(qn("p:timing"))
+    built = timing.findall(f"{qn('p:bldLst')}/{qn('p:bldP')}")
+    assert [b.get("spid") for b in built] == [str(worded.shape_id)]
+
+
+def test_a_click_sequence_withholds_bld_p_for_text_free_shapes_too():
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    worded = _texty(slide, "step one")
+    icon = slide.shapes.add_textbox(0, 0, 100, 100)
+    add_click_sequence(slide, [[worded.shape_id], [icon.shape_id]])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:bldP spid="(\d+)"', xml) == [str(worded.shape_id)]
+    assert xml.count('nodeType="clickEffect"') == 2
+
+
+def test_a_click_sequence_decides_grp_id_inside_the_group_too():
+    """One click, one group, two shapes of different kinds: the choice is per item, so
+    a group with a worded shape in it does not lend its `grpId` to the icon beside it."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    worded = _texty(slide, "step one")
+    icon = _wordless(slide)
+    add_click_sequence(slide, [[worded.shape_id, icon.shape_id]])
+
+    assert _grp_ids(slide) == {str(worded.shape_id): "0", str(icon.shape_id): None}
+
+
+def test_a_click_reveal_writes_no_grp_id_because_it_writes_no_build_list():
+    """An interactive tree carries no `<p:bldLst>` at all, so every `grpId` in it names
+    an entry that was never written."""
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    trigger = _texty(slide, "the question")
+    answer = _texty(slide, "the answer")
+    add_click_reveals(slide, [(trigger.shape_id, answer.shape_id)])
+
+    timing = slide._element.find(qn("p:timing"))
+    assert timing.find(qn("p:bldLst")) is None
+    assert {n.get("grpId") for n in timing.iter(qn("p:cTn"))} == {None}
+
+
+def test_bring_to_front_moves_shape_last():
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    first = slide.shapes.add_textbox(0, 0, 100, 100)
+    slide.shapes.add_textbox(0, 0, 100, 100)  # second shape, currently drawn on top
+    bring_to_front(first)
+    assert first._element.getparent()[-1] is first._element
+
+
+def test_a_paragraph_item_targets_that_paragraph_and_builds_the_shape_by_paragraph():
+    prs = Presentation()
+    slide = _blank_slide(prs)
+    listed = _texty(slide, "one")
+    listed.text_frame.add_paragraph().text = "two"
+    add_click_sequence(slide, [[(listed.shape_id, "fade", 0)], [(listed.shape_id, "fade", 1)]])
+
+    xml = slide._element.find(qn("p:timing")).xml
+    assert re.findall(r'<p:pRg st="(\d+)" end="(\d+)"/>', xml) == [
+        ("0", "0"),
+        ("0", "0"),
+        ("1", "1"),
+        ("1", "1"),
+    ]
+    assert re.findall(r"<p:bldP [^>]*/>", xml) == [
+        f'<p:bldP spid="{listed.shape_id}" grpId="0" build="p"/>'
+    ]
+    assert xml.count('nodeType="clickEffect"') == 2
+
+
+_WEDGE = Reserved(name="logo-wedge", poly=((1.0, 0.7227), (1.0, 1.0), (0.825, 1.0)))
+
+
+def _plate(ctx_factory, theme):
+    return rect(ctx_factory({}).slide, 1, 1, 2, 1, RGBColor(0x33, 0x66, 0x99))
+
+
+def _line(ctx_factory, theme):
+    ctx = ctx_factory({"connector": {"from": [0.1, 0.2], "to": [0.9, 0.8]}})
+    get_component("connector")(ctx)
+    return ctx.slide.shapes[-1]
+
+
+def _elbow(ctx_factory, theme):
+    ctx = ctx_factory({"connector": {"from": [0.1, 0.2], "to": [0.9, 0.8], "kind": "elbow"}})
+    get_component("connector")(ctx)
+    return ctx.slide.shapes[-1]
+
+
+def _reserve_overlay(ctx_factory, theme):
+    ctx = ctx_factory({"grid": {}}, theme_override=replace(theme, reserve=(_WEDGE,)))
+    get_component("grid")(ctx)
+    return next(s for s in ctx.slide.shapes if s._element.spPr.find(qn("a:custGeom")) is not None)
+
+
+def _preset_icon(ctx_factory, theme):
+    ctx = ctx_factory({"icon": {"name": "circle"}})
+    get_component("icon")(ctx)
+    return ctx.slide.shapes[-1]
+
+
+def _scrim(ctx_factory, theme):
+    return paint_scrim(ctx_factory({}).slide, Rect(0, 0, 4, 3), Scrim("101010", "FFFFFF", 0.8))
+
+
+@pytest.mark.parametrize(
+    "draw",
+    [_plate, _line, _elbow, _reserve_overlay, _preset_icon, _scrim],
+    ids=lambda draw: draw.__name__.strip("_"),
+)
+def test_a_drawn_shape_references_no_effect_style(draw, ctx_factory, theme):
+    """python-pptx points an autoshape at effect style 2 and a connector at style 1, so a
+    template's shadow or bevel there would land on every plate."""
+    shape = draw(ctx_factory, theme)._element
+    ref = shape.find(f"{qn('p:style')}/{qn('a:effectRef')}")
+    assert ref is not None
+    assert ref.get("idx") == "0"
+    effects = shape.find(f"{qn('p:spPr')}/{qn('a:effectLst')}")
+    assert effects is not None
+    assert len(effects) == 0

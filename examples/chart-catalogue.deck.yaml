@@ -1,0 +1,950 @@
+theme: base
+title: deckwright Chart Catalogue
+sections:
+- Bar & Column
+- Line
+- Area
+- Pie & Doughnut
+- Radar
+- XY & Bubble
+out: ../out/chart-catalogue/deckwright Chart Catalogue.pptx
+---
+background: inverse
+kicker: JULY 2026
+title: The deckwright Chart Catalogue
+subtitle: Every chart type the native renderer can build, one per slide
+notes: '29 types across 6 families. Each slide names the exact type: field and
+
+  explains what it is for, not what it is called — the wording to reuse when
+
+  picking a chart, not a repeat of the title.
+
+  '
+---
+background: inverse
+kicker: PART 1 OF 6
+title: Bar & Column
+subtitle: One number per category, compared side by side or stacked.
+section: Bar & Column
+notes: Six types — clustered, stacked, and normalized, in both orientations.
+---
+kicker: BAR & COLUMN
+title: bar
+subtitle: Comparing a handful of long-labeled categories — horizontal bars keep names readable
+section: Bar & Column
+notes: 'bar — XL_CHART_TYPE.BAR_CLUSTERED. Has axes and gap_width; categories run
+
+  down the side rather than along the bottom.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bar
+    data:
+    - category: North America
+      value: 82
+      highlight: true
+    - category: Europe
+      value: 64
+    - category: APAC
+      value: 51
+    - category: LATAM
+      value: 28
+---
+kicker: BAR & COLUMN
+title: column
+subtitle: The default comparison — one number per category, read left to right
+section: Bar & Column
+notes: 'column — XL_CHART_TYPE.COLUMN_CLUSTERED. The plain case every other
+
+  bar/column variant below is a variation on.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: column
+    data:
+    - category: Q1
+      value: 120
+    - category: Q2
+      value: 180
+    - category: Q3
+      value: 240
+    - category: Q4
+      value: 300
+      highlight: true
+---
+kicker: BAR & COLUMN
+title: column-stacked
+subtitle: Share of a total over time, when the total also matters
+section: Bar & Column
+notes: 'column-stacked — XL_CHART_TYPE.COLUMN_STACKED. Same axes and gap_width as
+
+  a clustered column; series stack instead of sitting side by side.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: column-stacked
+    data:
+    - category: Q1
+      values:
+        Ads: 20
+        Organic: 15
+    - category: Q2
+      values:
+        Ads: 28
+        Organic: 22
+    - category: Q3
+      values:
+        Ads: 35
+        Organic: 30
+    - category: Q4
+      values:
+        Ads: 42
+        Organic: 41
+---
+kicker: BAR & COLUMN
+title: column-stacked-100
+subtitle: The shifting mix across categories, once the total stops being the point
+section: Bar & Column
+notes: 'column-stacked-100 — XL_CHART_TYPE.COLUMN_STACKED_100. Every bar sums to
+
+  100%, so a reader compares proportion, not absolute size.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: column-stacked-100
+    data:
+    - category: Q1
+      values:
+        Desktop: 70
+        Mobile: 30
+    - category: Q2
+      values:
+        Desktop: 60
+        Mobile: 40
+    - category: Q3
+      values:
+        Desktop: 50
+        Mobile: 50
+    - category: Q4
+      values:
+        Desktop: 40
+        Mobile: 60
+    unit: '%'
+---
+kicker: BAR & COLUMN
+title: bar-stacked
+subtitle: A stacked total for categories with long labels, breakdown intact
+section: Bar & Column
+notes: 'bar-stacked — XL_CHART_TYPE.BAR_STACKED. Same trap as column-stacked, drawn
+
+  horizontally for labels too long to fit under a column.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bar-stacked
+    data:
+    - category: Customer Support
+      values:
+        Full-time: 18
+        Contract: 6
+    - category: Product Engineering
+      values:
+        Full-time: 42
+        Contract: 10
+    - category: Sales & Marketing
+      values:
+        Full-time: 25
+        Contract: 4
+    - category: Finance & Ops
+      values:
+        Full-time: 10
+        Contract: 3
+---
+kicker: BAR & COLUMN
+title: bar-stacked-100
+subtitle: A headcount mix by team, independent of how big each team is
+section: Bar & Column
+notes: 'bar-stacked-100 — XL_CHART_TYPE.BAR_STACKED_100. Same normalization as
+
+  column-stacked-100, horizontal.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bar-stacked-100
+    data:
+    - category: Customer Support
+      values:
+        Full-time: 90
+        Contract: 10
+    - category: Product Engineering
+      values:
+        Full-time: 80
+        Contract: 20
+    - category: Sales & Marketing
+      values:
+        Full-time: 65
+        Contract: 35
+    - category: Finance & Ops
+      values:
+        Full-time: 55
+        Contract: 45
+    unit: '%'
+---
+background: inverse
+kicker: PART 2 OF 6
+title: Line
+subtitle: A trend over time — plain, marked, stacked, or normalized.
+section: Line
+notes: Six types — the line family carries as many variants as bar/column.
+---
+kicker: LINE
+title: line
+subtitle: A single trend over time — the plain case, one line, no fill
+section: Line
+notes: 'line — XL_CHART_TYPE.LINE. Has axes, no gap_width; the stroke alone
+
+  carries the trend.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line
+    data:
+    - category: Jan
+      value: 12
+    - category: Feb
+      value: 19
+    - category: Mar
+      value: 15
+    - category: Apr
+      value: 27
+    - category: May
+      value: 32
+    - category: Jun
+      value: 41
+---
+kicker: LINE
+title: line-markers
+subtitle: A trend where individual points need to be read precisely, not just eyeballed
+section: Line
+notes: 'line-markers — XL_CHART_TYPE.LINE_MARKERS. Same as line, plus a marker at
+
+  every point.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-markers
+    data:
+    - category: Mon
+      value: 340
+    - category: Tue
+      value: 362
+    - category: Wed
+      value: 355
+    - category: Thu
+      value: 410
+    - category: Fri
+      value: 398
+---
+kicker: LINE
+title: line-stacked
+subtitle: Running totals by channel, stacked — reach for it only when the source is already cumulative
+section: Line
+notes: 'line-stacked — XL_CHART_TYPE.LINE_STACKED. Has axes, no gap_width; lines
+
+  stack like column-stacked''s bars, which reads clearly only when each
+
+  series is itself a running total.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-stacked
+    data:
+    - category: Q1
+      values:
+        Referral: 10
+        Paid: 8
+    - category: Q2
+      values:
+        Referral: 18
+        Paid: 15
+    - category: Q3
+      values:
+        Referral: 25
+        Paid: 24
+    - category: Q4
+      values:
+        Referral: 33
+        Paid: 30
+---
+kicker: LINE
+title: line-stacked-100
+subtitle: The same channels' share of the total each period, normalized
+section: Line
+notes: 'line-stacked-100 — XL_CHART_TYPE.LINE_STACKED_100. line-stacked''s
+
+  proportion counterpart, same shifting-mix trap as the column-100 pair.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-stacked-100
+    data:
+    - category: Q1
+      values:
+        Referral: 65
+        Paid: 35
+    - category: Q2
+      values:
+        Referral: 58
+        Paid: 42
+    - category: Q3
+      values:
+        Referral: 50
+        Paid: 50
+    - category: Q4
+      values:
+        Referral: 42
+        Paid: 58
+    unit: '%'
+---
+kicker: LINE
+title: line-markers-stacked
+subtitle: Stacked running totals where each point still needs an exact reading
+section: Line
+notes: 'line-markers-stacked — XL_CHART_TYPE.LINE_MARKERS_STACKED. line-stacked
+
+  plus a marker at every point.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-markers-stacked
+    data:
+    - category: W1
+      values:
+        Team A: 5
+        Team B: 4
+    - category: W2
+      values:
+        Team A: 8
+        Team B: 6
+    - category: W3
+      values:
+        Team A: 10
+        Team B: 9
+    - category: W4
+      values:
+        Team A: 14
+        Team B: 11
+---
+kicker: LINE
+title: line-markers-stacked-100
+subtitle: The contribution mix each period, marked at every point and normalized
+section: Line
+notes: 'line-markers-stacked-100 — XL_CHART_TYPE.LINE_MARKERS_STACKED_100. The
+
+  marked, normalized counterpart to line-markers-stacked.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-markers-stacked-100
+    data:
+    - category: W1
+      values:
+        Team A: 55
+        Team B: 45
+    - category: W2
+      values:
+        Team A: 58
+        Team B: 42
+    - category: W3
+      values:
+        Team A: 53
+        Team B: 47
+    - category: W4
+      values:
+        Team A: 56
+        Team B: 44
+    unit: '%'
+---
+background: inverse
+kicker: PART 3 OF 6
+title: Area
+subtitle: A filled trend — magnitude reinforced, alone, stacked, or normalized.
+section: Area
+notes: Three types — area has no clustered/stacked-only split like bar/column; just plain, stacked,
+  and 100%.
+---
+kicker: AREA
+title: area
+subtitle: A single trend where the filled area under the line reinforces magnitude, not just direction
+section: Area
+notes: 'area — XL_CHART_TYPE.AREA. Has axes, no gap_width; the fill is what
+
+  carries the trend, not a bare stroke.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: area
+    data:
+    - category: Jan
+      value: 3
+    - category: Feb
+      value: 9
+    - category: Mar
+      value: 17
+    - category: Apr
+      value: 29
+    - category: May
+      value: 44
+    - category: Jun
+      value: 68
+---
+kicker: AREA
+title: area-stacked
+subtitle: Two channels' volumes stacked so the combined total is as visible as each one's share
+section: Area
+notes: 'area-stacked — XL_CHART_TYPE.AREA_STACKED. Has axes, no gap_width; the
+
+  same total-still-matters case as column-stacked, filled instead of barred.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: area-stacked
+    data:
+    - category: Jan
+      values:
+        Web: 10
+        Mobile: 5
+    - category: Feb
+      values:
+        Web: 14
+        Mobile: 9
+    - category: Mar
+      values:
+        Web: 20
+        Mobile: 14
+    - category: Apr
+      values:
+        Web: 25
+        Mobile: 20
+    - category: May
+      values:
+        Web: 30
+        Mobile: 28
+    - category: Jun
+      values:
+        Web: 38
+        Mobile: 35
+---
+kicker: AREA
+title: area-stacked-100
+subtitle: The channel mix over time, normalized — once the combined total stops being the point
+section: Area
+notes: 'area-stacked-100 — XL_CHART_TYPE.AREA_STACKED_100. area-stacked''s
+
+  proportion counterpart, the shifting-mix case again, filled.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: area-stacked-100
+    data:
+    - category: Jan
+      values:
+        Web: 80
+        Mobile: 20
+    - category: Feb
+      values:
+        Web: 75
+        Mobile: 25
+    - category: Mar
+      values:
+        Web: 65
+        Mobile: 35
+    - category: Apr
+      values:
+        Web: 55
+        Mobile: 45
+    - category: May
+      values:
+        Web: 45
+        Mobile: 55
+    - category: Jun
+      values:
+        Web: 35
+        Mobile: 65
+    unit: '%'
+---
+background: inverse
+kicker: PART 4 OF 6
+title: Pie & Doughnut
+subtitle: Share of a single whole — no axis to misread.
+section: Pie & Doughnut
+notes: Four types — plain and exploded, wedge and ring.
+---
+kicker: PIE & DOUGHNUT
+title: pie
+subtitle: A single moment's share of a whole — plain wedges, best kept to a handful of slices
+section: Pie & Doughnut
+notes: 'pie — XL_CHART_TYPE.PIE. No category or value axis; one series, coloured
+
+  and named per wedge.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: pie
+    data:
+    - category: Direct
+      value: 38
+      highlight: true
+    - category: Referral
+      value: 27
+    - category: Paid
+      value: 21
+    - category: Organic
+      value: 14
+    unit: '%'
+---
+kicker: PIE & DOUGHNUT
+title: doughnut
+subtitle: The same share-of-whole as pie, with a center hole that leaves room for a total or a mark
+section: Pie & Doughnut
+notes: 'doughnut — XL_CHART_TYPE.DOUGHNUT. Same per-point palette and
+
+  category-name labels as pie; no axes to style.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: doughnut
+    data:
+    - category: Enterprise
+      value: 45
+    - category: Mid-market
+      value: 28
+    - category: SMB
+      value: 18
+    - category: Self-serve
+      value: 9
+    unit: '%'
+---
+kicker: PIE & DOUGHNUT
+title: pie-exploded
+subtitle: Share of a whole with every wedge pulled apart, when the parts matter more than the mass
+section: Pie & Doughnut
+notes: 'pie-exploded — XL_CHART_TYPE.PIE_EXPLODED. Writes a series-level
+
+  <c:explosion val="25"/> — every wedge pulls apart uniformly, not just a
+
+  highlighted one; highlight is still the only per-wedge callout.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: pie-exploded
+    data:
+    - category: Email
+      value: 40
+      highlight: true
+    - category: Chat
+      value: 30
+    - category: Phone
+      value: 20
+    - category: Social
+      value: 10
+    unit: '%'
+---
+kicker: PIE & DOUGHNUT
+title: doughnut-exploded
+subtitle: An exploded share-of-whole with a center hole — parts pulled apart, room left for a total
+section: Pie & Doughnut
+notes: 'doughnut-exploded — XL_CHART_TYPE.DOUGHNUT_EXPLODED. pie-exploded''s ring
+
+  counterpart; same uniform explosion, same axis-free styling as doughnut.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: doughnut-exploded
+    data:
+    - category: iOS
+      value: 42
+    - category: Android
+      value: 33
+      highlight: true
+    - category: Web
+      value: 17
+    - category: Desktop
+      value: 8
+    unit: '%'
+---
+background: inverse
+kicker: PART 5 OF 6
+title: Radar
+subtitle: Several comparable traits at once — a shape, not a size.
+section: Radar
+notes: Three types — plain, filled, and marked, all needing one shared scale.
+---
+kicker: RADAR
+title: radar
+subtitle: Comparing things across several comparable traits at once — reads as a shape, not a size
+section: Radar
+notes: 'radar — XL_CHART_TYPE.RADAR. Its major gridlines are the rings and spokes
+
+  the shape is plotted against — the one family _style_axes leaves at
+
+  python-pptx''s own default instead of driving from theme.chart.grid. Needs
+
+  every series on one comparable scale, or the smaller one collapses to the
+
+  centre.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: radar
+    data:
+    - category: Speed
+      values:
+        Model A: 4
+        Model B: 3
+    - category: Range
+      values:
+        Model A: 5
+        Model B: 3
+    - category: Comfort
+      values:
+        Model A: 3
+        Model B: 5
+    - category: Price
+      values:
+        Model A: 4
+        Model B: 5
+    - category: Reliability
+      values:
+        Model A: 5
+        Model B: 3
+---
+kicker: RADAR
+title: radar-filled
+subtitle: The same shape comparison with the area under each series filled, to emphasize coverage
+section: Radar
+notes: 'radar-filled — XL_CHART_TYPE.RADAR_FILLED. Same structural gridlines and
+
+  gap_width-free plot as radar; the outline becomes a filled region.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: radar-filled
+    data:
+    - category: Speed
+      values:
+        Model A: 4
+        Model C: 5
+    - category: Range
+      values:
+        Model A: 5
+        Model C: 4
+    - category: Comfort
+      values:
+        Model A: 3
+        Model C: 4
+    - category: Price
+      values:
+        Model A: 4
+        Model C: 3
+    - category: Reliability
+      values:
+        Model A: 5
+        Model C: 4
+---
+kicker: RADAR
+title: radar-markers
+subtitle: The same shape comparison with each vertex marked, for when exact values at each axis matter
+section: Radar
+notes: 'radar-markers — XL_CHART_TYPE.RADAR_MARKERS. Same structural gridlines as
+
+  radar; a marker at every vertex instead of a filled or bare outline.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: radar-markers
+    data:
+    - category: Speed
+      values:
+        Team X: 3
+        Team Y: 4
+    - category: Range
+      values:
+        Team X: 4
+        Team Y: 3
+    - category: Comfort
+      values:
+        Team X: 4
+        Team Y: 5
+    - category: Price
+      values:
+        Team X: 5
+        Team Y: 3
+    - category: Reliability
+      values:
+        Team X: 3
+        Team Y: 4
+---
+background: inverse
+kicker: PART 6 OF 6
+title: XY & Bubble
+subtitle: A different data shape — a point is (x, y), or (x, y, size), not one number per category.
+section: XY & Bubble
+notes: Seven types — five scatter variants and two bubble variants. No categories field; every point
+  carries its own x-value.
+---
+kicker: XY & BUBBLE
+title: xy-scatter
+subtitle: Two measures against each other, to see whether they move together — no line connects the
+  points, so clusters and outliers stay visible
+section: XY & Bubble
+notes: 'xy-scatter — XL_CHART_TYPE.XY_SCATTER. Points are (x, y) pairs, not one
+
+  value per category — categories: is forbidden on this shape. Has both axes,
+
+  no gap_width, per-point fill all work like any other axis chart.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: xy-scatter
+    data:
+    - x: 12
+      y: 38
+    - x: 18
+      y: 52
+    - x: 22
+      y: 58
+    - x: 25
+      y: 61
+    - x: 31
+      y: 74
+    - x: 40
+      y: 88
+---
+kicker: XY & BUBBLE
+title: xy-scatter-lines
+subtitle: The same x/y relationship, but the sequence matters — straight segments trace the path from
+  point to point in the order given
+section: XY & Bubble
+notes: 'xy-scatter-lines — XL_CHART_TYPE.XY_SCATTER_LINES. Same shape and styling
+
+  surface as xy-scatter; markers stay visible, joined by straight segments.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: xy-scatter-lines
+    data:
+    - x: 20
+      y: 1.0
+    - x: 35
+      y: 1.4
+    - x: 55
+      y: 2.1
+    - x: 70
+      y: 2.6
+    - x: 90
+      y: 3.4
+    - x: 110
+      y: 4.0
+---
+kicker: XY & BUBBLE
+title: xy-scatter-lines-no-markers
+subtitle: A path with too many points for individual markers to help — the line alone carries the
+  shape
+section: XY & Bubble
+notes: 'xy-scatter-lines-no-markers — XL_CHART_TYPE.XY_SCATTER_LINES_NO_MARKERS.
+
+  Same as xy-scatter-lines with markers suppressed.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: xy-scatter-lines-no-markers
+    data:
+    - x: 0
+      y: 0
+    - x: 10
+      y: 4
+    - x: 20
+      y: 9
+    - x: 30
+      y: 17
+    - x: 40
+      y: 28
+    - x: 50
+      y: 42
+    - x: 60
+      y: 60
+---
+kicker: XY & BUBBLE
+title: xy-scatter-smooth
+subtitle: Sampled points from something that varies continuously — the curve interpolates between
+  them instead of connecting with straight segments
+section: XY & Bubble
+notes: 'xy-scatter-smooth — XL_CHART_TYPE.XY_SCATTER_SMOOTH. Curve-fitted
+
+  interpolation between points instead of straight segments; markers stay visible.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: xy-scatter-smooth
+    data:
+    - x: 0
+      y: 95
+    - x: 5
+      y: 78
+    - x: 10
+      y: 64
+    - x: 15
+      y: 54
+    - x: 20
+      y: 47
+    - x: 25
+      y: 42
+---
+kicker: XY & BUBBLE
+title: xy-scatter-smooth-no-markers
+subtitle: The same smooth curve without markers competing with the shape — best once there are too
+  many points to mark individually
+section: XY & Bubble
+notes: 'xy-scatter-smooth-no-markers — XL_CHART_TYPE.XY_SCATTER_SMOOTH_NO_MARKERS.
+
+  Same interpolation as xy-scatter-smooth, markers suppressed.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: xy-scatter-smooth-no-markers
+    data:
+    - x: 1
+      y: 300
+    - x: 2
+      y: 340
+    - x: 3
+      y: 320
+    - x: 4
+      y: 380
+    - x: 5
+      y: 410
+    - x: 6
+      y: 400
+    - x: 7
+      y: 450
+---
+kicker: XY & BUBBLE
+title: bubble
+subtitle: Two measures on the axes plus a third carried by size — for when spend and revenue alone
+  don't tell the whole story
+section: XY & Bubble
+notes: 'bubble — XL_CHART_TYPE.BUBBLE. Points are (x, y, size) triples; size must
+
+  be positive — a zero or negative bubble isn''t renderable and ChartSpec
+
+  rejects it naming the series and the point. Per-point fill and both axes
+
+  work like any other axis chart; no gap_width.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bubble
+    data:
+    - x: 12
+      y: 38
+      size: 20
+    - x: 18
+      y: 52
+      size: 45
+    - x: 25
+      y: 61
+      size: 30
+    - x: 31
+      y: 74
+      size: 60
+    - x: 40
+      y: 88
+      size: 15
+---
+kicker: XY & BUBBLE
+title: bubble-3d
+subtitle: The same three-measure comparison, with each bubble shaded for a dimensional look — purely
+  cosmetic, no third axis is added
+section: XY & Bubble
+notes: 'bubble-3d — XL_CHART_TYPE.BUBBLE_THREE_D_EFFECT. Same (x, y, size) shape and
+
+  styling surface as bubble; python-pptx shades the circles, nothing else changes.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bubble-3d
+    data:
+    - x: 5
+      y: 12
+      size: 42
+    - x: 8
+      y: 18
+      size: 38
+    - x: 12
+      y: 25
+      size: 55
+    - x: 15
+      y: 30
+      size: 48
+    - x: 20
+      y: 40
+      size: 65

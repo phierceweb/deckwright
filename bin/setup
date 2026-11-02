@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Bootstrap deckwright: venv (Python 3.12+), editable install, .env, pw-foundation wiring.
+# Self-contained — works whether pw-foundation is pip-installed or a sibling checkout.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+ok()   { echo "  ✓ $*"; }
+info() { echo "  $*"; }
+
+pick_python() {
+  local p
+  for p in python3.13 python3.12 python3; do
+    p="$(command -v "$p" 2>/dev/null || true)"
+    [[ -n "$p" ]] || continue
+    if "$p" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+      echo "$p"; return 0
+    fi
+  done
+  echo "No Python 3.12+ found. Install 3.12+ (e.g. brew install python@3.12)." >&2
+  exit 1
+}
+
+if [[ ! -d .venv ]]; then
+  PY="$(pick_python)"
+  info "Creating .venv ($("$PY" --version | tr -d '\r'))"
+  "$PY" -m venv .venv
+  ok ".venv created"
+else
+  ok ".venv exists ($(.venv/bin/python --version | tr -d '\r'))"
+fi
+
+info "Installing (editable, with dev extras) — pw-foundation resolves from PyPI..."
+.venv/bin/python -m pip install --quiet --upgrade pip
+GIT_TERMINAL_PROMPT=0 .venv/bin/python -m pip install -e ".[dev]"
+ok "dependencies installed"
+
+if [[ -f .env.example && ! -f .env ]]; then
+  cp .env.example .env
+  ok "copied .env.example -> .env"
+fi
+
+# Install the commit gates (structural gate + ruff) when this is a git repo.
+if [[ -d .git && -x .venv/bin/pre-commit ]]; then
+  .venv/bin/pre-commit install >/dev/null
+  ok "pre-commit hooks installed (gate runs on every commit)"
+else
+  info "not a git repo yet — run 'git init && .venv/bin/pre-commit install' to enable the commit gates"
+fi
+
+# pw-foundation's wiring: docs/pw-foundation -> the installed package's docs, its starter
+# rules into .ai/rules/ (an edited rule is kept), .claude/ and .cursor/ -> .ai/, and
+# .pw-guards.toml. A leftover .pf-guards.toml or docs/pf-core link from pf-core is migrated.
+.venv/bin/pw-setup || {
+  echo "FAILED: pw-setup could not finish the wiring — fix each '!' line above, then re-run bin/setup" >&2
+  exit 1
+}
+
+# --- generate ---------------------------------------------------------------
+# The glyph bundle is committed, so this only confirms it arrived intact; it is a
+# hash check over an archive, not a fetch. `deckwright glyphs sync` rebuilds it.
+if .venv/bin/deckwright glyphs verify >/dev/null 2>&1; then
+  ok "glyph bundle verified"
+else
+  info "glyph bundle missing or stale — rebuilding (needs a network)"
+  .venv/bin/deckwright glyphs sync
+fi
+
+# A template to run `conform` against, so onboarding needs no brand file. Never
+# overwritten: you may have put your own there, and doctor reports drift instead.
+if [[ ! -f templates/sample.pptx ]]; then
+  .venv/bin/deckwright sample >/dev/null
+  ok "templates/sample.pptx written (try: bin/run conform templates/sample.pptx --adopt sample)"
+else
+  ok "templates/sample.pptx exists"
+fi
+
+# --- verify -----------------------------------------------------------------
+# One real compile, end to end, into a temp dir: parse -> theme -> layout -> .pptx
+# -> manifest. Needs no external tool, so it is the honest proof setup can give.
+SMOKE="$(mktemp -d)"
+if .venv/bin/deckwright build examples/smoke.deck.yaml --out "$SMOKE/Smoke.pptx" >/dev/null 2>&1 \
+   && [[ -f "$SMOKE/Smoke.pptx" && -f "$SMOKE/Smoke.manifest.json" ]]; then
+  ok "end-to-end build (examples/smoke.deck.yaml)"
+else
+  echo "FAILED: the smoke deck did not build — run it directly to see why:" >&2
+  echo "  .venv/bin/deckwright build examples/smoke.deck.yaml --out /tmp/Smoke.pptx" >&2
+  rm -rf "$SMOKE"
+  exit 1
+fi
+rm -rf "$SMOKE"
+
+echo
+.venv/bin/deckwright doctor || true
+
+echo
+echo "Setup complete. Try: bin/run demo"

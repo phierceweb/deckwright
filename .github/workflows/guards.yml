@@ -1,0 +1,110 @@
+name: guards
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+# Runner images deny the unprivileged user namespace Chrome's sandbox needs, and
+# both the browser-backed tests and the `document:` exercise start a real browser.
+# The HTML rendered here is this repo's own; see SECURITY.md.
+env:
+  DECKWRIGHT_CHROME_NO_SANDBOX: "1"
+
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: structural gate
+        run: python -m pw_foundation.guards
+      - name: ruff
+        run: python -m ruff check src tests
+      - name: ruff format
+        run: python -m ruff format --check src tests
+      - name: mypy
+        run: python -m mypy
+      - name: import-layering
+        run: python bin/check-layers
+      - name: framework-first (pw-foundation)
+        run: python bin/check-framework
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      # templates/ is gitignored, so its module always skips here — `-rs` keeps that
+      # visible, and test_templates_gate.py (which does run) is what keeps it honest.
+      - name: tests (no brand templates — see docs/testing.md)
+        run: python -m pytest -q -rs
+      # The glyph bundle is committed; this is the same hash check bin/setup runs.
+      - name: glyph bundle
+        run: python -m deckwright.cli glyphs verify
+      - name: end-to-end build (no external tools needed)
+        run: |
+          python -m deckwright.cli build examples/smoke.deck.yaml \
+            --out "$RUNNER_TEMP/smoke/Smoke.pptx"
+          test -f "$RUNNER_TEMP/smoke/Smoke.pptx"
+          test -f "$RUNNER_TEMP/smoke/Smoke.manifest.json"
+      - name: doctor
+        run: python -m deckwright.cli doctor
+
+  # The only job that renders and QAs the exercise catalogue; the unit suite above builds
+  # it, with a browser, but has no LibreOffice or Poppler.
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: renderers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-impress poppler-utils
+      # Probed rather than assumed: a `document:` slide needs a browser, and a missing
+      # one should say so here rather than surface as a confusing mid-build failure.
+      - name: browser
+        run: |
+          google-chrome --version || chromium --version || {
+            echo "::error::no Chromium-family browser on the runner — the 'document' \
+          exercise needs one; install it here or drop that exercise"; exit 1; }
+      - name: build every capability
+        run: python -m deckwright.cli demo --theme base --out out/demo
+      - name: render + contact sheet
+        run: python -m deckwright.cli render "out/demo/base capabilities.pptx" --contact-sheet --cols 8
+      # `error` rather than `warn`: the runner substitutes its own faces for the
+      # theme's (Liberation Sans for Helvetica), so wrap-sensitive findings can differ
+      # from a developer's machine. Tighten once that has been watched for a while.
+      - name: qa
+        run: python -m deckwright.cli qa "out/demo/base capabilities.pptx" --fail-on error
+      # An owned template, so the whole conform path runs here without licensed
+      # artwork. It is a pipeline smoke test, not brand-variance evidence — that is
+      # tests/test_templates.py, which cannot run in CI.
+      - name: conform against the generated sample
+        run: |
+          python -m deckwright.cli sample "$RUNNER_TEMP/sample.pptx"
+          python -m deckwright.cli conform "$RUNNER_TEMP/sample.pptx" --out "$RUNNER_TEMP/conform"
+      - name: qa summary
+        if: always()
+        run: cat "out/demo/render/base capabilities/qa.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: capability-demo
+          if-no-files-found: error
+          path: |
+            out/demo/base capabilities.pptx
+            out/demo/base capabilities.content.md
+            out/demo/render/base capabilities/contact_sheet.png
+            out/demo/render/base capabilities/qa.md

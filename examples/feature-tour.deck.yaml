@@ -1,0 +1,740 @@
+theme: base
+title: deckwright
+sections:
+- Chrome
+- Theme
+- Spec
+- QA
+out: ../out/feature-tour/deckwright Feature Tour.pptx
+---
+background: inverse
+kicker: THE FEATURE TOUR
+title: deckwright
+subtitle: Decks compiled from a spec, not assembled by hand
+chrome:
+  kicker: {at: {box: {x: 5.5%, y: 52%, w: 50%, h: 5%}}, anchor: bottom}
+  title: {at: {box: {x: 5.5%, y: 57%, w: 75%, h: 14%}}, rung: display, anchor: bottom}
+  subtitle: {at: {box: {x: 5.5%, y: 72%, w: 60%, h: 6%}}, anchor: top}
+notes: 'Every slide after this one was produced by `deckwright build` from a single
+
+  YAML file, and no Python at all — every body on it is a component that ships.
+
+  '
+---
+background: inverse
+kicker: PART 1 OF 4
+title: Chrome
+subtitle: The frame that repeats on every slide, written once.
+section: Chrome
+notes: Act one — what a slide is made of.
+---
+kicker: CHROME
+title: A slide has no layout
+subtitle: Four optional fields, a backdrop, and a list of placements — that is the whole shape
+section: Chrome
+notes: 'There is no layout: key. A slide names the text it carries, the backdrop it sits
+
+  on, and what to place where. Every position and size comes from the theme.
+
+  '
+animate: one_at_a_time
+place:
+- at: {cols: full}
+  callouts:
+    items:
+    - head: 'kicker, title, subtitle'
+      body: The chrome. Every field is optional; an absent field draws nothing at all.
+    - head: 'background:'
+      body: page, inverse, or an image — and it picks the contrast-checked colour pair the text uses.
+    - head: 'place:'
+      body: One entry per component, each saying where it goes and what it draws.
+    - head: 'extends:'
+      body: A Python module registering components of its own, for what the spec cannot say.
+---
+kicker: CHROME
+title: Nothing here is hand-positioned
+subtitle: Every number below comes out of the theme, not out of a build script
+section: Chrome
+notes: 'None of these values appear in the deck spec. The theme owns colour, type and
+
+  the space content may occupy; the spec says only what goes where.
+
+  '
+place:
+- at: {cols: full}
+  stats:
+    items:
+    - value: '0'
+      label: inches hand-computed
+    - value: '12'
+      label: semantic colour roles
+    - value: '10'
+      label: rungs on the type ramp
+    - value: '5'
+      label: components in the vocabulary
+    caption: The spec says what goes where. The theme owns every colour, size and inch.
+---
+background: inverse
+kicker: PART 2 OF 4
+title: Theme
+subtitle: One source of truth for colour, type, and the space content may occupy.
+section: Theme
+notes: Act two — the theme.
+---
+kicker: THEME
+title: The palette binds onto the template
+subtitle: Semantic roles bind onto slots in the .pptx's own clrScheme — edit the template, the deck
+  follows
+section: Theme
+notes: 'A bind: never lists a hex value. It says ink -> dk1, accent-1 -> accent1.
+
+  The loader opens the template and reads what those slots actually are, so the
+
+  YAML cannot drift from the brand file.
+
+  '
+place:
+- at: {cols: full, rows: {from: 0, to: 8}}
+  swatches:
+    roles:
+    - ink
+    - accent-1
+    - accent-2
+    - accent-3
+    - muted
+    - line
+    caption: Every value above was read out of the .pptx at build time.
+- at: {cols: full, rows: {from: 8, to: 12}}
+  split:
+  - card:
+      pair: accent-1
+      heading: accent-1
+      body: A ground, and ink checked against it.
+  - card:
+      pair: accent-2
+      heading: accent-2
+      body: The pair supplies the ink.
+  - card:
+      pair: accent-3
+      heading: accent-3
+      body: Every pair clears WCAG AA.
+  - card:
+      pair: inverse
+      heading: inverse
+      body: Below AA fails qa, never ships.
+---
+kicker: THEME
+title: The grid every placement resolves against
+subtitle: Drawn below by asking the theme for its own measurements — and any region it reserves
+section: Theme
+notes: 'The bars are the theme''s own columns, read from the theme rather than drawn to
+
+  a fixed number. A theme that declares a reserved region — a logo wedge a brand keeps
+
+  clear — has it laid over them as its real polygon, and a placement intruding on it
+
+  fails the geometry check. The base theme declares none, so this slide shows columns
+
+  alone.
+
+  '
+place:
+- at: {cols: full, rows: {from: 0, to: 6}}
+  grid: {show: columns}
+- at: {cols: full, rows: {from: 6, to: 12}}
+  callouts:
+    items:
+    - head: Named fractions cover most of it
+      body: "left-half, right-third, band, bottom-third — the spans a deck actually says out loud."
+    - head: Exact spans where no name fits
+      body: "cols: {from: 7, to: 12} indexes the same twelve, half-open, and rows: takes the same form."
+    - head: A region the brand keeps clear
+      body: A conformed template's logo wedge is laid over these bars as its real polygon, and any
+        placement intruding on it fails the build. The base theme reserves nothing, so none is drawn.
+---
+background: inverse
+kicker: PART 3 OF 4
+title: Spec
+subtitle: A deck is a document you can read, diff, and hand to an assistant.
+section: Spec
+notes: Act three — the spec format and the escape hatch.
+---
+kicker: SPEC
+title: A real file, rendered as itself
+subtitle: doc-card places a markdown source as a picture — not a retyped copy
+section: Spec
+notes: 'This card is docs/qa.md''s own opening lines, screenshotted through headless
+
+  Chrome and placed by place_panel. Edit the source file and the next build
+
+  changes with it; nothing here is retyped prose.
+
+  '
+place:
+- at: {cols: full}
+  document:
+    source: ../docs/qa.md
+    lines: '1-9'
+    max_width: 1500
+---
+kicker: SPEC
+title: When the spec is not enough
+subtitle: 'extends: points at a Python module that registers components by name'
+section: Spec
+notes: 'Every body on this deck — the point lists, the swatches, the grid, this code
+
+  card — is a component that ships. `extends:` remains for the shape only one deck
+
+  wants; the compiler hands a deck-local component the same rectangle and theme.
+
+  '
+place:
+- at: {cols: full}
+  split:
+  - code:
+      heading: my_components.py
+      accent: ['@component']
+      size: 12
+      lines:
+      - from deckwright.layouts.components import component
+      - ''
+      - '@component("org-chart")'
+      - 'def org_chart(ctx):'
+      - '    for node in ctx.body["nodes"]:'
+      - '        rrect(ctx.slide, ..., ctx.color("surface"))'
+  - callouts:
+      heading: when to reach for it
+      items:
+      - head: One deck needs one shape
+        body: "A diagram only this deck wants is ten lines beside it, not a feature request."
+      - head: Full access to the theme
+        body: "A deck-local component reads the same palette, ramp and grid the built-ins use."
+      - head: Nothing is a special case
+        body: "Built-ins and deck-local components resolve through one registry."
+---
+kicker: SPEC
+title: Every build leaves a record
+subtitle: A manifest of what the build meant to place, beside the .pptx
+section: Spec
+notes: 'This is the piece that makes the next phase possible. Render the deck to PDF,
+
+  extract the text, diff it against the manifest — text that vanished overflowed.
+
+  Panel text is marked as an image and excluded, because a PDF extractor cannot
+
+  see it; that gets checked in the browser instead.
+
+  '
+place:
+- at: {cols: full}
+  split:
+  - code:
+      heading: recorded per slide
+      lines:
+      - 'shape_id, name, box (inches)'
+      - 'text + font size'
+      - 'foreground / background'
+      - 'rendered: native | image'
+      - 'animation groups'
+      - 'slide_w, slide_h, theme_path'
+  - callouts:
+      heading: what it buys
+      items:
+      - head: Overflow becomes detectable
+        body: "Compare the text the build intended against the text that survived the render."
+      - head: Geometry becomes checkable
+        body: "Off-slide shapes, overlaps and reserved-region intrusions are box arithmetic."
+      - head: Hand-edits stay possible
+        body: "Shape ids and names are what a surgical edit to a delivered deck needs."
+---
+kicker: SPEC
+title: Bullets join the vocabulary
+subtitle: The third body component, exercised for the first time in this deck
+section: Spec
+notes: 'callouts and stats have carried every body slide so far. bullets is the plain
+
+  case — a heading, N columns, one bullet per item — and it guards its own
+
+  overflow the same way its siblings do.
+
+  '
+place:
+- at: {cols: full}
+  bullets:
+    heading: What ships today
+    columns: 2
+    items:
+    - Callout lists
+    - Stat tiles
+    - Bullet columns
+    - Native charts
+    - A manifest per build
+    - The Python escape hatch
+---
+kicker: SPEC
+title: Adoption climbs every quarter
+subtitle: A real chart part — editable, animatable by series or point, and its labels are extractable
+  text
+section: Spec
+notes: 'A native OOXML chart with an embedded worksheet. Open this deck in
+
+  PowerPoint and choose Edit Data on this shape — the numbers are live,
+
+  not a picture of numbers.
+
+  '
+animate: by_category
+place:
+- at: {cols: full}
+  chart:
+    kind: column
+    data:
+    - category: Q1
+      value: 12
+    - category: Q2
+      value: 34
+    - category: Q3
+      value: 58
+    - category: Q4
+      value: 91
+      highlight: true
+---
+kicker: SPEC
+title: Two channels, one stacked column
+subtitle: Share of total adoption over time, broken out by source each quarter
+section: Spec
+notes: 'column-stacked — XL_CHART_TYPE.COLUMN_STACKED. Same axes and gap_width as
+
+  a clustered column; series stack instead of sitting side by side.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: column-stacked
+    data:
+    - category: Q1
+      values:
+        Ads: 12
+        Organic: 8
+    - category: Q2
+      values:
+        Ads: 20
+        Organic: 20
+    - category: Q3
+      values:
+        Ads: 25
+        Organic: 39
+    - category: Q4
+      values:
+        Ads: 30
+        Organic: 62
+---
+kicker: SPEC
+title: The same two channels, normalized
+subtitle: Mix shifts even while both totals keep climbing — share of total, independent of scale
+section: Spec
+notes: 'column-stacked-100 — XL_CHART_TYPE.COLUMN_STACKED_100. Every bar sums to
+
+  100%, so a reader compares proportion across quarters, not absolute size.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: column-stacked-100
+    data:
+    - category: Q1
+      values:
+        Ads: 12
+        Organic: 8
+    - category: Q2
+      values:
+        Ads: 20
+        Organic: 20
+    - category: Q3
+      values:
+        Ads: 25
+        Organic: 39
+    - category: Q4
+      values:
+        Ads: 30
+        Organic: 62
+---
+kicker: SPEC
+title: Cumulative decks built, filled
+subtitle: A trend, not a comparison — the filled area under the line is the point
+section: Spec
+notes: 'area — XL_CHART_TYPE.AREA. Has axes like line, but no gap_width; the fill
+
+  is what carries the trend, not a bare stroke.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: area
+    data:
+    - category: Jan
+      value: 4
+    - category: Feb
+      value: 11
+    - category: Mar
+      value: 19
+    - category: Apr
+      value: 33
+    - category: May
+      value: 52
+    - category: Jun
+      value: 80
+---
+kicker: SPEC
+title: Adoption, by segment
+subtitle: Parts of a whole, at a glance — no scale to misread
+section: Spec
+notes: 'doughnut — XL_CHART_TYPE.DOUGHNUT. Same per-point palette and category-name
+
+  labels as pie; no category or value axis exists to style.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: doughnut
+    data:
+    - category: Enterprise
+      value: 38
+    - category: SMB
+      value: 29
+    - category: Individual
+      value: 21
+    - category: Education
+      value: 12
+---
+kicker: SPEC
+title: Weekly signups, each week marked
+subtitle: A trend with every sample marked, not just the shape between them
+section: Spec
+notes: 'line-markers — XL_CHART_TYPE.LINE_MARKERS. Same stroke styling as line and
+
+  no gap_width either; a marker draws at every point instead of a bare line.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: line-markers
+    data:
+    - category: W1
+      value: 21
+    - category: W2
+      value: 18
+    - category: W3
+      value: 27
+    - category: W4
+      value: 24
+    - category: W5
+      value: 33
+    - category: W6
+      value: 30
+---
+kicker: SPEC
+title: Support hours, by team
+subtitle: Bug work and feature work, stacked so each team's total effort is still legible
+section: Spec
+notes: 'bar-stacked — XL_CHART_TYPE.BAR_STACKED. Same axes and gap_width as a
+
+  clustered bar; series stack instead of sitting side by side, and the
+
+  horizontal layout suits longer category labels.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bar-stacked
+    data:
+    - category: Platform
+      values:
+        Bugs: 12
+        Features: 20
+    - category: Growth
+      values:
+        Bugs: 18
+        Features: 10
+    - category: Infra
+      values:
+        Bugs: 9
+        Features: 15
+---
+kicker: SPEC
+title: The same three teams, by share of the week
+subtitle: Mix shifts even as total workload changes — share, not raw hours
+section: Spec
+notes: 'bar-stacked-100 — XL_CHART_TYPE.BAR_STACKED_100. Every bar sums to 100%,
+
+  so a reader compares mix across teams, not the size of each team''s week.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: bar-stacked-100
+    data:
+    - category: Platform
+      values:
+        Bugs: 12
+        Features: 20
+    - category: Growth
+      values:
+        Bugs: 18
+        Features: 10
+    - category: Infra
+      values:
+        Bugs: 9
+        Features: 15
+---
+kicker: SPEC
+title: Two products, growing together
+subtitle: The combined total climbs while the mix between them keeps shifting underneath
+section: Spec
+notes: 'area-stacked — XL_CHART_TYPE.AREA_STACKED. Has axes like area, but each
+
+  band''s own height is one series — the top edge reads as the running total.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: area-stacked
+    data:
+    - category: Jan
+      values:
+        Web: 10
+        Mobile: 4
+    - category: Feb
+      values:
+        Web: 18
+        Mobile: 9
+    - category: Mar
+      values:
+        Web: 25
+        Mobile: 15
+    - category: Apr
+      values:
+        Web: 30
+        Mobile: 22
+    - category: May
+      values:
+        Web: 38
+        Mobile: 30
+    - category: Jun
+      values:
+        Web: 44
+        Mobile: 40
+---
+kicker: SPEC
+title: Two teams, five capabilities
+subtitle: A radar compares shape, not size — it reads when the series are on one scale
+section: Spec
+notes: 'radar — XL_CHART_TYPE.RADAR. Its plot has no gap_width, and its major
+
+  gridlines are the rings and spokes the shape is plotted against — the one
+
+  type _style_axes leaves at python-pptx''s own default instead of driving
+
+  from the theme.
+
+
+  The two series are deliberately close in magnitude. A radar whose series
+
+  differ by an order of magnitude collapses the smaller one onto the centre
+
+  point, which says nothing about either.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: radar
+    data:
+    - category: Discovery
+      values:
+        Platform: 4
+        Growth: 3
+    - category: Delivery
+      values:
+        Platform: 5
+        Growth: 3
+    - category: Testing
+      values:
+        Platform: 3
+        Growth: 5
+    - category: Docs
+      values:
+        Platform: 4
+        Growth: 2
+    - category: Support
+      values:
+        Platform: 2
+        Growth: 4
+---
+kicker: SPEC
+title: How this catalogue is weighted
+subtitle: Fourteen chart types, one family carrying nearly half of them
+section: Spec
+notes: 'pie-exploded — XL_CHART_TYPE.PIE_EXPLODED. Same per-point palette and
+
+  category-name labels as pie/doughnut; the type itself pulls every wedge
+
+  outward, and highlight still picks out the one to act on.
+
+  '
+place:
+- at: {cols: full}
+  chart:
+    kind: pie-exploded
+    data:
+    - category: Bar/column family
+      value: 6
+      highlight: true
+    - category: Line family
+      value: 2
+    - category: Area family
+      value: 2
+    - category: Radar
+      value: 1
+    - category: Pie family
+      value: 3
+---
+background: inverse
+kicker: PART 4 OF 4
+title: QA
+subtitle: The build checks its own output before you ever open it.
+section: QA
+notes: Act four — the QA layer, built after this deck's first cut.
+---
+kicker: QA
+title: What the checker catches
+subtitle: Every check reads the manifest the build already writes — no second source of truth
+section: QA
+notes: 'Run as `deckwright qa <deck>.pptx`. The manifest records what the build intended;
+
+  the checks compare that against the geometry and, for overflow, against a real render.
+
+  '
+animate: one_at_a_time
+place:
+- at: {cols: full}
+  callouts:
+    items:
+    - head: Off-slide and safe-zone
+      body: Shapes past the edge, or intruding on the logo wedge, as polygon arithmetic.
+    - head: Typography floors
+      body: Any run below the theme's minimum point size, wherever it came from.
+    - head: Contrast
+      body: WCAG AA ratios computed per run from the colours actually applied.
+    - head: Overflow
+      body: The text the build intended, diffed against the text that survived a render.
+---
+kicker: QA
+title: This deck, checked
+subtitle: The numbers below are this build's own QA run, not an illustration
+section: QA
+notes: 'Zero findings is what the built-in palette earns by construction: its weakest
+
+  accent measures 6.0:1 on the page, well past the 4.5:1 AA minimum, because every
+
+  pair is contrast-checked when the theme loads. Bind a real brand onto a template
+
+  and this number moves — an accent chosen to look right as a fill is often below
+
+  the bar as text, and that is exactly the finding this layer exists to surface.
+
+  '
+place:
+- at: {cols: full}
+  stats:
+    items:
+    - value: '29'
+      label: slides compiled
+    - value: '181'
+      label: shapes recorded
+    - value: '128'
+      label: carrying text
+    - value: '0'
+      label: findings
+    caption: A clean run is not a good deck — the next slide is what these checks cannot see.
+---
+kicker: QA
+title: What it structurally cannot catch
+subtitle: The checks that would need eyes, and are therefore still yours
+section: QA
+notes: 'This slide exists because a green check is the most dangerous thing a tool can
+
+  emit. Everything below is invisible to the manifest by construction.
+
+  '
+animate: one_at_a_time
+place:
+- at: {cols: full}
+  callouts:
+    items:
+    - head: Whether it looks good
+      body: Balance, rhythm, and emphasis are not expressible as box arithmetic.
+    - head: Whether the words are right
+      body: The checker compares intended text to rendered text — never to the truth.
+    - head: What a picture contains
+      body: A rendered panel is one opaque rectangle; its internals are unreadable.
+    - head: How a build animates
+      body: That the timing is well-formed, not that the reveal order makes sense.
+---
+kicker: QA
+title: Geometry the components can now ask for
+subtitle: A body that ends above the logo wedge is entitled to the width the wedge steals
+section: QA
+notes: 'The safe zone is a triangle, so a full-height body must clear its diagonal and
+
+  loses 1.31in. A body that stops at 5.0in never reaches the wedge and keeps the
+
+  full content width. Components now request the rect their real height earns.
+
+  '
+place:
+- at: {cols: full}
+  stats:
+    items:
+    - value: 12.10"
+      label: content width, full grid
+    - value: 10.79"
+      label: what a full-height body keeps
+    - value: 1.31"
+      label: reclaimed by a shallow body
+    - value: '3'
+      label: components reporting their height
+    caption: The component reports how tall it came out; the layout bounds it from that.
+---
+title: One card, before
+notes: The next slide arrives by morph and carries the same card under the same name.
+place:
+- at: {cols: {from: 0, to: 5}, rows: {from: 0, to: 6}}
+  morph: figure
+  card: {heading: Revenue, body: Up 12% on the year}
+---
+title: The same card, after
+transition: morph
+notes: 'Written as a Morph transition with a fade as its fallback. The card carries the same name as on the slide before, which is how Morph pairs the two.'
+place:
+- at: {cols: {from: 3, to: 12}, rows: {from: 0, to: 8}}
+  morph: figure
+  card: {heading: Revenue, body: Up 12% on the year}
+---
+background: inverse
+title: deckwright
+notes: Close on the two commands that produced this deck.
+place:
+- at: {cols: full}
+  bullets:
+    items:
+    - bin/run build <spec>.deck.yaml
+    - bin/run render <deck>.pptx --contact-sheet

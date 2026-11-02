@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Run the deckwright CLI (or a sibling bin/ command) via the project venv.
+#
+#   bin/run --help
+#   bin/run build examples/smoke.deck.yaml
+#   bin/run pw-doctor     # pw-foundation console script, from the venv
+#   bin/run test          # delegates to bin/test
+#   bin/run lint          # delegates to bin/lint
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+# Delegate to a sibling bin/ script when the first arg names one.
+if [[ "$#" -gt 0 && "$1" != "run" && -x "$ROOT/bin/$1" ]]; then
+  CMD="$1"; shift
+  exec "$ROOT/bin/$CMD" "$@"
+fi
+
+# pw-foundation's console scripts live in the venv; the pw- prefix can't collide with an app command.
+if [[ "$#" -gt 0 && "$1" == pw-* && -x "$ROOT/.venv/bin/$1" ]]; then
+  CMD="$1"; shift
+  exec "$ROOT/.venv/bin/$CMD" "$@"
+fi
+
+if [[ ! -x "$ROOT/.venv/bin/python" && -z "${VIRTUAL_ENV:-}" ]]; then
+  echo "No virtualenv found. Run bin/setup first, or activate your own." >&2
+  exit 1
+fi
+exec "$ROOT/bin/py" -m deckwright.cli "$@"
