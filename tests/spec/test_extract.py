@@ -1441,6 +1441,132 @@ def test_a_group_with_no_child_extent_leaves_its_childrens_boxes_as_they_are():
     assert slide_box(_grouped_child(flat)) == (914400, 914400, 1828800, 1828800)
 
 
+def _turned_child(**turn: str):
+    """Child A, 2x1 in at the group's origin, of a group drawn at (3, 3, 4, 2) in that also
+    holds a 2x1 in child at (2, 1), with ``turn`` set on the group's transform."""
+    prs = Presentation()
+    group = prs.slides.add_slide(prs.slide_layouts[6]).shapes.add_group_shape()
+    child = group.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(2), Inches(1))
+    group.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2), Inches(1), Inches(2), Inches(1))
+    _transform(group, off=(3, 3), ext=(4, 2), ch_off=(0, 0), ch_ext=(4, 2))
+    xfrm = group._element.grpSpPr.xfrm
+    for key, value in turn.items():
+        xfrm.set(key, value)
+    return child
+
+
+@pytest.mark.parametrize(
+    ("turn", "drawn"),
+    [
+        ({"rot": "5400000"}, (4572000, 1828800, 914400, 1828800)),
+        ({"rot": "10800000"}, (4572000, 3657600, 1828800, 914400)),
+        ({"flipH": "1"}, (4572000, 2743200, 1828800, 914400)),
+        ({"flipV": "1"}, (2743200, 3657600, 1828800, 914400)),
+        ({"rot": "5400000", "flipH": "1"}, (4572000, 3657600, 914400, 1828800)),
+        ({"rot": "2700000"}, (3278843, 1717865, 1939735, 1939735)),
+        ({"flipH": "1", "flipV": "1"}, (4572000, 3657600, 1828800, 914400)),
+        ({"rot": "5400000", "flipV": "1"}, (3657600, 1828800, 914400, 1828800)),
+        ({"flipH": "true"}, (4572000, 2743200, 1828800, 914400)),
+        ({"flipV": "true"}, (2743200, 3657600, 1828800, 914400)),
+    ],
+    ids=[
+        "quarter-turn",
+        "half-turn",
+        "flipped-across",
+        "flipped-over",
+        "flipped-then-turned",
+        "eighth-turn",
+        "flipped-both-ways",
+        "flipped-over-then-turned",
+        "flipped-as-a-word",
+        "flipped-over-as-a-word",
+    ],
+)
+def test_a_child_of_a_turned_group_is_measured_where_the_group_draws_it(turn, drawn):
+    """Each box is where LibreOffice draws child A: the flip applies before the turn, and a
+    turned box is the upright rectangle around it."""
+    from deckwright.spec._tree import slide_box
+
+    assert slide_box(_turned_child(**turn)) == drawn
+
+
+@pytest.mark.parametrize(
+    ("inner", "outer", "drawn"),
+    [
+        ("2700000", "18900000", (2743200, 2743200, 1828800, 914400)),
+        ("1800000", "3600000", (4572000, 1828800, 914400, 1828800)),
+    ],
+    ids=["turns-that-cancel", "turns-that-add-to-a-quarter"],
+)
+def test_a_child_of_nested_turned_groups_is_measured_through_both_turns(inner, outer, drawn):
+    """Each box is where LibreOffice draws child A: the turns compose before the upright
+    rectangle is taken, once."""
+    from deckwright.spec._tree import slide_box
+
+    prs = Presentation()
+    outside = prs.slides.add_slide(prs.slide_layouts[6]).shapes.add_group_shape()
+    inside = outside.shapes.add_group_shape()
+    child = inside.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(2), Inches(1))
+    inside.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2), Inches(1), Inches(2), Inches(1))
+    for group, off, rot in ((inside, (0, 0), inner), (outside, (3, 3), outer)):
+        _transform(group, off=off, ext=(4, 2), ch_off=(0, 0), ch_ext=(4, 2))
+        group._element.grpSpPr.xfrm.set("rot", rot)
+    assert slide_box(child) == drawn
+
+
+def test_an_outer_groups_squash_scales_a_turned_inner_group_without_shearing_it():
+    """LibreOffice draws child A within a hundredth of an inch of this box: the outer group's
+    halving of height lands on the inner group's box before the inner group turns."""
+    from deckwright.spec._tree import slide_box
+
+    prs = Presentation()
+    outside = prs.slides.add_slide(prs.slide_layouts[6]).shapes.add_group_shape()
+    inside = outside.shapes.add_group_shape()
+    child = inside.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(1), Inches(0.5))
+    inside.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(1), Inches(1))
+    _transform(inside, off=(0, 0), ext=(4, 2), ch_off=(0, 0), ch_ext=(2, 2))
+    _transform(outside, off=(3, 2), ext=(4, 1.5), ch_off=(0, 0), ch_ext=(4, 3))
+    for group, turn in (
+        (inside, {"rot": "1800000", "flipV": "1"}),
+        (outside, {"rot": "2700000", "flipH": "1"}),
+    ):
+        for key, value in turn.items():
+            group._element.grpSpPr.xfrm.set(key, value)
+    assert slide_box(child) == pytest.approx((4615313, 2573766, 1825651, 694139), abs=2)
+
+
+@pytest.mark.parametrize(
+    ("rot", "drawn"),
+    [
+        ("5400000", (3657600, 1143000, 1828800, 914400)),
+        ("16200000", (3657600, 1143000, 1828800, 914400)),
+        ("2760000", (3596638, 636122, 1950724, 1928156)),
+        ("2640000", (3097672, 165368, 2948655, 2869665)),
+        ("9000000", (2873913, 487827, 3396175, 2224747)),
+    ],
+    ids=[
+        "quarter-turn",
+        "three-quarter-turn",
+        "just-past-an-eighth",
+        "just-short-of-an-eighth",
+        "past-three-eighths",
+    ],
+)
+def test_a_group_turned_near_a_quarter_takes_its_parents_stretch_across(rot, drawn):
+    """Each box is where LibreOffice draws the child: a group turned between 45 and 135
+    degrees, or 225 and 315, is stretched by its parent along the other axis."""
+    from deckwright.spec._tree import slide_box
+
+    prs = Presentation()
+    outside = prs.slides.add_slide(prs.slide_layouts[6]).shapes.add_group_shape()
+    inside = outside.shapes.add_group_shape()
+    child = inside.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(2), Inches(1))
+    _transform(inside, off=(1, 1), ext=(2, 1), ch_off=(0, 0), ch_ext=(2, 1))
+    _transform(outside, off=(1, 1), ext=(8, 2), ch_off=(0, 0), ch_ext=(4, 4))
+    inside._element.grpSpPr.xfrm.set("rot", rot)
+    assert slide_box(child) == pytest.approx(drawn, abs=2)
+
+
 def test_a_chart_build_whose_chart_is_not_read_back_drafts_a_slide_that_builds(tmp_path):
     """A scatter's points are not read back, so the draft has no chart for `by_series` to build."""
     spec = tmp_path / "xy.deck.yaml"
@@ -1521,6 +1647,108 @@ def _extracted(tmp_path, slide: str, *, theme: str = "base", manifest: bool = Tr
     assert result.exit_code == 0, result.output
     docs = [d for d in yaml.safe_load_all(draft.read_text()) if isinstance(d, dict)][1:]
     return draft, docs
+
+
+_TABLE = (
+    "title: Looks\nplace:\n  - at: {cols: full}\n    table:\n"
+    "      header: [A, B, C]\n"
+    "      rows: [[a, b, c], [d, e, f], [g, h, i], [j, k, l]]\n"
+)
+
+
+def _drafted_table(tmp_path, fields: str) -> dict:
+    _, (doc,) = _extracted(tmp_path, _TABLE + fields, manifest=False)
+    ((table,),) = [[e["table"] for e in doc["place"] if "table" in e]]
+    return table
+
+
+def test_a_tables_look_drafts_back_from_the_file(tmp_path):
+    table = _drafted_table(
+        tmp_path,
+        "      align: [left, right, center]\n      valign: bottom\n      banding: true\n"
+        "      rules: grid\n      density: 0.6\n",
+    )
+    assert table == {
+        "header": ["A", "B", "C"],
+        "rows": [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"], ["j", "k", "l"]],
+        "align": ["left", "right", "center"],
+        "valign": "bottom",
+        "rules": "grid",
+    }
+
+
+@pytest.mark.parametrize("rules", ["header", "none"])
+def test_a_tables_rules_draft_back_from_the_file(tmp_path, rules):
+    assert _drafted_table(tmp_path, f"      rules: {rules}\n")["rules"] == rules
+
+
+@pytest.mark.kept_spec
+def test_an_untouched_banded_table_with_a_total_keeps_its_banding(tmp_path):
+    _, (doc,) = _extracted(
+        tmp_path,
+        "title: Bands\nplace:\n  - at: {cols: full}\n    table:\n      banding: true\n"
+        "      header: [A, B]\n      rows: [[a, b]]\n      total: [T, U]\n",
+    )
+    ((drafted,),) = [[e["table"] for e in doc["place"] if "table" in e]]
+    assert drafted["banding"] is True
+
+
+@pytest.mark.kept_spec
+def test_a_filled_body_without_banding_drafts_as_its_spec(tmp_path):
+    _, (doc,) = _extracted(tmp_path, _TABLE + "      body_pair: surface\n")
+    ((drafted,),) = [[e["table"] for e in doc["place"] if "table" in e]]
+    assert drafted == {
+        "header": ["A", "B", "C"],
+        "rows": [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"], ["j", "k", "l"]],
+        "body_pair": "surface",
+    }
+
+
+def test_a_table_at_its_defaults_drafts_none_of_them(tmp_path):
+    assert set(_drafted_table(tmp_path, "")) == {"header", "rows"}
+
+
+@pytest.mark.kept_spec
+def test_a_column_without_words_keeps_the_alignment_its_spec_gave_it(tmp_path):
+    """The file cannot show how a column with no words is set, so the spec's list stands."""
+    _, (doc,) = _extracted(
+        tmp_path,
+        "title: T\nplace:\n  - at: {cols: full}\n    table:\n"
+        '      header: [A, "", C]\n      rows: [[a, "", c], [d, "", f]]\n'
+        "      align: [left, right, right]\n",
+    )
+    ((table,),) = [[e["table"] for e in doc["place"] if "table" in e]]
+    assert table["align"] == ["left", "right", "right"]
+
+
+def test_a_header_and_one_row_ruled_by_rows_drafts_no_rules(tmp_path):
+    """Its one rule, under the header, is what `rules: header` would draw too."""
+    _, (doc,) = _extracted(
+        tmp_path,
+        "title: T\nplace:\n  - at: {cols: full}\n    table:\n"
+        "      header: [A, B]\n      rows: [[a, b]]\n",
+        manifest=False,
+    )
+    ((table,),) = [[e["table"] for e in doc["place"] if "table" in e]]
+    assert set(table) == {"header", "rows"}
+
+
+@pytest.mark.kept_spec
+@pytest.mark.parametrize(
+    "cells",
+    [
+        "header: [A, B, C]\n      rows: [[a, b, c], [d, e, f]]",
+        'header: [A, "", C]\n      rows: [[a, "", c], [d, "", f]]',
+    ],
+    ids=["every-column-worded", "a-column-without-words"],
+)
+def test_columns_set_as_their_placement_draft_no_align(tmp_path, cells):
+    _, (doc,) = _extracted(
+        tmp_path,
+        f"title: T\nplace:\n  - at: {{cols: full}}\n    align: right\n    table:\n      {cells}\n",
+    )
+    (entry,) = [e for e in doc["place"] if "table" in e]
+    assert (entry["align"], set(entry["table"])) == ("right", {"header", "rows"})
 
 
 def test_a_slides_language_drafts_back_so_its_han_text_still_builds(tmp_path, monkeypatch):

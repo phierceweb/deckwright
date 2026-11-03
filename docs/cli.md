@@ -364,7 +364,7 @@ deck deckwright built comes back as its placements, not only its words.
 | `card` | its heading, its body, its icon and its `pair:` |
 | `bullets` | its heading, its items and `columns:` |
 | `prose` | its paragraphs and `cite:` |
-| `table` | its header, its rows, and its `widths:` when the columns are not an even split |
+| `table` | its header, its rows, its `widths:` when the columns are not an even split, and its `align:`, `valign:` and `rules:` as its cells draw them, each left out at its default |
 | `chart` | its kind and data, read from the values the chart caches |
 | `image` | its picture, in the media folder; its `alt:` or `decorative:`; its `over:` lines, each on the rung its size matches |
 | `icon` | the glyph it draws, by name, with its `ink:`, `size:` and alt text |
@@ -374,7 +374,10 @@ deck deckwright built comes back as its placements, not only its words.
 Each is placed at `at: {box: …}`, in percent of the canvas. The box is the rectangle the
 build's manifest recorded, when that manifest is beside the deck — or, for a copy saved
 under another name, any manifest beside it recording the same build id — and otherwise the
-rectangle its shapes cover, rounded outward so words drawn tight in it still fit. An
+rectangle its shapes cover, rounded outward so words drawn tight in it still fit. A
+manifest that cannot be read, is not a JSON object, numbers a slide with anything but a
+whole number from 1, or records no usable canvas size is not used, and the deck is read from
+the file alone. An
 author's `id:` and a `morph:` name come back, as do a slide's `animate:`, its
 `transition: morph` and its `lang:`, read off the language its CJK runs carry. A placement
 comes back with `bleed: true` when the manifest records it, or when its box runs off the slide. With the manifest found, so do the deck's `sections:`, each slide's
@@ -383,15 +386,21 @@ invents no sections and writes a preset slide's lines as the boxes they sit in. 
 hand, so a rebuild names its shapes as before. A `pair:` comes back when the plate's fill
 and ink are a pair the drafted theme declares; `surface`, the default, stays unwritten.
 
+What the manifest and the kept spec (below) say about a slide reaches it by the number in
+its shapes' names, inside groups included, not by where it sits, so a slide moved by hand,
+and every slide after a deleted one, keeps its own boxes, section, preset and fields. A slide
+holding only morph placements and no title carries no number: it is taken where it sits only
+while its morph shapes hold the words the build drew there, where it drew them, and an empty
+slide only where the build left one empty. A slide added by hand, the later of two copies of
+one slide, and one holding shapes named for two slides take nothing from the manifest or the
+kept spec and are read from the file alone.
+
 **With the spec it was built from.** Every build keeps its spec at
 `.build/<deck>.deck.yaml` beside the deck, and `extract` reads it for what the file does not
 show. It is used only when the deck carries the build id its manifest records, the kept spec
 still hashes to the manifest's `spec_hash`, it names no `extends:` module (reading a deck
 never runs one), and it still parses; otherwise the deck is read from the file alone, as
-above. A slide takes nothing from it unless it holds a shape the build named for that slide
-and none named for another: a slide added or moved since the build, one after a deleted
-slide, and one holding only morph placements and no title are read from the file alone. A
-deck mailed or moved away from its build directory has no kept spec beside it.
+above. A deck mailed or moved away from its build directory has no kept spec beside it.
 
 A placement whose shapes are still the ones the build drew, holding the same words, takes
 its component and fields from the spec, so a `stats:` comes back as `stats:` and an image
@@ -408,9 +417,10 @@ of it, and a card's picture icon is left out. A comment on each slide names the 
 drafted this way.
 
 A field the file shows but `extract` cannot read comes back as the spec wrote it, even when
-it was changed by hand: a picture's crop or mask, the colour of a plate other than a card's
-or a panel's, a table's `align:`, `valign:`, `banding:`, `rules:` and `density:`, and a
-placement's `align:` and `anchor:`.
+it was changed by hand: a picture's crop or mask; the colour of a plate other than a card's
+or a panel's; a table's `head_pair:`, `body_pair:`, `color:`, `weight:`, `density:` and
+`banding:`, and the alignment of a column holding no words (without the spec, the
+placement's); and a placement's `align:` and `anchor:`.
 
 A `reveals:` comes back where a spec can state it: the whole placement revealed, by one
 trigger that is itself drafted, in no ring. A trigger added in PowerPoint can say more —
@@ -478,8 +488,9 @@ picture's.
 
 A group is walked rather than named: its children convert as though each sat on the slide,
 ordered among themselves and taking the group's place in the reading order. A child is
-measured where its groups draw it — moved and scaled, though not rotated or flipped — so a
-card's text box on the slide lies on a plate inside a moved group. Eight levels of nesting
+measured where its groups draw it — moved, scaled, flipped and turned, a turned child's box
+being the upright rectangle around it — so a card's text box on the slide lies on a plate
+inside a moved group. Eight levels of nesting
 are walked; a group nested deeper than that is named whole in a
 `# not converted:` comment instead.
 

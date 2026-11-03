@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +38,7 @@ from deckwright.qa.textflow import check_overflow, extract_pages
 from deckwright.services.render import render_to_images, reuse_render
 from deckwright.theme import load_theme
 from deckwright.theme.model import Theme
+from deckwright.utils.provenance import read_manifest
 
 logger = get_logger(__name__)
 
@@ -142,7 +142,7 @@ def run_qa(
     manifest_path = Path(manifest) if manifest else deck.with_suffix(".manifest.json")
     if not manifest_path.is_file():
         raise SpecError(f"manifest not found: {manifest_path} — build the deck first")
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data = read_manifest(manifest_path)
 
     theme_file = _theme_file(theme_path, data.get("theme_path"), manifest_path, data.get("theme"))
     if not theme_file:

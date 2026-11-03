@@ -73,3 +73,15 @@ def test_qa_rejects_an_invalid_fail_on(tmp_path, dirty_manifest_deck, capsys):
     err = capsys.readouterr().err.lower()
     assert "fail-on" in err
     assert "bogus" in err
+
+
+def test_qa_refuses_a_spoiled_manifest_naming_it(
+    tmp_path, clean_manifest_deck, spoil_manifest, capsys
+):
+    deck, manifest = clean_manifest_deck
+    spoil_manifest(manifest)
+    with pytest.raises(SystemExit) as exc_info:
+        run_cli(app, args=["qa", str(deck), "--no-render", "--outdir", str(tmp_path)])
+    assert exc_info.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.startswith("d.manifest.json is not a build manifest deckwright can read")

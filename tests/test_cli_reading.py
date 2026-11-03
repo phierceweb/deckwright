@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from deckwright.cli import app
+from deckwright.cli._run import run_cli
 
 runner = CliRunner()
 
@@ -57,6 +58,19 @@ def test_diff_says_so_when_the_file_changed_and_no_shape_did(built):
     result = runner.invoke(app, ["diff", str(built.deck)])
     assert result.stdout.splitlines()[1] == (
         "  no shape differs — a resave, or a change this cannot see"
+    )
+
+
+def test_diff_refuses_a_spoiled_manifest_naming_it(built, spoil_manifest, capsys):
+    spoil_manifest(built.deck.with_suffix(".manifest.json"))
+    with pytest.raises(SystemExit) as exc:
+        run_cli(app, args=["diff", str(built.deck)])
+    assert exc.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.startswith("D.manifest.json is not a build manifest deckwright can read")
+    assert err.endswith(
+        "— build the spec again with --out elsewhere and pass the manifest it writes with "
+        "--manifest"
     )
 
 

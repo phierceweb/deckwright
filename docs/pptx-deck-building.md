@@ -317,8 +317,9 @@ through an edit. Full command: [`docs/cli.md`](cli.md#diff--what-a-hand-edit-cha
 
 **Or draft a spec of the deck as edited.** `bin/run extract "<Name> vN.pptx" -o <new>.deck.yaml`,
 with the deck still in its build directory, reads the file for what it states and the spec
-the build kept for the rest: on a slide still where the build put it, a placement whose words
-were not touched comes back with its component and fields, and one that was edited comes
+the build kept for the rest: on a slide matched to its build by the number in its shapes'
+names, so a slide moved by hand still counts, a placement whose words were not touched comes
+back with its component and fields, and one that was edited comes
 back as the file shows it. A field the file shows but `extract` cannot read, such as a
 re-cropped picture, comes back as the spec had it, so check the render of a rebuild
 against the edited deck.

@@ -3,6 +3,26 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.11.0 — 2026-11-02
+
+- `extract` matches each slide to its build by the number in its shapes' names, inside
+  groups included, so a slide moved by hand, and every slide after a deleted one, keeps its
+  own box, section, `chrome:` preset and kept-spec fields. A slide carrying no number is
+  matched where it sits only while the build's slide there carried none either and its
+  morph shapes hold the words the build drew, where it drew them, or both slides are empty.
+- `extract` reads a table's `align`, `valign` and `rules` from the file, so a hand edit to any
+  of them survives the kept spec; each is left out of the draft at its default.
+- `extract` measures a shape inside rotated or flipped groups, nested or not, where the
+  groups draw it.
+- `diff` and `qa` refuse a manifest they cannot read (not UTF-8 text, not a JSON object, or
+  its slides not numbered from 1), naming it; `extract` reads such a deck, or one whose
+  manifest records no usable canvas size, from the file alone. A manifest saved with a
+  byte-order mark is read.
+- `diff` and `extract`, finding a renamed copy's manifest by its build id, pass over a
+  `*.manifest.json` beside it that deckwright cannot read, instead of stopping on it.
+- A manifest records a relative spec, deck or theme path that shares only the filesystem
+  root with it as the absolute path it names, so `qa` finds that build's theme.
+
 ## v0.10.0 — 2026-11-02
 
 - The library is the same as v0.9.0's.

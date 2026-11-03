@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from deckwright.spec._bodyback import table_unset
 from deckwright.spec._fit import column_up, content_band, lay_out, loose
 from deckwright.spec._themeback import _background, _box, _chrome, _inked, _pair, _rungs_over
 from deckwright.theme.load import load_theme
@@ -140,6 +141,8 @@ def _entry(item: Recovered, *, theme: Theme, remarks: list[str]) -> dict:
             entry[key] = getattr(item, key)
     if item.still:
         entry["animate"] = "none"
+    if "table" in item.body:
+        item = replace(item, body={"table": table_unset(item.body["table"], item.align)})
     if item.sizes:
         item = _rungs_over(item, theme=theme, remarks=remarks)
     pair = _pair(item.painted, theme)

@@ -9,6 +9,7 @@ never reports a lost column.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from pptx.dml.color import RGBColor
 from pptx.oxml import parse_xml
@@ -45,11 +46,16 @@ _FIELDS = (
 _HEAD_PAIR_DEFAULT = "surface"
 _BAND_PAIR_DEFAULT = "surface"
 _RULE_ROLE_DEFAULT = "line"
-# Every real table in the corpus centres its cells; the placement's own ``anchor:``
-# says where the block sits in its box, which is a different question.
-_VALIGN_DEFAULT = "middle"
 RULES = ("rows", "header", "grid", "none")
 """What the hairlines mark: every row, the header alone, the whole grid, or nothing."""
+# `valign` is middle because every real table in the corpus centres its cells; the
+# placement's own ``anchor:`` says where the block sits in its box, a different question.
+TABLE_DEFAULTS: dict[str, Any] = {
+    "valign": "middle",
+    "banding": False,
+    "rules": RULES[0],
+    "density": 1.0,
+}
 # Office's "No Style, No Grid": python-pptx stamps a banded blue style on every new
 # table, and it would repaint every fill and rule this component sets.
 _NO_STYLE = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
@@ -257,7 +263,7 @@ def _band_fill(ctx: SlideCtx, body: Pair | None) -> Pair:
 
 
 def _valign(ctx: SlideCtx) -> str:
-    value = ctx.body.get("valign", _VALIGN_DEFAULT)
+    value = ctx.body.get("valign", TABLE_DEFAULTS["valign"])
     if str(value) not in ANCHORS:
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'table'): 'valign' is one of "
@@ -267,7 +273,7 @@ def _valign(ctx: SlideCtx) -> str:
 
 
 def _rules(ctx: SlideCtx) -> str:
-    value = ctx.body.get("rules", RULES[0])
+    value = ctx.body.get("rules", TABLE_DEFAULTS["rules"])
     if str(value) not in RULES:
         raise LayoutError(
             f"slide {ctx.spec.index} (component 'table'): 'rules' is one of "
@@ -278,7 +284,7 @@ def _rules(ctx: SlideCtx) -> str:
 
 def _density(ctx: SlideCtx) -> float:
     """The multiplier on both cell paddings. Below 1 is tighter, above 1 airier."""
-    value = ctx.body.get("density", 1.0)
+    value = ctx.body.get("density", TABLE_DEFAULTS["density"])
     try:
         factor = 0.0 if isinstance(value, bool) else float(value)
     except (TypeError, ValueError):

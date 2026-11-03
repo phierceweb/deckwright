@@ -252,8 +252,9 @@ survives that pair being moved, which absolute does not. `qa` resolves `theme_pa
 against the manifest's location.
 
 When the two share nothing but the filesystem root, the relative form would climb out
-through that same home directory, so the absolute path stays — nothing about such a build
-is portable anyway.
+through that same home directory, so the path is written absolute, resolved through any
+links and, if it was relative, against the working directory — nothing about such a build is
+portable anyway.
 
 **The rewrite lives in `write()`, not in `to_dict()`**, and it copies rather than mutating
 the recorder — so an in-process consumer of `to_dict()` sees the paths exactly as recorded,

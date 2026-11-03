@@ -6,6 +6,7 @@ deck carrying one is still harvested.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -120,42 +121,76 @@ def members(shapes) -> tuple[list, list[Unreadable]]:
 
 def slide_box(shape) -> tuple[int, int, int, int] | None:
     """``shape``'s left, top, width and height in slide space, EMU, through every group around
-    it; ``None`` when it reports no geometry.
-
-    A group maps its child space onto the slide by ``x' = off + (x - chOff) * ext / chExt`` on
-    each axis. One with no child extent, as a group assembled by moving shapes into it has,
-    has nothing to scale by and leaves its children as they are.
+    it; ``None`` when it reports no geometry. A turned shape's box is the upright rectangle
+    around it. A group with no child extent, as one assembled by moving shapes into it has,
+    leaves its children as they are.
     """
     box = (shape.left, shape.top, shape.width, shape.height)
     if None in box:
         return None
     left, top, width, height = (float(v) for v in box)
-    for group in shape._element.iterancestors(qn("p:grpSp")):
-        mapped = _child_space(group)
-        if mapped is None:
-            continue
-        (off_x, off_y), (ch_x, ch_y), (scale_x, scale_y) = mapped
-        left, top = off_x + (left - ch_x) * scale_x, off_y + (top - ch_y) * scale_y
-        width, height = width * scale_x, height * scale_y
-    return round(left), round(top), round(width), round(height)
+    space = _SLIDE
+    for group in reversed(list(shape._element.iterancestors(qn("p:grpSp")))):
+        space = _entered(space, group)
+    corners = [space.place(left + dx, top + dy) for dx in (0, width) for dy in (0, height)]
+    xs, ys = [x for x, _ in corners], [y for _, y in corners]
+    return round(min(xs)), round(min(ys)), round(max(xs) - min(xs)), round(max(ys) - min(ys))
 
 
-def _child_space(group) -> tuple[tuple[int, int], tuple[int, int], tuple[float, float]] | None:
-    """A group's offset, child offset and scale, or ``None`` if it maps nothing."""
+@dataclass(frozen=True)
+class _Space:
+    """Where a child space lands on the slide: ``anchor`` at ``origin``, scaled along its own
+    axes, then turned and mirrored by ``axes``, the images of its x and y unit vectors."""
+
+    origin: tuple[float, float]
+    anchor: tuple[float, float]
+    scale: tuple[float, float]
+    axes: tuple[tuple[float, float], tuple[float, float]]
+
+    def place(self, x: float, y: float) -> tuple[float, float]:
+        u = (x - self.anchor[0]) * self.scale[0]
+        v = (y - self.anchor[1]) * self.scale[1]
+        (ax, ay), (bx, by) = self.axes
+        return self.origin[0] + u * ax + v * bx, self.origin[1] + u * ay + v * by
+
+
+_SLIDE = _Space((0.0, 0.0), (0.0, 0.0), (1.0, 1.0), ((1.0, 0.0), (0.0, 1.0)))
+
+
+def _entered(space: _Space, group) -> _Space:
+    """The space ``group``'s children are drawn in, given the space it is drawn in: its box is
+    scaled there along that space's axes, then flipped and turned about its centre, flip
+    first. A group that maps nothing leaves ``space`` as it is."""
     xfrm = group.find(f"{qn('p:grpSpPr')}/{qn('a:xfrm')}")
     if xfrm is None:
-        return None
+        return space
     parts = [xfrm.find(qn(f"a:{name}")) for name in ("off", "ext", "chOff", "chExt")]
     if any(part is None for part in parts):
-        return None
+        return space
     off, ext, ch_off, ch_ext = parts
     ch_cx, ch_cy = int(ch_ext.get("cx", 0)), int(ch_ext.get("cy", 0))
     if not ch_cx or not ch_cy:
-        return None
-    return (
-        (int(off.get("x", 0)), int(off.get("y", 0))),
-        (int(ch_off.get("x", 0)), int(ch_off.get("y", 0))),
-        (int(ext.get("cx", 0)) / ch_cx, int(ext.get("cy", 0)) / ch_cy),
+        return space
+    cx, cy = int(ext.get("cx", 0)), int(ext.get("cy", 0))
+    centre = space.place(int(off.get("x", 0)) + cx / 2, int(off.get("y", 0)) + cy / 2)
+    degrees = int(xfrm.get("rot", 0)) / 60000
+    turn = math.radians(degrees)
+    # Nearer a quarter turn than level, it takes its parent's stretch on swapped axes.
+    quarter = 45 <= degrees % 180 < 135
+    stretch = (space.scale[1], space.scale[0]) if quarter else space.scale
+    across = -1.0 if xfrm.get("flipH") in ("1", "true") else 1.0
+    over = -1.0 if xfrm.get("flipV") in ("1", "true") else 1.0
+    (ax, ay), (bx, by) = space.axes
+    x_axis = (math.cos(turn) * across, math.sin(turn) * across)
+    y_axis = (-math.sin(turn) * over, math.cos(turn) * over)
+    return _Space(
+        origin=centre,
+        anchor=(int(ch_off.get("x", 0)) + ch_cx / 2, int(ch_off.get("y", 0)) + ch_cy / 2),
+        scale=(cx * stretch[0] / ch_cx, cy * stretch[1] / ch_cy),
+        axes=(
+            (x_axis[0] * ax + x_axis[1] * bx, x_axis[0] * ay + x_axis[1] * by),
+            (y_axis[0] * ax + y_axis[1] * bx, y_axis[0] * ay + y_axis[1] * by),
+        ),
     )
 
 

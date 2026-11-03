@@ -269,7 +269,9 @@ def test_a_copy_with_no_manifest_anywhere_says_which_build_it_wanted(three, tmp_
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     copy = shutil.copy(three.deck, elsewhere / "T.pptx")
-    with pytest.raises(SpecError, match=r"no manifest in .* records build deckwright:[0-9a-f]+"):
+    with pytest.raises(
+        SpecError, match=r"no manifest deckwright can read in .* records build deckwright:[0-9a-f]+"
+    ):
         read_back(copy)
 
 

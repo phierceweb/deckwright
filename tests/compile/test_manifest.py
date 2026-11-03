@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from pw_foundation.exceptions import InvalidInputError, PreconditionError
@@ -522,3 +523,19 @@ def test_recorded_text_is_the_words_a_link_shows_and_the_address_is_kept(slide):
     assert (by_text.text, by_text.links) == ("Read the guide first", ["https://example.com/g"])
     assert (by_lines.lines, by_lines.links) == (["a b", "c"], ["https://a.io"])
     assert (literal.text, literal.links) == ("[a](https://a.io)", [])
+
+
+def test_a_relative_path_sharing_only_the_root_is_recorded_absolute(tmp_path, monkeypatch):
+    """Written as given, it would be read against the manifest's directory, not the one the
+    build ran in."""
+    from deckwright.compile.manifest import _portable
+
+    monkeypatch.chdir(tmp_path)
+    recorded = _portable("x.deck.yaml", Path("/deckwright-no-such-dir/out"))
+    assert recorded == str(tmp_path.resolve() / "x.deck.yaml")
+
+
+def test_a_path_that_cannot_be_resolved_is_recorded_as_given():
+    from deckwright.compile.manifest import _portable
+
+    assert _portable("a\x00b", Path("/x")) == "a\x00b"

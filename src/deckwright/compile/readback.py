@@ -8,7 +8,6 @@ which names the package really carries.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,7 +23,7 @@ from deckwright.motion.transition import read_kind
 from deckwright.utils.a11y import described
 from deckwright.utils.deck import open_presentation
 from deckwright.utils.mce import resolved_shapes
-from deckwright.utils.provenance import find_manifest
+from deckwright.utils.provenance import find_manifest, read_manifest
 
 logger = get_logger(__name__)
 
@@ -59,7 +58,7 @@ def read_back(deck: str | Path, *, manifest: str | Path | None = None) -> Drift:
     path = Path(manifest) if manifest else _manifest_for(deck, prs)
     if not path.is_file():
         raise SpecError(f"manifest not found: {path}")
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_manifest(path)
     changes: list[Change] = []
     indexed: dict[int, Any] = {}
     placed: list[tuple[int, int]] = []
@@ -148,8 +147,9 @@ def _manifest_for(deck: Path, prs) -> Path:
         return found
     ident = str(prs.core_properties.identifier or "")
     raise SpecError(
-        f"manifest not found: {deck.with_suffix('.manifest.json')}, and no manifest in "
-        f"{deck.parent} records build {ident or '(none recorded)'} — a deck can only be read "
+        f"manifest not found: {deck.with_suffix('.manifest.json')}, and no manifest deckwright "
+        f"can read in {deck.parent} records build {ident or '(none recorded)'} — a deck can "
+        f"only be read "
         f"back against the build that made it. Keep the copy beside its build, or pass "
         f"--manifest."
     )

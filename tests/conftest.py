@@ -335,6 +335,51 @@ def dirty_manifest_deck(tmp_path, theme_file):
     return _qa_deck(tmp_path, theme_file, box=[12.0, 1.0, 3.0, 1.0])
 
 
+def _slide_index(value):
+    def spoil(data):
+        data["slides"][0]["index"] = value
+        return json.dumps(data)
+
+    return spoil
+
+
+@pytest.fixture(
+    params=[
+        lambda data: "not json",
+        lambda data: "[1]",
+        lambda data: "[" * 100_000,
+        _slide_index(float("inf")),
+        _slide_index(float("nan")),
+        _slide_index("1"),
+        _slide_index(True),
+        _slide_index(0),
+        lambda data: json.dumps({**data, "slides": None}),
+        lambda data: json.dumps({**data, "slides": {}}),
+        lambda data: json.dumps({**data, "slides": [1]}),
+    ],
+    ids=[
+        "not-json",
+        "a-list",
+        "nested-past-the-stack",
+        "index-inf",
+        "index-nan",
+        "index-str",
+        "index-true",
+        "index-zero",
+        "slides-null",
+        "slides-an-object",
+        "slides-not-records",
+    ],
+)
+def spoil_manifest(request):
+    """Rewrites the manifest at a path into one no build writes."""
+
+    def spoil(path: pathlib.Path) -> None:
+        path.write_text(request.param(json.loads(path.read_text(encoding="utf-8"))))
+
+    return spoil
+
+
 #: A checkout has bin/, CLAUDE.md and the gitignored content directories; an sdist
 #: ships the package, the suite, the docs and the examples and nothing else. Tests
 #: that assert on the *repository's* layout have nothing to check in the second case.

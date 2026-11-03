@@ -300,15 +300,15 @@ def _portable(target: Any, base: Path) -> Any:
 
     An absolute path puts the build machine's username in a file that leaves the machine,
     and does not survive the deck directory moving. Paths sharing only the filesystem
-    root stay absolute — climbing out would name that home directory anyway.
+    root are written absolute — climbing out would name that home directory anyway.
     """
     if not isinstance(target, str) or not target:
         return target
-    here, there = Path(target), base
     try:
-        common = Path(os.path.commonpath([here.resolve(), there.resolve()]))
+        here, there = Path(target).resolve(), base.resolve()
+        common = Path(os.path.commonpath([here, there]))
     except ValueError:  # different drives, or a path that cannot be resolved
         return target
     if common == Path(common.anchor):
-        return target
-    return os.path.relpath(here.resolve(), there.resolve())
+        return str(here)
+    return os.path.relpath(here, there)

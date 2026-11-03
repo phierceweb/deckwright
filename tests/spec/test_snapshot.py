@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 from pptx import Presentation
-from pptx.oxml.ns import qn
+from pptx.oxml.ns import nsdecls, qn
 
 from deckwright.compile import build_deck
 from deckwright.compile.readback import read_back
@@ -19,6 +19,7 @@ from deckwright.spec import parse_deck
 from deckwright.spec.draft import draft_spec
 from deckwright.spec.extract import harvest
 from deckwright.utils.a11y import describe
+from deckwright.utils.provenance import find_manifest
 
 pytestmark = [pytest.mark.kept_spec, pytest.mark.xdist_group("kept-spec-tour")]
 
@@ -180,6 +181,48 @@ def test_a_deck_carrying_another_build_id_is_read_from_the_file_alone(own_tour):
     _from_the_file_alone(own_tour)
 
 
+def test_a_spoiled_manifest_drafts_as_though_there_were_none(own_tour, spoil_manifest):
+    manifest = own_tour.with_suffix(".manifest.json")
+    spoil_manifest(manifest)
+    spoiled, _ = _drafted(own_tour)
+    manifest.unlink()
+    assert spoiled == _drafted(own_tour)[0]
+
+
+@pytest.mark.parametrize("width", [0, float("nan"), float("inf")], ids=["zero", "nan", "inf"])
+def test_a_manifest_with_no_canvas_width_drafts_as_though_there_were_none(own_tour, width):
+    manifest = own_tour.with_suffix(".manifest.json")
+    data = json.loads(manifest.read_text())
+    data["canvas"]["w"] = width
+    manifest.write_text(json.dumps(data))
+    spoiled, _ = _drafted(own_tour)
+    manifest.unlink()
+    assert spoiled == _drafted(own_tour)[0]
+
+
+def test_a_manifest_saved_with_a_byte_order_mark_is_read(own_tour):
+    manifest = own_tour.with_suffix(".manifest.json")
+    text, _ = _drafted(own_tour)
+    manifest.write_bytes(b"\xef\xbb\xbf" + manifest.read_bytes())
+    assert _drafted(own_tour)[0] == text
+
+
+def test_a_copy_is_matched_past_a_directory_named_as_a_manifest(own_tour):
+    copy = own_tour.with_name("Sent.pptx")
+    shutil.copy(own_tour, copy)
+    (own_tour.parent / "A.manifest.json").mkdir()
+    identifier = str(Presentation(str(copy)).core_properties.identifier)
+    assert find_manifest(copy, identifier) == own_tour.with_suffix(".manifest.json")
+
+
+def test_a_copy_is_matched_past_a_manifest_holding_a_list(own_tour):
+    copy = own_tour.with_name("Sent.pptx")
+    shutil.copy(own_tour, copy)
+    (own_tour.parent / "A.manifest.json").write_text("[1]")
+    identifier = str(Presentation(str(copy)).core_properties.identifier)
+    assert find_manifest(copy, identifier) == own_tour.with_suffix(".manifest.json")
+
+
 def test_a_deck_whose_kept_spec_is_gone_is_read_from_the_file_alone(own_tour):
     (own_tour.parent / ".build" / f"{own_tour.stem}.deck.yaml").unlink()
     _from_the_file_alone(own_tour)
@@ -332,15 +375,86 @@ def _unboxed(slide: dict) -> list[dict]:
 
 
 _PLAIN = [{"morph": "ant", "card": {"heading": "Ant", "body": "Same words"}}]
+_ONE = [
+    {
+        "id": "one",
+        "morph": "ant",
+        "anchor": "middle",
+        "card": {"heading": "Ant", "body": "Same words", "radius": 0.4},
+    }
+]
+_TWO = [{"id": "two", "morph": "ant", "card": {"heading": "Ant", "body": "Same words"}}]
+
+THREE = """theme: base
+title: Three
+out: out/Three.pptx
+sections: [A, B, C]
+---
+section: A
+title: First
+place:
+  - at: {cols: {from: 0, to: 6}, rows: {from: 0, to: 4}}
+    card: {heading: One, body: First words, radius: 0.3}
+---
+section: B
+chrome: side
+title: Second
+place:
+  - at: {cols: {from: 0, to: 6}, rows: {from: 2, to: 6}}
+    anchor: middle
+    card: {heading: Two, body: Second words, radius: 0.4}
+---
+section: C
+title: Third
+place:
+  - at: {cols: {from: 4, to: 12}, rows: {from: 4, to: 8}}
+    card: {heading: Three, body: Third words, radius: 0.2}
+"""
 
 
-def test_a_slide_holding_no_shape_named_for_it_takes_nothing_from_the_spec(tmp_path):
-    """Morph names carry no slide, so nothing on these slides shows where the build put them."""
+def _built(tmp_path, spec: str) -> Path:
+    path = tmp_path / "deck.deck.yaml"
+    path.write_text(spec)
+    return build_deck(path).deck
+
+
+def _keep(deck, order: list[int]) -> None:
+    """Leave the deck holding its slides at these positions, from 1, in this order."""
+    prs = Presentation(str(deck))
+    ids = prs.slides._sldIdLst
+    entries = list(ids)
+    for entry in entries:
+        ids.remove(entry)
+    for position in order:
+        ids.append(entries[position - 1])
+    prs.save(str(deck))
+
+
+def _duplicate(deck, position: int) -> None:
+    """Append a copy of the slide at ``position``, as a duplicate made by hand would be."""
+    import copy
+
+    prs = Presentation(str(deck))
+    source = prs.slides[position - 1]
+    added = prs.slides.add_slide(source.slide_layout)
+    tree = added.shapes._spTree
+    for shape in list(added.shapes):
+        tree.remove(shape._element)
+    for shape in source.shapes:
+        tree.append(copy.deepcopy(shape._element))
+    prs.save(str(deck))
+
+
+def test_an_untouched_titleless_morph_pair_takes_its_kept_spec(tmp_path):
+    """Morph names carry no slide, so each slide is taken where it sits: the build's slide
+    there named nothing for its number either."""
     _, slides = _drafted(_morph_pair(tmp_path, titled=False))
-    assert [_unboxed(slide) for slide in slides] == [_PLAIN, _PLAIN]
+    assert [_unboxed(slide) for slide in slides] == [_ONE, _TWO]
 
 
-def test_a_moved_slide_takes_nothing_from_the_spec_though_its_ids_are_renumbered(tmp_path):
+def test_a_moved_slide_takes_its_own_fields_from_the_spec_though_its_ids_are_renumbered(
+    tmp_path,
+):
     """LibreOffice renumbers slide ids on a save, so only the shapes' names show the move."""
     deck = _morph_pair(tmp_path, titled=True)
     prs = Presentation(str(deck))
@@ -353,7 +467,303 @@ def test_a_moved_slide_takes_nothing_from_the_spec_though_its_ids_are_renumbered
     prs.save(str(deck))
 
     _, slides = _drafted(deck)
-    assert [_unboxed(slide) for slide in slides] == [_PLAIN, _PLAIN]
+    assert [_unboxed(slide) for slide in slides] == [_TWO, _ONE]
+
+
+def test_after_a_slide_is_deleted_every_later_slide_drafts_as_before(tmp_path):
+    deck = _built(tmp_path, THREE)
+    _, before = _drafted(deck)
+    _keep(deck, [2, 3])
+    _, after = _drafted(deck)
+    assert after == before[1:]
+    assert [slide["section"] for slide in after] == ["B", "C"]
+    assert (after[0]["place"][0]["anchor"], _entry(after[0], "card")["card"]["radius"]) == (
+        "middle",
+        0.4,
+    )
+
+
+def test_a_moved_slide_drafts_with_its_own_fields(tmp_path):
+    deck = _built(tmp_path, THREE)
+    _, before = _drafted(deck)
+    _keep(deck, [3, 1, 2])
+    _, after = _drafted(deck)
+    assert after == [before[2], before[0], before[1]]
+    assert _entry(after[0], "card")["card"]["radius"] == 0.2
+
+
+def test_a_duplicated_slide_drafts_from_the_file_alone(tmp_path):
+    deck = _built(tmp_path, THREE)
+    _, before = _drafted(deck)
+    _duplicate(deck, 2)
+    _, after = _drafted(deck)
+    assert after[:3] == before
+    assert after[1]["section"] == "B"
+    assert _entry(after[1], "card")["card"]["radius"] == 0.4
+    assert "section" not in after[3]
+    assert _entry(after[3], "card")["card"] == {"heading": "Two", "body": "Second words"}
+
+
+def test_a_morph_slide_after_a_deleted_one_keeps_its_own_section_and_box(tmp_path):
+    """Delete the first of a morph pair: the slide left keeps its own section and box."""
+    spec = (
+        "theme: base\ntitle: Pair\nout: out/Pair.pptx\nsections: [Problem, Solution]\n---\n"
+        "section: Problem\ntitle: First\nplace:\n"
+        "  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+        "    morph: ant\n    card: {heading: Ant, body: Same words}\n---\n"
+        "section: Solution\ntitle: Second\nplace:\n"
+        "  - at: {cols: {from: 6, to: 12}, rows: {from: 4, to: 8}}\n"
+        "    morph: ant\n    card: {heading: Ant, body: Same words}\n"
+    )
+    deck = _built(tmp_path, spec)
+    _, before = _drafted(deck)
+    assert before[0]["place"][0]["at"] != before[1]["place"][0]["at"]
+    _keep(deck, [2])
+    _, (left,) = _drafted(deck)
+    assert left["section"] == "Solution"
+    assert left["place"][0]["at"] == before[1]["place"][0]["at"]
+
+
+def test_a_titleless_morph_slide_moved_onto_a_titled_slides_place_takes_nothing(tmp_path):
+    """Delete the titled first slide: the morph slide now sits where it stood, and the build's
+    slide there was numbered, so nothing of that slide's is taken for it."""
+    spec = (
+        "theme: base\ntitle: Mixed\nout: out/Mixed.pptx\nsections: [A, B]\n---\n"
+        "section: A\ntitle: First\nchrome: side\nplace:\n"
+        "  - at: {cols: full}\n    card: {heading: One, body: Words}\n"
+        "---\nplace:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+        "    id: mid\n    morph: ant\n    anchor: middle\n"
+        "    card: {heading: Ant, body: Same words, radius: 0.4}\n"
+        "---\nsection: B\ntitle: Third\nplace:\n"
+        "  - at: {cols: full}\n    card: {heading: Three, body: Words}\n"
+    )
+    deck = _built(tmp_path, spec)
+    _, before = _drafted(deck)
+    assert _unboxed(before[1])[0]["id"] == "mid"
+    _keep(deck, [2, 3])
+    _, after = _drafted(deck)
+    assert after[0] == {"place": after[0]["place"]}
+    assert _unboxed(after[0]) == _PLAIN
+    assert after[1] == before[2]
+
+
+def test_an_untitled_equation_slide_keeps_its_section(tmp_path):
+    """An equation sits inside `mc:AlternateContent`, where a slide's own shape list does not
+    reach; the slide is still numbered by it."""
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: Eq\nout: out/Eq.pptx\nsections: [A, B]\n---\n"
+        "section: A\ntitle: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n"
+        "---\nsection: B\nplace:\n  - at: {cols: {from: 2, to: 10}, rows: {from: 2, to: 6}}\n"
+        '    equation: {tex: "E = mc^2"}\n',
+    )
+    _, slides = _drafted(deck)
+    assert [slide["section"] for slide in slides] == ["A", "B"]
+
+
+def test_a_slide_whose_shapes_were_grouped_by_hand_keeps_its_section_and_preset(tmp_path):
+    deck = _built(tmp_path, THREE)
+    prs = Presentation(str(deck))
+    for slide in prs.slides:
+        slide.shapes.add_group_shape(list(slide.shapes))
+    prs.save(str(deck))
+    _, after = _drafted(deck)
+    assert [slide["section"] for slide in after] == ["A", "B", "C"]
+    assert after[1]["chrome"] == "side"
+
+
+_MORPH_RUN = (
+    "theme: base\ntitle: Run\nout: out/Run.pptx\n---\n"
+    "title: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n---\n"
+    "place:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+    "    id: a\n    morph: ant\n    anchor: middle\n"
+    "    card: {heading: Ant, body: Same words, radius: 0.4}\n---\n"
+    "place:\n  - at: {cols: {from: 6, to: 12}, rows: {from: 4, to: 8}}\n"
+    "    id: b\n    morph: ant\n    align: right\n"
+    "    card: {heading: Ant, body: Same words}\n---\n"
+    "title: Last\nplace:\n  - at: {cols: full}\n    card: {heading: Four}\n"
+)
+
+
+def _blank_first(deck) -> None:
+    prs = Presentation(str(deck))
+    prs.slides.add_slide(prs.slides[0].slide_layout)
+    ids = prs.slides._sldIdLst
+    added = ids[-1]
+    ids.remove(added)
+    ids.insert(0, added)
+    prs.save(str(deck))
+
+
+@pytest.mark.parametrize(
+    ("edit", "morphs"),
+    [
+        (_blank_first, [2, 3]),
+        (lambda deck: _keep(deck, [1, 3, 4]), [1]),
+        (lambda deck: _keep(deck, [1, 3, 2, 4]), [1, 2]),
+    ],
+    ids=["blank-slide-inserted-first", "first-morph-slide-deleted", "morph-slides-swapped"],
+)
+def test_a_titleless_morph_slide_not_where_its_build_put_it_takes_nothing(tmp_path, edit, morphs):
+    """Morph slides sit in runs, so the slide in a titleless one's place is often another
+    titleless one: only its shapes, where the build drew them, show it is the same slide."""
+    deck = _built(tmp_path, _MORPH_RUN)
+    edit(deck)
+    _, slides = _drafted(deck)
+    assert [_unboxed(slides[index]) for index in morphs] == [_PLAIN] * len(morphs)
+
+
+_EMPTY_LAST = (
+    "theme: base\ntitle: E\nout: out/E.pptx\nsections: [A, B]\n---\n"
+    "section: A\ntitle: One\n---\nsection: B\n"
+)
+
+
+def test_an_untouched_titleless_morph_table_keeps_its_section(tmp_path):
+    """The manifest records a table's cells as parts of its one shape."""
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: T\nout: out/T.pptx\nsections: [A, B]\n---\n"
+        "section: A\ntitle: One\n---\nsection: B\nplace:\n  - at: {cols: full}\n"
+        "    morph: tab\n    table: {header: [A, B], rows: [[a, b], [c, d]]}\n",
+    )
+    _, slides = _drafted(deck)
+    assert [slide["section"] for slide in slides] == ["A", "B"]
+
+
+def test_an_untouched_empty_slide_keeps_its_section(tmp_path):
+    _, slides = _drafted(_built(tmp_path, _EMPTY_LAST))
+    assert [slide["section"] for slide in slides] == ["A", "B"]
+
+
+def test_a_slide_drawn_by_hand_where_an_empty_one_stood_takes_nothing(tmp_path):
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.util import Inches
+
+    deck = _built(tmp_path, _EMPTY_LAST)
+    prs = Presentation(str(deck))
+    prs.slides[1].shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(1), Inches(2), Inches(1))
+    prs.save(str(deck))
+    _, slides = _drafted(deck)
+    assert slides[0]["section"] == "A"
+    assert "section" not in slides[1]
+
+
+def test_a_slide_whose_records_cannot_be_read_takes_no_slide_by_place(tmp_path):
+    deck = _built(tmp_path, _EMPTY_LAST)
+    manifest = deck.with_suffix(".manifest.json")
+    data = json.loads(manifest.read_text())
+    data["slides"][1]["shapes"] = "x"
+    manifest.write_text(json.dumps(data))
+    _, slides = _drafted(deck)
+    assert slides[0]["section"] == "A"
+    assert "section" not in slides[1]
+
+
+_TWINS = (
+    "theme: base\ntitle: Twins\nout: out/Twins.pptx\nsections: [One, Ant, Bee, Two]\n---\n"
+    "section: One\ntitle: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n---\n"
+    "section: Ant\nplace:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+    "    morph: ant\n    card: {heading: Ant, body: Same words}\n---\n"
+    "section: Bee\nplace:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+    "    morph: ant\n    card: {heading: Ant, body: Other words}\n---\n"
+    "section: Two\ntitle: Last\nplace:\n  - at: {cols: full}\n    card: {heading: Four}\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("order", "unmatched"),
+    [([1, 3, 4], [1]), ([1, 3, 2, 4], [1, 2])],
+    ids=["first-twin-deleted", "twins-swapped"],
+)
+def test_titleless_twins_drawn_alike_are_told_apart_by_their_words(tmp_path, order, unmatched):
+    """A morph that changes only the words leaves both slides' shapes in one place."""
+    deck = _built(tmp_path, _TWINS)
+    _keep(deck, order)
+    _, slides = _drafted(deck)
+    assert [("section" in slides[index]) for index in unmatched] == [False] * len(unmatched)
+    assert (slides[0]["section"], slides[-1]["section"]) == ("One", "Two")
+
+
+def test_a_blank_slide_inserted_before_titled_ones_takes_none_of_their_fields(tmp_path):
+    deck = _built(tmp_path, THREE)
+    _blank_first(deck)
+    _, slides = _drafted(deck)
+    assert "section" not in slides[0]
+    assert [slide["section"] for slide in slides[1:]] == ["A", "B", "C"]
+
+
+_SHARED = (
+    "theme: base\ntitle: Shared\nout: out/Shared.pptx\n---\n"
+    "title: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n---\n"
+    "place:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+    "    id: first-ant\n    morph: ant\n    card: {heading: Ant, body: Same words}\n"
+    "  - at: {cols: {from: 6, to: 12}, rows: {from: 4, to: 8}}\n"
+    "    id: bee\n    morph: bee\n    card: {heading: Bee, body: Gone next}\n---\n"
+    "place:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+    "    morph: ant\n    card: {heading: Ant, body: Same words}\n"
+)
+
+
+def test_a_slide_holding_some_of_its_places_morph_shapes_takes_nothing(tmp_path):
+    """Swapped: the slide now second holds the ant the build drew there, but not the bee."""
+    deck = _built(tmp_path, _SHARED)
+    _keep(deck, [1, 3, 2])
+    _, slides = _drafted(deck)
+    assert _unboxed(slides[1]) == _PLAIN
+
+
+_NEAR_TWINS = (
+    "theme: base\ntitle: Near\nout: out/Near.pptx\n---\n"
+    "title: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n---\n"
+    "place:\n  - at: {box: {x: 2%, y: 0%, w: 30%, h: 40%}}\n"
+    "    id: a\n    morph: ant\n    card: {heading: Ant, body: Same words}\n---\n"
+    "place:\n  - at: {box: {x: 2.4%, y: 0%, w: 30%, h: 40%}}\n"
+    "    id: b\n    morph: ant\n    card: {heading: Ant, body: Same words}\n"
+)
+
+
+def test_twins_a_twentieth_of_an_inch_apart_swapped_take_nothing(tmp_path):
+    """Alike but for where they sit: only the boxes tell the swapped twins apart."""
+    deck = _built(tmp_path, _NEAR_TWINS)
+    _keep(deck, [1, 3, 2])
+    _, slides = _drafted(deck)
+    assert [_unboxed(slides[index]) for index in (1, 2)] == [_PLAIN, _PLAIN]
+
+
+def test_a_morph_shape_nudged_a_few_thousandths_still_matches(tmp_path):
+    deck = _built(tmp_path, _NEAR_TWINS)
+    prs = Presentation(str(deck))
+    for shape in prs.slides[1].shapes:
+        shape.left += 4572  # 0.005 in
+    prs.save(str(deck))
+    _, slides = _drafted(deck)
+    assert _unboxed(slides[1])[0]["id"] == "a"
+
+
+def test_a_morph_card_holding_a_double_space_matches_where_it_sits(tmp_path):
+    """The manifest records the words as drawn; both sides are compared on one line."""
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: Gap\nout: out/Gap.pptx\n---\n"
+        "title: First\nplace:\n  - at: {cols: full}\n    card: {heading: One}\n---\n"
+        "place:\n  - at: {cols: {from: 0, to: 4}, rows: {from: 0, to: 4}}\n"
+        "    id: a\n    morph: ant\n    card: {heading: Ant, body: 'Same  words'}\n",
+    )
+    _, slides = _drafted(deck)
+    assert _unboxed(slides[1])[0]["id"] == "a"
+
+
+def test_ink_on_a_slide_does_not_stop_it_matching(tmp_path):
+    from lxml import etree
+
+    deck = _built(tmp_path, THREE)
+    prs = Presentation(str(deck))
+    ink = etree.fromstring(f'<p:contentPart {nsdecls("p", "r")} r:id="rId99"/>')
+    prs.slides[1].shapes._spTree.append(ink)
+    prs.save(str(deck))
+    _, slides = _drafted(deck)
+    assert [slide["section"] for slide in slides] == ["A", "B", "C"]
 
 
 def test_a_slide_holding_a_shape_pasted_from_another_takes_nothing_from_the_spec(tmp_path):
@@ -368,6 +778,130 @@ def test_a_slide_holding_a_shape_pasted_from_another_takes_nothing_from_the_spec
     _, slides = _drafted(deck)
     assert _unboxed(slides[0]) == _PLAIN
     assert _unboxed(slides[1])[0]["id"] == "two"
+
+
+@pytest.mark.parametrize("unrule", ["deleted", "unfilled"])
+def test_a_tables_look_changed_by_hand_survives_the_kept_spec(tmp_path, unrule):
+    """Set back to the defaults by hand: the file's middle anchor and row rules, not the
+    spec's bottom and grid, whether a border is deleted or left with no fill."""
+    from pptx.enum.text import MSO_ANCHOR
+    from pptx.oxml import parse_xml
+
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: T\nout: out/T.pptx\n---\ntitle: T\nplace:\n"
+        "  - at: {cols: full}\n    table:\n      header: [A, B, C]\n"
+        "      rows: [[a, b, c], [d, e, f]]\n      valign: bottom\n      rules: grid\n",
+    )
+    prs = Presentation(str(deck))
+    (frame,) = [s for s in prs.slides[0].shapes if s.has_table]
+    for row in frame.table.rows:
+        for cell in row.cells:
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            for line in cell._tc.tcPr.findall(qn("a:lnR")):
+                if unrule == "deleted":
+                    cell._tc.tcPr.remove(line)
+                    continue
+                for child in list(line):
+                    line.remove(child)
+                line.append(parse_xml(f"<a:noFill {nsdecls('a')}/>"))
+    prs.save(str(deck))
+
+    _, (slide,) = _drafted(deck)
+    table = _entry(slide, "table")["table"]
+    assert table == {"header": ["A", "B", "C"], "rows": [["a", "b", "c"], ["d", "e", "f"]]}
+
+
+_BANDED_SPEC = (
+    "theme: base\ntitle: T\nout: out/T.pptx\n---\ntitle: T\nplace:\n"
+    "  - at: {cols: full}\n    table:\n      header: [A, B, C]\n"
+    "      rows: [[a, b, c], [d, e, f], [g, h, i], [j, k, l]]\n      banding: true\n"
+)
+
+
+def _refilled(deck, rows: list[int], rgb: str | None) -> None:
+    """Fill every cell of the table's ``rows``, counted from 0 with the header, by hand."""
+    from pptx.dml.color import RGBColor
+
+    prs = Presentation(str(deck))
+    (frame,) = [s for s in prs.slides[0].shapes if s.has_table]
+    for index in rows:
+        for cell in frame.table.rows[index].cells:
+            if rgb is None:
+                cell.fill.background()
+            else:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = RGBColor.from_string(rgb)
+    prs.save(str(deck))
+
+
+def test_banding_taken_off_by_hand_comes_back_from_the_spec(tmp_path):
+    """Which colour banding paints is the theme's, so the file's fills say nothing of it."""
+    deck = _built(tmp_path, _BANDED_SPEC)
+    _refilled(deck, [1, 2, 3, 4], None)
+    _, (slide,) = _drafted(deck)
+    assert _entry(slide, "table")["table"]["banding"] is True
+
+
+@pytest.mark.parametrize("kept", [True, False], ids=["kept-spec", "file-alone"])
+def test_a_column_realigned_by_hand_beside_a_wordless_one_keeps_its_alignment(
+    tmp_path, monkeypatch, kept
+):
+    """The wordless column takes the spec's entry, or the placement's without a spec."""
+    from pptx.enum.text import PP_ALIGN
+
+    if not kept:
+        monkeypatch.setattr("deckwright.spec._manifest.kept_placements", lambda *a, **k: {})
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: T\nout: out/T.pptx\n---\ntitle: T\nplace:\n"
+        '  - at: {cols: full}\n    table:\n      header: [A, "", C]\n'
+        '      rows: [[a, "", c], [d, "", f]]\n      align: [left, right, right]\n',
+    )
+    prs = Presentation(str(deck))
+    (frame,) = [s for s in prs.slides[0].shapes if s.has_table]
+    for row in frame.table.rows:
+        row.cells[2].text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+    prs.save(str(deck))
+    _, (slide,) = _drafted(deck)
+    middle = "right" if kept else "left"
+    assert _entry(slide, "table")["table"]["align"] == ["left", middle, "center"]
+
+
+def test_a_body_row_merged_across_by_hand_still_drafts(tmp_path):
+    deck = _built(tmp_path, _BANDED_SPEC)
+    prs = Presentation(str(deck))
+    (frame,) = [s for s in prs.slides[0].shapes if s.has_table]
+    frame.table.cell(1, 0).merge(frame.table.cell(2, 2))
+    prs.save(str(deck))
+    _, (slide,) = _drafted(deck)
+    assert _entry(slide, "table")["table"]["header"] == ["A", "B", "C"]
+
+
+@pytest.mark.parametrize("edit", ["margins-cleared", "type-resized"])
+def test_a_tables_density_comes_back_from_the_spec_whatever_its_cells_hold(tmp_path, edit):
+    """The file holds each cell's margins, which say nothing of density without the type size
+    the build padded for, so the spec's stands."""
+    from pptx.util import Pt
+
+    deck = _built(
+        tmp_path,
+        "theme: base\ntitle: T\nout: out/T.pptx\n---\ntitle: T\nplace:\n"
+        "  - at: {cols: full}\n    table:\n      header: [A, B]\n"
+        "      rows: [[a, b], [c, d]]\n      density: 0.6\n",
+    )
+    prs = Presentation(str(deck))
+    (frame,) = [s for s in prs.slides[0].shapes if s.has_table]
+    for row in frame.table.rows:
+        for cell in row.cells:
+            if edit == "margins-cleared":
+                cell.margin_left = cell.margin_right = cell.margin_top = cell.margin_bottom = 0
+            for run in cell.text_frame.paragraphs[0].runs:
+                run.font.size = Pt(28) if edit == "type-resized" else run.font.size
+    prs.save(str(deck))
+
+    _, (slide,) = _drafted(deck)
+    assert _entry(slide, "table")["table"]["density"] == 0.6
 
 
 def test_what_the_file_states_wins_over_what_the_spec_kept(tmp_path):

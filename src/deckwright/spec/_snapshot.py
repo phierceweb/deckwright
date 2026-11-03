@@ -45,7 +45,6 @@ _WORDS = {
     "table": ("header", "rows", "total"),
 }
 _CELL = re.compile(r"r(\d+)c(\d+)")
-_SLIDE = re.compile(r"s(\d+)\.")
 _HASHED = 16  # hex digits of a build's spec_hash, as compile.build._digest cuts it
 _LARGEST = 16 * 1024 * 1024  # bytes; no spec a build kept comes near it
 
@@ -64,14 +63,14 @@ class Kept:
 
 
 def kept_placements(
-    manifest: Path, data: dict[str, Any], identifier: str, names: list[list[str]]
+    manifest: Path, data: dict[str, Any], identifier: str, matched: dict[int, int]
 ) -> dict[int, dict[str, Kept]]:
-    """Each slide's placements by the origin their shapes are named for, read from the spec
-    the build kept beside ``manifest``, for a deck whose slides hold shapes named ``names``.
+    """Each deck slide's placements by the origin their shapes are named for, read from the
+    spec the build kept beside ``manifest``; ``matched`` maps a slide's position in the deck
+    to the build slide it answers to, and a slide it leaves out takes nothing.
 
     Empty unless ``identifier`` is that build's id, and the kept spec is a file that still
-    hashes to the manifest's ``spec_hash``, names no ``extends:`` module and parses. A slide is
-    left out unless it holds a shape named for it and none named for another.
+    hashes to the manifest's ``spec_hash``, names no ``extends:`` module and parses.
     """
     from deckwright.spec.parse import parse_deck_text
 
@@ -99,13 +98,15 @@ def kept_placements(
     except (AttributeError, TypeError):
         return {}
     out: dict[int, dict[str, Kept]] = {}
-    for slide in spec.slides:
-        if slide.index > len(names) or not _in_place(names[slide.index - 1], slide.index):
+    by_index = {slide.index: slide for slide in spec.slides}
+    for where, index in matched.items():
+        if index not in by_index:
             continue
+        slide = by_index[index]
         for position, placement in enumerate(slide.place, start=1):
             token = token_of(slide.index, position, placement)
             texts = _texts(drawn.get(slide.index, {}), token)
-            out.setdefault(slide.index, {})[token] = Kept(
+            out.setdefault(where, {})[token] = Kept(
                 placement.component,
                 dict(placement.body),
                 texts,
@@ -115,13 +116,6 @@ def kept_placements(
                 placement.bleed,
             )
     return out
-
-
-def _in_place(names: list[str], index: int) -> bool:
-    """Whether a slide holds a shape the build named for slide ``index`` and none named for
-    another; a morph name carries no slide, so it shows nothing."""
-    numbered = [int(found[1]) for found in map(_SLIDE.match, names) if found]
-    return bool(numbered) and all(number == index for number in numbered)
 
 
 def _extends(text: str) -> bool:
@@ -213,6 +207,12 @@ def _merged(
         for key in (on_disk, "alt", "decorative"):
             fields.pop(key, None)
         note += f"; its {on_disk} is a file beside that spec, so it is left out"
+    read, spec = stated.get("align"), fields.get("align")
+    if isinstance(read, list) and isinstance(spec, list) and len(read) == len(spec):
+        # A table column holding no words reads as None: the spec says how it was set.
+        stated["align"] = [
+            given if entry is None else entry for entry, given in zip(read, spec, strict=True)
+        ]
     fields.update(stated)
     return {kept.component: fields}, note
 
