@@ -171,8 +171,9 @@ The manifest opens with what produced it, before the records it describes:
 | `canvas` | `{"w", "h", "unit": "in"}` — the slide size, rounded like every other inch. |
 
 Each slide records the `transition` it arrives on — the theme's kind, or `none` for a hard
-cut — beside its `animations`. A manifest written before the key existed carries none, and
-`diff` treats that as unknown. A slide built with a `chrome:` preset records it as `chrome`,
+cut — beside its `animations`, and its speaker `notes`, which `diff` compares to tell empty
+slides apart. A manifest written before the transition key existed carries none, and `diff`
+treats that as unknown. A slide built with a `chrome:` preset records it as `chrome`,
 which `extract` drafts back.
 
 Paths are written **relative to the manifest** wherever the two share a directory

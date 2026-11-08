@@ -253,6 +253,14 @@ the spec rather than living only in the binary.
 | `--manifest` / `-m` | Default `<deck>.manifest.json`, else the manifest beside the deck that records the deck's build id. |
 | `--out` / `-o` | Also write `readback.md` in this directory. |
 
+The first line says what the manifest's file hash settled: the deck is the one that was
+built, and there is nothing to carry back; or it was edited, and the changes follow. A
+manifest that records no file hash — one from an older build — cannot settle it, so the
+first line says so and the changes follow anyway, ending `no shape differs from the build`
+where there are none. A manifest that records no slides is refused: there is nothing to
+read the deck back against, so build the spec again and pass the manifest it writes with
+`--manifest`.
+
 It works because shapes are named for the spec node that drew them and PowerPoint
 keeps a shape name through an edit — see
 [what the manifest records](qa.md#what-the-manifest-records). Matching runs from the
@@ -262,14 +270,55 @@ are paragraphs in a single frame.
 A built deck carries its build id, so a copy saved under another name in the same
 directory is read against the right manifest with no flag.
 
-A slide is matched by the number in its shapes' names, not by where it sits. A deleted
-slide is one `slide-gone` line and every slide after it still matches its own records. A
-slide carrying no build-named shape is `slide-added`, and so is a duplicate, which says
-which slide it copies. A slide out of build order is `slide-moved`: as few slides are named
-as explain the order the deck is now in.
+A slide is the build slide whose number its shapes' names carry (`s3.…`, inside groups
+included). A slide of morph placements (`m.<name>.…`), which carry no number, is the build
+slide it draws exactly: the same names, places and words. An empty slide is known by its
+transition and speaker notes. Slides keep their build order wherever the deck allows, so:
+
+- a deleted slide is one `slide-gone` line, and every slide after it still matches its own
+  records;
+- a slide out of build order is `slide-moved`, naming as few slides as explain the order the
+  deck is now in; of two swapped slides, either may be named;
+- a slide edited where it sits (shapes moved, retyped, restyled or pasted onto it, its
+  transition changed) is still that slide, and each change is reported on it. A pasted shape
+  reads as `added`, naming the slide the build drew it on;
+- a slide that answers to no build slide is `slide-added`, and the line says why: no
+  build-named shape on it, a copy of a slide the deck still has, shapes named for more than
+  one slide with none of them left to answer to, or morph shapes matching no slide of the
+  build.
+
+Some edits leave nothing that says which slide is which, and `diff` reports one reading that
+fits the deck:
+
+- a morph slide both edited and moved out of order may read as added where it sits and gone
+  where it was built;
+- an empty slide whose transition or notes changed may read as added and gone, or as another
+  empty slide it now matches;
+- slides alike in drawing, transition and notes are interchangeable, so a copy of one may be
+  reported under either number;
+- a copy put where a deleted slide drawn exactly like it was may read as that slide, retimed
+  if its transition differs;
+- a blank slide put where a deleted slide was may read as that slide with its shapes gone;
+- a slide holding more shapes pasted from a deleted slide than its own may read as that
+  slide.
+
+Two edits read as more than they are:
+
+- a shape pasted onto an empty slide reads as a copy of the slide it came from, added there,
+  and the empty slide as gone;
+- of two morph slides drawn alike on different transitions, if one is edited and the other
+  given the first's transition, the edited one reads as added, the other as the first moved,
+  and the other's own slide as gone.
+
+A manifest older than the recorded transition cannot disagree with a slide's transition.
 
 A shape PowerPoint stores inside `mc:AlternateContent` — an equation, a 3D model — is
-read from its fallback, the branch a reader of none of the extension namespaces takes.
+read from its fallback, the branch a reader of none of the extension namespaces takes. A
+shape grouped by hand still answers to its record, and a group moved by hand reports each
+shape in it as `moved`, in slide inches; the group itself is not a change unless it holds
+nothing, or nests deeper than eight groups. A placeholder the layout put on the slide and
+nobody filled — no words, and no fill, outline or shape style of its own that paints it — is
+not a change either.
 
 `retimed` is a slide whose build no longer spends the clicks, reveals the shapes or
 listens on the triggers the manifest records, or whose transition changed kind. `restyled` compares a shape's runs as sets: a point size the build never set, or the
@@ -277,9 +326,10 @@ recorded ink gone from every run. `relabelled` is the decorative mark set or cle
 alternative text changed.
 
 **What it cannot see:** a typeface, a fill, one run recoloured while the rest keep the
-recorded ink, or which table cell changed — cells were never shapes, so they carry no
-name and answer through their frame. A deck whose bytes changed with
-no shape difference says so rather than reporting nothing.
+recorded ink, a table cell's words — cells were never shapes, so they carry no name and their
+frame holds no words of its own — a shape emptied of every word, or words typed into a shape the
+build left without any. A deck whose bytes changed with no shape difference says so rather than
+reporting nothing.
 
 ## `inspect` — inventory a deck's shapes
 
@@ -376,7 +426,7 @@ build's manifest recorded, when that manifest is beside the deck — or, for a c
 under another name, any manifest beside it recording the same build id — and otherwise the
 rectangle its shapes cover, rounded outward so words drawn tight in it still fit. A
 manifest that cannot be read, is not a JSON object, numbers a slide with anything but a
-whole number from 1, or records no usable canvas size is not used, and the deck is read from
+whole number from 1, numbers two slides alike, or records no usable canvas size is not used, and the deck is read from
 the file alone. An
 author's `id:` and a `morph:` name come back, as do a slide's `animate:`, its
 `transition: morph` and its `lang:`, read off the language its CJK runs carry. A placement

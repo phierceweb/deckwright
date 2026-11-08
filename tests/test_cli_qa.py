@@ -85,3 +85,16 @@ def test_qa_refuses_a_spoiled_manifest_naming_it(
     assert exc_info.value.code == 1
     err = " ".join(capsys.readouterr().err.split())
     assert err.startswith("d.manifest.json is not a build manifest deckwright can read")
+
+
+def test_qa_refuses_damaged_records_naming_them(
+    tmp_path, clean_manifest_deck, spoil_records, capsys
+):
+    deck, manifest = clean_manifest_deck
+    spoil_records(manifest)
+    with pytest.raises(SystemExit) as exc_info:
+        run_cli(app, args=["qa", str(deck), "--no-render", "--outdir", str(tmp_path)])
+    assert exc_info.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.startswith("d.manifest.json is not a build manifest deckwright can read (slide 1's ")
+    assert " is not a list of records)" in err

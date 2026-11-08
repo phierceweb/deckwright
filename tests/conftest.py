@@ -335,12 +335,16 @@ def dirty_manifest_deck(tmp_path, theme_file):
     return _qa_deck(tmp_path, theme_file, box=[12.0, 1.0, 3.0, 1.0])
 
 
-def _slide_index(value):
+def _slide_field(key, value):
     def spoil(data):
-        data["slides"][0]["index"] = value
+        data["slides"][0][key] = value
         return json.dumps(data)
 
     return spoil
+
+
+def _slide_index(value):
+    return _slide_field("index", value)
 
 
 @pytest.fixture(
@@ -356,6 +360,7 @@ def _slide_index(value):
         lambda data: json.dumps({**data, "slides": None}),
         lambda data: json.dumps({**data, "slides": {}}),
         lambda data: json.dumps({**data, "slides": [1]}),
+        lambda data: json.dumps({**data, "slides": [*data["slides"], dict(data["slides"][0])]}),
     ],
     ids=[
         "not-json",
@@ -369,10 +374,29 @@ def _slide_index(value):
         "slides-null",
         "slides-an-object",
         "slides-not-records",
+        "index-repeated",
     ],
 )
 def spoil_manifest(request):
     """Rewrites the manifest at a path into one no build writes."""
+
+    def spoil(path: pathlib.Path) -> None:
+        path.write_text(request.param(json.loads(path.read_text(encoding="utf-8"))))
+
+    return spoil
+
+
+_RECORD_LISTS = ("shapes", "placements", "animations")
+_NOT_RECORDS = {"a-string": "x", "not-records": [1], "a-number": 5}
+
+
+@pytest.fixture(
+    params=[_slide_field(key, bad) for key in _RECORD_LISTS for bad in _NOT_RECORDS.values()],
+    ids=[f"{key}-{what}" for key in _RECORD_LISTS for what in _NOT_RECORDS],
+)
+def spoil_records(request):
+    """Rewrites the manifest at a path so one of its first slide's record lists is not one;
+    `extract` reads past these, `qa` and `diff` refuse them."""
 
     def spoil(path: pathlib.Path) -> None:
         path.write_text(request.param(json.loads(path.read_text(encoding="utf-8"))))

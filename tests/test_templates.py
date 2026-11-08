@@ -150,10 +150,17 @@ def test_every_capability_builds_on_the_template(built):
 
 
 def test_the_deck_it_produced_can_be_read_back(built):
+    """Every exercise, through this template, reads back as the build that made it: a
+    `diff` false positive on an untouched deck is a defect in the matching, not the deck."""
     from pptx import Presentation
+
+    from deckwright.compile.readback import read_back
 
     assert built.deck is not None
     assert len(Presentation(str(built.deck)).slides) == len(built.passed)
+    drift = read_back(built.deck)
+    assert drift.edited is False
+    assert drift.changes == (), f"{built.template}: {drift.changes[:5]}"
 
 
 def test_powerpoint_would_open_what_the_build_saved(built):

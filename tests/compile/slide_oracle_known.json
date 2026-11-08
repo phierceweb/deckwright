@@ -1,0 +1,155 @@
+{
+ "seed 1 deck 6 copy 0 [paste s1.chrome.title onto 3]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 4 deck 8 copy 5 [retype 5, paste s4.chrome.title onto 6]": [
+  "deck 6 is build 6, read as None"
+ ],
+ "seed 5 deck 1 copy 2 [none, paste s3.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 5 deck 3 copy 3 [paste s2.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 5 deck 6 copy 4 [paste s4.chrome.title onto 2, duplicate 4]": [
+  "deck 2 is build 2, read as None"
+ ],
+ "seed 8 deck 1 copy 5 [paste s4.chrome.title onto 5]": [
+  "deck 5 is build 5, read as None"
+ ],
+ "seed 8 deck 16 copy 3 [duplicate 4, delete 6]": [
+  "build 4, its twins and copies at [4, 5] read as [4, 5]"
+ ],
+ "seed 8 deck 18 copy 3 [paste s2.chrome.title onto 3]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 10 deck 8 copy 0 [paste s1.chrome.title onto 2]": [
+  "deck 2 is build 2, read as None"
+ ],
+ "seed 11 deck 9 copy 2 [paste s3.chrome.title onto 6, delete 3]": [
+  "deck 5 is build 6, read as 3"
+ ],
+ "seed 11 deck 14 copy 0 [paste s2.chrome.title onto 7]": [
+  "deck 7 is build 7, read as None"
+ ],
+ "seed 11 deck 19 copy 0 [retime 4 like 6, paste s3.chrome.title onto 2]": [
+  "deck 2 is build 2, read as None"
+ ],
+ "seed 12 deck 1 copy 4 [duplicate 1, blank at 1]": [
+  "build 1, its twins and copies at [2, 3] read as [1, 2]"
+ ],
+ "seed 12 deck 3 copy 3 [delete 3, retime 4 like 2]": [
+  "deck 4 is build 5, read as 3"
+ ],
+ "seed 13 deck 5 copy 1 [paste s3.chrome.title onto 7]": [
+  "deck 7 is build 7, read as None"
+ ],
+ "seed 13 deck 13 copy 5 [paste s2.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 14 deck 19 copy 4 [paste s3.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 15 deck 4 copy 2 [move 8->3, paste s7.chrome.title onto 7]": [
+  "deck 7 is build 6, read as None"
+ ],
+ "seed 15 deck 7 copy 5 [paste s1.chrome.title onto 7]": [
+  "deck 7 is build 7, read as None"
+ ],
+ "seed 15 deck 9 copy 0 [paste s2.chrome.title onto 3, delete 6]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 15 deck 12 copy 2 [paste s3.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 16 deck 5 copy 3 [paste s6.chrome.title onto 3]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 17 deck 0 copy 5 [paste s1.chrome.title onto 8]": [
+  "deck 8 is build 8, read as None"
+ ],
+ "seed 17 deck 6 copy 0 [paste s5.chrome.title onto 7]": [
+  "deck 7 is build 7, read as None"
+ ],
+ "seed 18 deck 7 copy 3 [paste s2.chrome.title onto 1, none]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 19 deck 12 copy 2 [notes 4, retime 5 like 1]": [
+  "deck 4 is build 4, read as 5",
+  "deck 5 is build 5, read as 4"
+ ],
+ "seed 19 deck 15 copy 5 [paste s8.chrome.title onto 4, retime 2 like 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 20 deck 8 copy 1 [paste s7.chrome.title onto 3, duplicate 1]": [
+  "deck 4 is build 3, read as None"
+ ],
+ "seed 21 deck 5 copy 3 [paste s6.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 21 deck 13 copy 2 [paste s3.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 22 deck 19 copy 3 [notes 1, paste s3.chrome.title onto 2]": [
+  "deck 2 is build 2, read as None"
+ ],
+ "seed 23 deck 2 copy 0 [paste s1.chrome.title onto 7]": [
+  "deck 7 is build 7, read as None"
+ ],
+ "seed 24 deck 13 copy 4 [paste s3.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 25 deck 18 copy 5 [paste s4.chrome.title onto 3]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 26 deck 9 copy 4 [delete 6, paste s2.chrome.title onto 3]": [
+  "deck 3 is build 3, read as None"
+ ],
+ "seed 27 deck 2 copy 3 [paste s4.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 30 deck 6 copy 2 [blank at 3, paste s5.chrome.title onto 7]": [
+  "deck 7 is build 6, read as None"
+ ],
+ "seed 31 deck 4 copy 2 [paste s2.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 31 deck 7 copy 5 [retime 4 like 3, blank at 4]": [
+  "new slide at 4 took build 4, still in the deck",
+  "deck 5 is build 4, read as None"
+ ],
+ "seed 33 deck 0 copy 3 [paste s5.chrome.title onto 4]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 33 deck 17 copy 2 [paste s5.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 33 deck 18 copy 1 [paste s4.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 34 deck 9 copy 2 [paste s6.chrome.title onto 4, none]": [
+  "deck 4 is build 4, read as None"
+ ],
+ "seed 34 deck 10 copy 4 [paste s2.chrome.title onto 1, duplicate 1]": [
+  "build 1, its twins and copies at [1, 2] read as [None, None]"
+ ],
+ "seed 36 deck 6 copy 2 [paste s6.chrome.title onto 2]": [
+  "deck 2 is build 2, read as None"
+ ],
+ "seed 38 deck 10 copy 0 [paste s7.chrome.title onto 1]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 38 deck 10 copy 5 [paste s7.chrome.title onto 6]": [
+  "deck 6 is build 6, read as None"
+ ],
+ "seed 39 deck 6 copy 4 [retime 5 like 1, duplicate 1]": [
+  "build 1, its twins and copies at [1, 2] read as [1, 5]",
+  "deck 6 is build 5, read as None"
+ ],
+ "seed 40 deck 7 copy 2 [paste s4.chrome.title onto 1, notes 5]": [
+  "deck 1 is build 1, read as None"
+ ],
+ "seed 40 deck 13 copy 1 [paste s7.chrome.title onto 6, notes 1]": [
+  "deck 6 is build 6, read as None"
+ ]
+}

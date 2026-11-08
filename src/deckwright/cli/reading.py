@@ -29,14 +29,25 @@ def diff(
 ) -> None:
     """Show what a hand-edited deck changed, so it can go back into the spec."""
     drift = read_back(deck, manifest=manifest)
-    if not drift.edited:
+    if drift.edited is False:
         typer.echo(f"{deck.name} is the deck that was built — nothing to carry back.")
         return
-    typer.echo(f"{deck.name} was edited after its build from {drift.spec}")
+    unknown = drift.edited is None
+    if unknown:
+        typer.echo(
+            f"{deck.name}: {Path(drift.manifest).name} records no file hash, so whether the "
+            f"deck was edited is unknown"
+        )
+    else:
+        typer.echo(f"{deck.name} was edited after its build from {drift.spec}")
     for change in drift.changes:
         typer.echo(f"  slide {change.slide}  {change.kind:<8} {change.shape}  {change.detail}")
     if not drift.changes:
-        typer.echo("  no shape differs — a resave, or a change this cannot see")
+        typer.echo(
+            "  no shape differs from the build"
+            if unknown
+            else "  no shape differs — a resave, or a change this cannot see"
+        )
     if outdir is not None:
         typer.echo(f"report -> {write_drift(drift, outdir / 'readback.md')}")
 

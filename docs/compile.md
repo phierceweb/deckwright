@@ -301,20 +301,41 @@ click or a chart's build, so this view, `qa`'s beat-size check and `rhythm` read
 written rather than as `one_at_a_time`.
 
 **Read-back** (`compile/readback.py`) compares a deck on disk against the manifest that
-built it. `_edited` hashes the file and compares against `deck_hash`; the shape comparison
-runs from the **deck** side, because one package shape can answer for several records —
-chrome's stacked lines again — and only the deck knows which names the package really
-carries. A shape claims its own record and any record whose name extends it with a dot, so
-`s1.chrome` claims `s1.chrome.title`; a table frame is `…table#1` and so claims no cells,
-which are never shapes.
+built it. `_edited` hashes the file and compares against `deck_hash`; with an older manifest
+that records none it is unknown, and the changes are reported under a line saying so. A
+manifest recording no slides is refused. Slides are matched by `compile/_slides.py` `paired`,
+whose outcomes `docs/cli.md` gives under `diff`. `_aligned` solves an order-preserving alignment
+of the deck's slides to the build's over both lists at once, comparing scores in order: slides
+matched exactly (by a number, by morph shapes drawn as built on the same transition, or by two
+empty slides on the same transition and notes), then how alike an edited slide is (the same
+morph names in the same places, the same names, one shared; or two empty slides, one step above
+an emptied slide or hand shapes on an empty build slide, and the same notes worth more than
+that step), then shapes carried, then whether the slide's first-drawn numbered shape is the
+build slide's, then transitions and notes kept. In the alignment, likeness counts only for a
+slide with no exact match anywhere. `_take_back` then gives each slide matched exactly only out
+of order a free build slide, or one held only by likeness, and then a slide drawn exactly but
+retimed a free one; slides still unmatched are aligned by likeness within the gap between their
+matched neighbours — a slide whose exact match went elsewhere only by its morph names or as two
+empty slides. Anything still unmatched is `slide-added`, with a detail saying why.
+`spec/matching.py` reads each slide's shapes; `extract` matches slides there too, by its own
+stricter rules.
 
-It reports four kinds — `moved`, `retyped`, `added`, `gone`. A move must exceed `_MOVED`
-(0.01in, twenty times the largest error three-decimal rounding can introduce) to count, so
-float dust is not a move. All four of left, top, width and height are compared, so a pure
-resize is caught — and reported as `moved`, which is the label to search for when a shape
-changed size but not position. **Only geometry and text are compared**: a recoloured or
-re-fonted shape reads as unchanged, and `render_drift` says so outright when the file's
-hash differs but no shape does.
+Shapes are walked through groups (`matching.placed`, each with its box in slide space) and
+compared from the **deck** side, because one package shape can answer for several records —
+chrome's stacked lines again — and only the deck knows which names the package really
+carries. A shape claims its own record and any record whose name extends its name, or its
+name before `#`, with a dot: `s1.chrome` claims `s1.chrome.title`, and a table frame
+`…table#1` claims its cells `…table.r1c1`. A record marked `plate` is a shape of its own, so
+`s1.chrome` does not claim `s1.chrome.kicker.plate`. A layout placeholder nobody filled —
+no words, no fill or outline of its own — is skipped: the build never records one.
+
+A move must exceed `_MOVED` (0.01in, twenty times the largest error three-decimal rounding
+can introduce) to count, so float dust is not a move. All four of left, top, width and height
+are compared, so a pure resize is caught — and reported as `moved`, which is the label to
+search for when a shape changed size but not position. Geometry, a shape's words where both
+the record and the shape hold some, run sizes, literal run colours, alt text and a slide's
+timing are compared; a typeface, a fill, a table cell's words and a shape emptied of words
+are not, and `render_drift` says so outright when the file's hash differs but no shape does.
 
 ## Adding a field to a record
 

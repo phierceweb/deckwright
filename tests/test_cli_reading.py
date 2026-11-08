@@ -74,6 +74,67 @@ def test_diff_refuses_a_spoiled_manifest_naming_it(built, spoil_manifest, capsys
     )
 
 
+def test_diff_refuses_damaged_records_naming_them(built, spoil_records, capsys):
+    spoil_records(built.deck.with_suffix(".manifest.json"))
+    with pytest.raises(SystemExit) as exc:
+        run_cli(app, args=["diff", str(built.deck)])
+    assert exc.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.startswith("D.manifest.json is not a build manifest deckwright can read (slide 1's ")
+    assert " is not a list of records)" in err
+
+
+def _manifest_without(built, *keys):
+    import json
+
+    manifest = built.deck.with_suffix(".manifest.json")
+    data = json.loads(manifest.read_text())
+    for key in keys:
+        del data[key]
+    manifest.write_text(json.dumps(data))
+
+
+_UNKNOWN = "D.pptx: D.manifest.json records no file hash, so whether the deck was edited is unknown"
+
+
+def test_diff_without_a_deck_hash_lists_the_changes_under_a_line_saying_so(built):
+    _manifest_without(built, "deck_hash")
+    _retitled(built)
+    result = runner.invoke(app, ["diff", str(built.deck)])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [
+        _UNKNOWN,
+        "  slide 1  retyped  s1.chrome.title  'A title' → 'Another title'",
+    ]
+
+
+def test_diff_without_a_deck_hash_and_no_change_says_no_shape_differs(built):
+    _manifest_without(built, "deck_hash")
+    result = runner.invoke(app, ["diff", str(built.deck)])
+    assert result.stdout.splitlines() == [_UNKNOWN, "  no shape differs from the build"]
+
+
+@pytest.mark.parametrize("empty", [True, False], ids=["slides-empty", "slides-missing"])
+def test_diff_refuses_a_manifest_recording_no_slides(built, empty, capsys):
+    import json
+
+    manifest = built.deck.with_suffix(".manifest.json")
+    data = json.loads(manifest.read_text())
+    if empty:
+        data["slides"] = []
+    else:
+        del data["slides"]
+    manifest.write_text(json.dumps(data))
+    with pytest.raises(SystemExit) as exc:
+        run_cli(app, args=["diff", str(built.deck)])
+    assert exc.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err == (
+        "D.manifest.json records no slides — nothing to read D.pptx back against; build the "
+        "spec again and pass the manifest it writes with --manifest"
+    )
+
+
 def test_inspect_lists_each_slides_shapes_with_their_boxes(built):
     result = runner.invoke(app, ["inspect", str(built.deck)])
     assert result.exit_code == 0, result.output

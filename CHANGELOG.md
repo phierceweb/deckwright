@@ -3,6 +3,24 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.12.0 — 2026-11-07
+
+- `diff` matches each slide to the build slide it came from by the number in its shapes'
+  names, inside groups included, and a slide of morph placements by the shapes it draws, so a
+  deleted slide is one `slide-gone` line, a slide out of build order is `slide-moved`, and a
+  slide edited where it sits reports each change on itself. A slide that answers to no build
+  slide is `slide-added`, with the reason. `docs/cli.md` lists the edits whose reading the deck
+  cannot decide, and two it misreads.
+- `diff` reads shapes inside groups: a shape grouped by hand answers to its record, a moved
+  group reports each shape in it as moved, in slide inches, and an equation or 3D model in a
+  hand group is read from its fallback.
+- `diff` reports what differs in a deck whose manifest records no file hash, under a line saying
+  whether it was edited is unknown, and refuses a manifest that records no slides.
+- `diff` and `qa` refuse a manifest that numbers two slides alike, or holds a slide's `shapes`,
+  `placements` or `animations` as something other than a list of records, naming it. `extract`
+  reads past a damaged record list, and reads a deck whose manifest numbers two slides alike
+  from the file alone.
+
 ## v0.11.0 — 2026-11-02
 
 - `extract` matches each slide to its build by the number in its shapes' names, inside
