@@ -332,10 +332,12 @@ no words, no fill or outline of its own — is skipped: the build never records 
 A move must exceed `_MOVED` (0.01in, twenty times the largest error three-decimal rounding
 can introduce) to count, so float dust is not a move. All four of left, top, width and height
 are compared, so a pure resize is caught — and reported as `moved`, which is the label to
-search for when a shape changed size but not position. Geometry, a shape's words where both
-the record and the shape hold some, run sizes, literal run colours, alt text and a slide's
-timing are compared; a typeface, a fill, a table cell's words and a shape emptied of words
-are not, and `render_drift` says so outright when the file's hash differs but no shape does.
+search for when a shape changed size but not position. Geometry, a shape's words where the
+record holds some, run sizes, literal run colours, alt text and a slide's timing are
+compared, and a shape that holds a text frame and no words is `retyped` to nothing (a
+record marked `annotation` holds a region's name, not drawn words, and is left out); a
+typeface, a fill, a table cell's words and words typed into a shape recorded without any are
+not, and `render_drift` says so outright when the file's hash differs but no shape does.
 
 ## Adding a field to a record
 
@@ -353,6 +355,11 @@ are not, and `render_drift` says so outright when the file's hash differs but no
 5. Document it in [`docs/qa.md`](qa.md#what-the-manifest-records) — that doc owns the
    reader's view of the format, and a field nothing documents is a field no check will ever
    consume.
+6. Name its type in `utils/provenance.py` (`RECORD_FIELDS`, `SLIDE_FIELDS` or `TOP_FIELDS`),
+   so `qa` and `diff` refuse a manifest holding it as anything else.
+   `tests/utils/test_provenance.py` fails until it is there, for a dataclass field or a key the
+   recorder always writes; a key written only for some builds needs its call in that test, and
+   a field of a type the test's `_WRITTEN_AS` does not list needs its entry there.
 
 ## Recording a new kind of shape
 

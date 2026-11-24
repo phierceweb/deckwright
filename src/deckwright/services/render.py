@@ -104,7 +104,6 @@ def render_to_images(
     # resolve there rather than where the caller meant.
     pptx_path = Path(pptx_path).resolve()
     outdir = Path(outdir).resolve()
-    outdir.mkdir(parents=True, exist_ok=True)
     dpi = resolve_int(dpi, "DECKWRIGHT_RENDER_DPI", default=_DPI_DEFAULT)
     soffice = env_str(soffice, "DECKWRIGHT_SOFFICE", default=_SOFFICE_DEFAULT)
     pdftoppm = env_str(pdftoppm, "DECKWRIGHT_PDFTOPPM", default=_PDFTOPPM_DEFAULT)
@@ -120,6 +119,7 @@ def render_to_images(
             f"no deck to render at {pptx_path}",
             context={"pptx": str(pptx_path)},
         )
+    outdir.mkdir(parents=True, exist_ok=True)
     deck_hash = content_hash(pptx_path.read_bytes())
     fonts = deck_font_files(pptx_path)
 

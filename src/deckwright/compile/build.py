@@ -93,6 +93,7 @@ def build_deck(
             f"{spec.source.name}: no output path — set 'out:' in the deck config or pass --out"
         )
     _refuse_a_spec(dest, source=spec.source)
+    _refuse_no_place_for_a_file(dest, source=spec.source)
 
     prs = _presentation(theme)
     _drop_template_slides(prs, theme)
@@ -205,6 +206,19 @@ def _refuse_a_spec(dest: Path, *, source: Path) -> None:
             f"{dest} is a YAML path, and a deck is never written to one — this is how "
             f"--out lands on a spec. Give it a .pptx path"
         )
+
+
+def _refuse_no_place_for_a_file(dest: Path, *, source: Path) -> None:
+    """Refuse an output path that is a directory, or that lies under a file."""
+    if dest.is_dir():
+        named = source.stem[:-5] if source.stem.lower().endswith(".deck") else source.stem
+        raise SpecError(
+            f"{dest} is a directory, and a deck is written to a file — name the .pptx to "
+            f"write in it, as in {dest / f'{named}.pptx'}"
+        )
+    held = next((p for p in dest.parents if p.exists()), None)
+    if held is not None and not held.is_dir():
+        raise SpecError(f"{dest} cannot be written: {held} is a file, not a directory")
 
 
 def _keep_source(source: Path, dest: Path) -> None:

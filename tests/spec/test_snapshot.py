@@ -189,6 +189,21 @@ def test_a_spoiled_manifest_drafts_as_though_there_were_none(own_tour, spoil_man
     assert spoiled == _drafted(own_tour)[0]
 
 
+# The spoiled fields that send `from_manifest` to the file alone; it reads past the rest.
+_EXTRACT_COMPUTES_WITH = {"canvas-a-string", "canvas-width-a-string", "placement-box-a-number"}
+
+
+def test_a_manifest_field_of_the_wrong_type_does_not_stop_the_draft(own_tour, spoil_values):
+    manifest = own_tour.with_suffix(".manifest.json")
+    whole, _ = _drafted(own_tour)
+    spoil_values(manifest)
+    spoiled, _ = _drafted(own_tour)
+    manifest.unlink()
+    alone, _ = _drafted(own_tour)
+    assert whole != alone
+    assert spoiled == (alone if spoil_values.case in _EXTRACT_COMPUTES_WITH else whole)
+
+
 @pytest.mark.parametrize("width", [0, float("nan"), float("inf")], ids=["zero", "nan", "inf"])
 def test_a_manifest_with_no_canvas_width_drafts_as_though_there_were_none(own_tour, width):
     manifest = own_tour.with_suffix(".manifest.json")

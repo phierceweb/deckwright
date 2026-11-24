@@ -77,6 +77,90 @@ def test_retyped_text_is_reported_against_what_was_built(built):
     assert "'A title' → 'Other'" in retyped[0].detail
 
 
+def _changes_on(deck):
+    return [(c.kind, c.shape, c.detail) for c in read_back(deck).changes]
+
+
+@pytest.mark.parametrize(
+    ("name", "words"),
+    [("s1.chrome.title", "A title"), ("s1.p1.bullets#1", "• alpha • beta")],
+    ids=["a-title", "a-list"],
+)
+def test_a_shape_emptied_of_every_word_is_retyped_to_nothing(built, name, words):
+    _edit(built.deck, lambda s: _named(s, name).text_frame.clear())
+    assert _changes_on(built.deck) == [("retyped", name, f"{words!r} → ''")]
+
+
+def test_a_shape_left_holding_only_spaces_is_retyped_to_nothing(built):
+    def blank(slide):
+        frame = _named(slide, "s1.chrome.title").text_frame
+        frame.clear()
+        frame.paragraphs[0].add_run().text = "  "
+
+    _edit(built.deck, blank)
+    assert _changes_on(built.deck) == [("retyped", "s1.chrome.title", "'A title' → ''")]
+
+
+def test_a_frame_carrying_several_lines_emptied_is_retyped_once(project):
+    from deckwright.compile import build_deck
+
+    (project / "c.deck.yaml").write_text(
+        "theme: testtheme\nout: out/C.pptx\n---\nkicker: K\ntitle: T\nsubtitle: S\n"
+    )
+    made = build_deck(project / "c.deck.yaml", theme_path=project / "testtheme.yaml")
+    _edit(made.deck, lambda s: _named(s, "s1.chrome").text_frame.clear())
+    assert _changes_on(made.deck) == [("retyped", "s1.chrome", "'K T S' → ''")]
+
+
+def _grid_deck(tmp_path, theme_file):
+    from deckwright.compile import build_deck
+
+    spec = tmp_path / "g.deck.yaml"
+    spec.write_text(
+        "theme: testtheme\nout: out/G.pptx\n---\ntitle: Grid\n"
+        "place:\n  - at: {cols: full}\n    grid: {}\n"
+    )
+    return build_deck(spec, theme_path=theme_file)
+
+
+def test_words_typed_into_a_shape_the_build_left_wordless_are_not_read(tmp_path, theme_file):
+    made = _grid_deck(tmp_path, theme_file)
+    records = json.loads(made.manifest.read_text())["slides"][0]["shapes"]
+    assert ["text" in r for r in records if r["name"] == "s1.p1.grid#1"] == [False]
+
+    def type_into(slide):
+        _named(slide, "s1.p1.grid#1").text_frame.text = "typed"
+
+    _edit(made.deck, type_into)
+    assert read_back(made.deck).changes == ()
+
+
+def test_a_drawn_reserved_region_recorded_under_its_name_is_not_an_emptied_shape(
+    tmp_path, theme_file
+):
+    """The grid records each region it draws with the region's name and writes no words in it."""
+    made = _grid_deck(tmp_path, theme_file)
+    records = json.loads(made.manifest.read_text())["slides"][0]["shapes"]
+    assert [r["text"] for r in records if r.get("annotation")] == ["logo-wedge"]
+    assert read_back(made.deck).changes == ()
+    _record_a_wordless_part(made.manifest, "s1.p1.grid.rule")
+    assert read_back(made.deck).changes == ()
+
+
+def _record_a_wordless_part(manifest, name):
+    """Add a record with no words that the shapes named for its origin answer for."""
+    data = json.loads(manifest.read_text())
+    box = {"x": 1.0, "y": 1.0, "w": 1.0, "h": 1.0}
+    data["slides"][0]["shapes"].append({"shape_id": 99, "name": name, "box": box})
+    manifest.write_text(json.dumps(data))
+
+
+def test_a_shape_answering_for_a_wordless_part_too_is_still_retyped_when_emptied(built):
+    _record_a_wordless_part(built.manifest, "s1.chrome.title.rule")
+    _edit(built.deck, lambda s: _named(s, "s1.chrome.title").text_frame.clear())
+    assert _changes_on(built.deck) == [("retyped", "s1.chrome.title", "'A title' → ''")]
+
+
 def test_a_shape_added_by_hand_says_no_placement_made_it(built):
     _edit(built.deck, lambda s: s.shapes.add_textbox(Inches(1), Inches(6), Inches(2), Inches(0.4)))
     added = read_back(built.deck).of("added")

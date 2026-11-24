@@ -119,6 +119,47 @@ def test_out_naming_any_yaml_path_is_refused(project, tmp_path, name):
         )
 
 
+def test_out_naming_a_directory_is_refused_and_writes_nothing(project, tmp_path):
+    there = tmp_path / "decks"
+    there.mkdir()
+    with pytest.raises(SpecError) as caught:
+        build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml", out=there)
+    assert str(caught.value) == (
+        f"{there} is a directory, and a deck is written to a file — name the .pptx to write "
+        f"in it, as in {there / 'd.pptx'}"
+    )
+    assert list(there.iterdir()) == [] and not (tmp_path / ".build").exists()
+
+
+def test_the_file_suggested_for_a_directory_keeps_a_dotted_spec_name(project, tmp_path):
+    spec = project / "Board v1.2.deck.yaml"
+    spec.write_text((project / "d.deck.yaml").read_text())
+    with pytest.raises(SpecError, match=r"as in .*/Board v1\.2\.pptx$"):
+        build_deck(spec, theme_path=project / "testtheme.yaml", out=tmp_path)
+
+
+def test_the_file_suggested_for_a_directory_drops_the_suffix_in_any_case(project, tmp_path):
+    spec = project / "Board.DECK.yaml"
+    spec.write_text((project / "d.deck.yaml").read_text())
+    with pytest.raises(SpecError, match=r"as in .*/Board\.pptx$"):
+        build_deck(spec, theme_path=project / "testtheme.yaml", out=tmp_path)
+
+
+def test_the_specs_own_out_naming_a_directory_is_refused(project):
+    (project / "out" / "Demo.pptx").mkdir(parents=True)
+    with pytest.raises(SpecError, match=r"Demo\.pptx is a directory, and a deck is written"):
+        build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml")
+
+
+def test_out_under_a_file_is_refused_naming_the_file(project, tmp_path):
+    held = tmp_path / "notes.txt"
+    held.write_text("kept")
+    dest = held / "deeper" / "D.pptx"
+    with pytest.raises(SpecError) as caught:
+        build_deck(project / "d.deck.yaml", theme_path=project / "testtheme.yaml", out=dest)
+    assert str(caught.value) == f"{dest} cannot be written: {held} is a file, not a directory"
+
+
 def test_rebuilding_over_an_existing_deck_is_still_allowed(project):
     """The guard is about specs, not about existence: rebuilding is the normal case and a
     blanket exists-check would break every second build."""

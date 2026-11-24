@@ -404,6 +404,69 @@ def spoil_records(request):
     return spoil
 
 
+def _record_field(key, field, value):
+    def spoil(data):
+        records = data["slides"][0].setdefault(key, [])
+        if not records:
+            records.append({})
+        records[0][field] = value
+        return json.dumps(data)
+
+    return spoil
+
+
+def _box_field(coordinate, value):
+    def spoil(data):
+        data["slides"][0]["shapes"][0]["box"][coordinate] = value
+        return json.dumps(data)
+
+    return spoil
+
+
+# What each case spoils: the field a refusal names, and the manifest rewritten.
+_WRONG_VALUES = {
+    "deck_hash-a-number": ("deck_hash", lambda data: json.dumps({**data, "deck_hash": 5})),
+    "theme_path-a-number": ("theme_path", lambda data: json.dumps({**data, "theme_path": 5})),
+    "canvas-a-string": ("canvas", lambda data: json.dumps({**data, "canvas": "wide"})),
+    "canvas-width-a-string": (
+        "canvas",
+        lambda data: json.dumps({**data, "canvas": {"w": "wide", "h": 7.5}}),
+    ),
+    "notes-a-number": ("notes", _slide_field("notes", 5)),
+    "name-a-number": ("name", _record_field("shapes", "name", 5)),
+    "shape_id-a-string": ("shape_id", _record_field("shapes", "shape_id", "2")),
+    "box-coordinate-a-string": ("box", _box_field("x", "1.0")),
+    "box-coordinate-nan": ("box", _box_field("y", float("nan"))),
+    "box-a-string": ("box", _record_field("shapes", "box", "1,1,3,1")),
+    "lines-a-number": ("lines", _record_field("shapes", "lines", 5)),
+    "lines-of-numbers": ("lines", _record_field("shapes", "lines", [5])),
+    "font_pt-a-string": ("font_pt", _record_field("shapes", "font_pt", "x")),
+    "line_pt-a-number": ("line_pt", _record_field("shapes", "line_pt", 5)),
+    "space_after_pt-a-number": (
+        "space_after_pt",
+        _record_field("shapes", "space_after_pt", 5),
+    ),
+    "plate-a-string": ("plate", _record_field("shapes", "plate", "no")),
+    "placement-box-a-number": ("box", _record_field("placements", "box", 5)),
+    "clicks-a-string": ("clicks", _record_field("animations", "clicks", "x")),
+    "steps-a-number": ("steps", _record_field("animations", "steps", 5)),
+    "steps-of-numbers": ("steps", _record_field("animations", "steps", [5])),
+}
+
+
+@pytest.fixture(params=list(_WRONG_VALUES), ids=list(_WRONG_VALUES))
+def spoil_values(request):
+    """Rewrites the manifest at a path so one field holds a value of a type no build writes;
+    ``case`` is which, ``field`` the field a refusal names."""
+    field, rewrite = _WRONG_VALUES[request.param]
+
+    def spoil(path: pathlib.Path) -> None:
+        path.write_text(rewrite(json.loads(path.read_text(encoding="utf-8"))))
+
+    spoil.case, spoil.field = request.param, field
+    return spoil
+
+
 #: A checkout has bin/, CLAUDE.md and the gitignored content directories; an sdist
 #: ships the package, the suite, the docs and the examples and nothing else. Tests
 #: that assert on the *repository's* layout have nothing to check in the second case.

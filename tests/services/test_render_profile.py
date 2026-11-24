@@ -148,3 +148,10 @@ def test_an_input_that_is_not_there_is_named(tmp_path):
     the run-3 reproduction pgrep found none and the real cause was the path."""
     with pytest.raises(RenderError, match=r"no deck to render at .*absent\.pptx"):
         render_mod.render_to_images(tmp_path / "absent.pptx", tmp_path)
+
+
+def test_an_input_that_is_not_there_leaves_no_directory_behind(tmp_path):
+    outdir = tmp_path / "render" / "absent"
+    with pytest.raises(RenderError, match="no deck to render at"):
+        render_mod.render_to_images(tmp_path / "absent.pptx", outdir)
+    assert list(tmp_path.iterdir()) == []

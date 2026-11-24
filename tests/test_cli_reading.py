@@ -84,6 +84,18 @@ def test_diff_refuses_damaged_records_naming_them(built, spoil_records, capsys):
     assert " is not a list of records)" in err
 
 
+def test_diff_refuses_a_value_of_the_wrong_type_naming_it(built, spoil_values, capsys):
+    spoil_values(built.deck.with_suffix(".manifest.json"))
+    with pytest.raises(SystemExit) as exc:
+        run_cli(app, args=["diff", str(built.deck)])
+    assert exc.value.code == 1
+    err = " ".join(capsys.readouterr().err.split())
+    assert err.startswith(
+        f"D.manifest.json is not a build manifest deckwright can read ({spoil_values.field} "
+    )
+    assert ", not " in err
+
+
 def _manifest_without(built, *keys):
     import json
 

@@ -3,6 +3,18 @@
 Notable changes to deckwright, newest first. The project is pre-1.0 — pin to a tagged
 release; `main` is the development line.
 
+## v0.13.0 — 2026-11-23
+
+- `diff` and `qa` refuse a manifest that holds a field as a type no build writes — a `font_pt`
+  that is text, a `box` coordinate that is not a finite number, `lines` that is not a list of
+  text — naming the field, its record and the value. A field that is missing, or unknown to
+  this version, is read. `extract` makes no such check.
+- `build` refuses an output path, from `--out` or the spec's `out:`, that is a directory or
+  runs through a file, before anything is written.
+- `render` creates no output directory for a deck that is not at the path given.
+- `diff` reports a shape emptied of every word as `retyped` to `''`. A table or chart frame,
+  whose words are its parts', reads as before.
+
 ## v0.12.0 — 2026-11-07
 
 - `diff` matches each slide to the build slide it came from by the number in its shapes'

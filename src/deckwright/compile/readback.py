@@ -209,7 +209,7 @@ def _shape_drift(
     before = " ".join(t for t in (_text(r) for r in claimed) if t).strip()
     after = _shape_text(shape)
     was_text, now_text = _flat(before), _flat(after)
-    if was_text and now_text and was_text != now_text:
+    if was_text and was_text != now_text and (now_text or _emptied(shape, claimed)):
         out.append(Change("retyped", index, name, f"{was_text!r} → {now_text!r}"))
     out.extend(style_drift(shape, claimed, index, name))
     own = next((r for r in claimed if r.get("name") == name), None)
@@ -232,6 +232,14 @@ def _text(record: dict[str, Any]) -> str:
 def _shape_text(shape) -> str:
     frame = getattr(shape, "text_frame", None)
     return frame.text.strip() if frame is not None else ""
+
+
+def _emptied(shape, claimed: list[dict[str, Any]]) -> bool:
+    """A shape that can hold words, holds none, and was drawn with some. An annotation's text
+    names the region it depicts and is never written into it."""
+    return getattr(shape, "text_frame", None) is not None and any(
+        _text(r) and not r.get("annotation") for r in claimed
+    )
 
 
 def _flat(text: str) -> str:

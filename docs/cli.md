@@ -112,7 +112,7 @@ two; they are derived, so regenerate them rather than edit them.
 | Flag | Effect |
 |---|---|
 | `--theme` / `-t` | Theme file. Default: resolved by the spec's `theme:` name against the theme directory. |
-| `--out` / `-o` | Output path, overriding the spec's own `out:`. Must be a `.pptx`: a YAML path, and the spec being compiled above all, is refused rather than written over. Rebuilding over an existing deck is fine. |
+| `--out` / `-o` | Output path, overriding the spec's own `out:`. Must be a `.pptx`: a YAML path, and the spec being compiled above all, is refused rather than written over. A directory, or a path under a file, is refused before anything is written; the same holds for the spec's `out:`. Rebuilding over an existing deck is fine. |
 | `--keep-layouts` | Keep the template's unused slide layouts and masters, and the media only they reach. Off by default. |
 
 A brand template arrives with every layout its designer drew, and a built deck uses
@@ -177,7 +177,8 @@ the render is the ground truth, not the spec.
 Stale `slide-<n>.<image>` files a previous render wrote are removed first, so a shorter
 deck never leaves orphans from a longer one behind — anything else in the directory,
 including `contact_sheet.png` and `qa.md`, is left alone. Each run gets its own
-LibreOffice profile, so concurrent renders do not silently no-op against a shared lock.
+LibreOffice profile, so concurrent renders do not silently no-op against a shared lock. A
+deck that is not at the path given is refused before the output directory is created.
 
 **The render sets the deck's own typefaces.** Before converting, `render` reads every face
 the deck names — its theme's font scheme, and the runs, bullets and charts on its masters,
@@ -320,16 +321,17 @@ nothing, or nests deeper than eight groups. A placeholder the layout put on the 
 nobody filled — no words, and no fill, outline or shape style of its own that paints it — is
 not a change either.
 
-`retimed` is a slide whose build no longer spends the clicks, reveals the shapes or
-listens on the triggers the manifest records, or whose transition changed kind. `restyled` compares a shape's runs as sets: a point size the build never set, or the
-recorded ink gone from every run. `relabelled` is the decorative mark set or cleared, or
-alternative text changed.
+`retyped` is a shape whose words differ from the words the build recorded for it; a shape
+emptied of every word is `retyped` to `''`. `retimed` is a slide whose build no longer
+spends the clicks, reveals the shapes or listens on the triggers the manifest records, or
+whose transition changed kind. `restyled` compares a shape's runs as sets: a point size the
+build never set, or the recorded ink gone from every run. `relabelled` is the decorative
+mark set or cleared, or alternative text changed.
 
 **What it cannot see:** a typeface, a fill, one run recoloured while the rest keep the
 recorded ink, a table cell's words — cells were never shapes, so they carry no name and their
-frame holds no words of its own — a shape emptied of every word, or words typed into a shape the
-build left without any. A deck whose bytes changed with no shape difference says so rather than
-reporting nothing.
+frame holds no words of its own — or words typed into a shape the build left without any. A
+deck whose bytes changed with no shape difference says so rather than reporting nothing.
 
 ## `inspect` — inventory a deck's shapes
 

@@ -411,6 +411,13 @@ finds its build. `diff` reads a copy back through it, and `extract` takes a plac
 box from the manifest it finds. It lives here rather than in `compile/` because `spec/`
 sits below `compile/` and cannot import it.
 
+`read_manifest(path)` is the one reader `qa` and `diff` go through. It refuses a manifest
+that is not a JSON object of numbered slides, a record list that is not one, and any field
+held as a type no build writes; `TOP_FIELDS`, `SLIDE_FIELDS` and `RECORD_FIELDS` name each
+field's type. A field that is missing, null or not in the tables is not refused. With
+`records=False`, as `extract` and `find_manifest` call it, only the file's shape and its
+slide numbering are checked.
+
 ## What was checked against pw-foundation
 
 `bin/check-framework`'s own `EXEMPT` table records the deliberate non-adoptions
